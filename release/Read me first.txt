@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 0.1.0
+STATIONKEEPER MACROS 0.1.1
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -14,12 +14,14 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
 3. DESCRIBE YOUR MACROS (the admin)
    - Open your template itself (File > Open the .dotm).
    - View > Macros > StationkeeperMacrosAdmin > Run.
+   - The list shows each macro with two columns: In menu (Shown, Hidden, Not set)
+     and Description (Written, Missing).
    - Pick each macro: title, description, category, keywords, what it affects.
      Tick "Show in the menu".
    - Many macros? Check tab > Export catalog to CSV, fill it in Excel,
      save as CSV UTF-8, then Import catalog from CSV.
    - Look tab: set Alt+Shift+M and an Add-ins tab button.
-   - Type WRITE, then Save to template. A dated backup is made first.
+   - Tick Ready to save, then Save to template. A dated backup is made first.
 
 4. USE THE MENU
    - In any document based on the template: Alt+Shift+M, the Add-ins tab button,

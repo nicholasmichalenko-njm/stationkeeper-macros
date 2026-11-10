@@ -100,6 +100,9 @@ try {
         Check 'menu search with no match' ($q3 -eq '0:') $q3
         $adm = TR $word 'T_Admin'
         Check 'admin loads and edits' (($adm -match '^8 rows') -and ($adm -match 'pending')) $adm
+        Check 'admin list has In menu and Description columns' (($adm -match 'Clear Direct Formatting \| Not set \| Missing') -and ($adm -match '\| Shown \| Written')) ''
+        Check 'Save disabled with nothing to save' ($adm -match 'gate0: pending=0 unticked=False ticked=False') ''
+        Check 'Save needs Ready to save ticked' ($adm -match 'gate1: pending=\d+ unticked=False ticked=True') ''
         $csv = TR $word 'T_Csv'
         Check 'CSV export and import round trip (quotes, commas, line breaks)' (($csv -like 'Updated 8 macro(s)*') -and ($csv -match 'line one\\nline two, with comma')) $csv
         $sc = TR $word 'T_Shortcut'

@@ -73,7 +73,10 @@ Public Function T_Admin() As String
     Dim s As String
     Load frmSKAdmin
     s = frmSKAdmin.TestState()
+    s = s & " || rows: " & frmSKAdmin.TestRow(0) & " ## " & frmSKAdmin.TestRow(3) & " ## " & frmSKAdmin.TestRow(7)
+    s = s & " || gate0: " & frmSKAdmin.TestSaveGate()
     s = s & " || " & frmSKAdmin.TestEditFirst("Edited by the admin self-test")
+    s = s & " || gate1: " & frmSKAdmin.TestSaveGate()
     Unload frmSKAdmin
     T_Admin = s
 End Function

@@ -2,7 +2,7 @@
 ' Stationkeeper Macros: the admin
 ' Describe, sort and show or hide the macros already in this template.
 ' Nothing here edits your code. Saving writes the catalog into the
-' template after a dated backup, and only after you type WRITE.
+' template after a dated backup, and only after you tick Ready to save.
 ' The controls are built in code, so this form needs no designer work.
 ' =====================================================================
 Option Explicit
@@ -60,7 +60,7 @@ Private txtHistory As MSForms.TextBox
 
 ' Bottom bar
 Private lblPending As MSForms.Label
-Private txtWrite As MSForms.TextBox
+Private WithEvents chkReady As MSForms.CheckBox
 Private WithEvents btnSave As MSForms.CommandButton
 Private WithEvents btnClose As MSForms.CommandButton
 
@@ -139,12 +139,17 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblFilter", "Show", 244, 6, 60, 14
     Set cboFilter = AddTo(pg, "Forms.ComboBox.1", "cboFilter", 244, 20, 118, 20)
     cboFilter.Style = fmStyleDropDownList
-    For Each v In Array("All", "Not described", "In the menu", "Not in the menu", "Hidden", "Not found")
+    For Each v In Array("All", "Description missing", "Shown in menu", "Not shown in menu", "Hidden", "Macro gone")
         cboFilter.AddItem v
     Next
-    Set lstEntries = AddTo(pg, "Forms.ListBox.1", "lstEntries", 8, 46, 354, 368)
-    lstEntries.ColumnCount = 2
-    lstEntries.ColumnWidths = "212 pt;120 pt"
+    ' Column headings (a ListBox filled in code cannot show its own).
+    Dim hd As MSForms.Label
+    Set hd = Lbl(pg, "hdMacro", "Macro", 12, 46, 180, 12): hd.Font.Bold = True
+    Set hd = Lbl(pg, "hdMenu", "In menu", 202, 46, 70, 12): hd.Font.Bold = True
+    Set hd = Lbl(pg, "hdDesc", "Description", 274, 46, 84, 12): hd.Font.Bold = True
+    Set lstEntries = AddTo(pg, "Forms.ListBox.1", "lstEntries", 8, 60, 354, 354)
+    lstEntries.ColumnCount = 3
+    lstEntries.ColumnWidths = "190 pt;72 pt;72 pt"
     lstEntries.IntegralHeight = False
 
     Set lblMacro = Lbl(pg, "lblMacro", "", 372, 6, 386, 14)
@@ -251,8 +256,7 @@ Private Sub UserForm_Initialize()
 
     ' ----- Bottom bar -----
     Set lblPending = Lbl(Me, "lblPending", "", 10, 478, 360, 16)
-    Lbl Me, "lblWrite", "Type WRITE to save", 380, 478, 110, 16
-    Set txtWrite = AddTo(Me, "Forms.TextBox.1", "txtWrite", 488, 474, 70, 20)
+    Set chkReady = Chk(Me, "chkReady", "Ready to save (a backup is made first)", 316, 476, 246, 18)
     Set btnSave = Btn(Me, "btnSave", "Save to template", 566, 472, 104, 24)
     Set btnClose = Btn(Me, "btnClose", "Close", 676, 472, 100, 24)
     btnClose.Cancel = True
@@ -321,11 +325,11 @@ Private Sub FillList(Optional ByVal keepRun As String = "")
         Set e = mModel("entries")(i)
         st = SK_EntryStatus(e)
         Select Case f
-            Case "Not described": okRow = (e("found") And Len(Trim$(e("description"))) = 0)
-            Case "In the menu": okRow = (e("found") And e("shown") = "1")
-            Case "Not in the menu": okRow = (e("found") And e("shown") <> "1")
+            Case "Description missing": okRow = (e("found") And Len(Trim$(e("description"))) = 0)
+            Case "Shown in menu": okRow = (e("found") And e("shown") = "1")
+            Case "Not shown in menu": okRow = (e("found") And e("shown") <> "1")
             Case "Hidden": okRow = (e("shown") = "0")
-            Case "Not found": okRow = (Not e("found"))
+            Case "Macro gone": okRow = (Not e("found"))
             Case Else: okRow = True
         End Select
         If okRow And Len(q) > 0 Then
@@ -353,7 +357,8 @@ Private Sub FillList(Optional ByVal keepRun As String = "")
     For i = 1 To cnt
         Set e = mModel("entries")(idx(i))
         lstEntries.AddItem e("title")
-        lstEntries.List(i - 1, 1) = SK_EntryStatus(e)
+        lstEntries.List(i - 1, 1) = MenuCol(e)
+        lstEntries.List(i - 1, 2) = DescCol(e)
         mView(i - 1) = idx(i)
     Next
     mLoading = False
@@ -492,7 +497,8 @@ Private Sub UpdateRow()
     If i < 0 Then Exit Sub
     mLoading = True
     lstEntries.List(i, 0) = mCur("title")
-    lstEntries.List(i, 1) = SK_EntryStatus(mCur)
+    lstEntries.List(i, 1) = MenuCol(mCur)
+    lstEntries.List(i, 2) = DescCol(mCur)
     mLoading = False
     lblMacro.Caption = "Macro: " & mCur("run") & "     Status: " & SK_EntryStatus(mCur)
 End Sub
@@ -521,7 +527,35 @@ Private Sub UpdatePending()
     Else
         lblPending.Caption = mPending.Count & " change(s) waiting. Nothing is saved until you save."
     End If
+    UpdateSaveButton
 End Sub
+
+' Save works only when there is something to save and Ready to save is ticked.
+Private Sub UpdateSaveButton()
+    If btnSave Is Nothing Or chkReady Is Nothing Then Exit Sub
+    btnSave.Enabled = (mPending.Count > 0 And chkReady.Value = True)
+End Sub
+
+Private Sub chkReady_Click()
+    UpdateSaveButton
+End Sub
+
+' The two list columns.
+Private Function MenuCol(ByVal e As Object) As String
+    If Not e("found") Then
+        MenuCol = "Macro gone"
+    ElseIf e("shown") = "1" Then
+        MenuCol = "Shown"
+    ElseIf e("shown") = "0" Then
+        MenuCol = "Hidden"
+    Else
+        MenuCol = "Not set"
+    End If
+End Function
+
+Private Function DescCol(ByVal e As Object) As String
+    If Len(Trim$(e("description"))) > 0 Then DescCol = "Written" Else DescCol = "Missing"
+End Function
 
 Private Function Summary() As String
     Dim i As Long, s As String
@@ -886,9 +920,8 @@ Private Sub btnSave_Click()
         MsgBox "Nothing to save.", vbInformation, SK_APP
         Exit Sub
     End If
-    If txtWrite.Text <> "WRITE" Then
-        MsgBox "Type WRITE in the box beside Save to confirm.", vbInformation, SK_APP
-        txtWrite.SetFocus
+    If Not chkReady.Value Then
+        MsgBox "Tick Ready to save first.", vbInformation, SK_APP
         Exit Sub
     End If
     KeepCategory
@@ -900,7 +933,7 @@ Private Sub btnSave_Click()
     FillCats
     Set mPending = New Collection
     mEdited.RemoveAll
-    txtWrite.Text = ""
+    chkReady.Value = False
     UpdatePending
     FillHistory
     MsgBox msg, vbInformation, SK_APP
@@ -931,6 +964,21 @@ End Sub
 ' ---------------------------------------------------------------------
 Public Function TestState() As String
     TestState = lstEntries.ListCount & " rows; " & lblHeader.Caption
+End Function
+
+Public Function TestRow(ByVal i As Long) As String
+    If i >= lstEntries.ListCount Then Exit Function
+    TestRow = lstEntries.List(i, 0) & " | " & lstEntries.List(i, 1) & " | " & lstEntries.List(i, 2)
+End Function
+
+Public Function TestSaveGate() As String
+    Dim a As Boolean, b As Boolean
+    chkReady.Value = False
+    a = btnSave.Enabled
+    chkReady.Value = True
+    b = btnSave.Enabled
+    chkReady.Value = False
+    TestSaveGate = "pending=" & mPending.Count & " unticked=" & a & " ticked=" & b
 End Function
 
 Public Function TestEditFirst(ByVal desc As String) As String

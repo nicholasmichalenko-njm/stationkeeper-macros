@@ -31,12 +31,12 @@ It works with whatever macros are already in the template: one module or many. I
 
 1. Open the template itself (File > Open the .dotm).
 2. View > Macros > `StationkeeperMacrosAdmin` > Run.
-3. On **Macros**, pick each macro and fill in Title, Description, Category, Keywords and Affects. Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
+3. On **Macros**, the list has three columns: the macro, **In menu** (Shown, Hidden, Not set, or Macro gone) and **Description** (Written or Missing). Use **Show** to list only the ones still missing a description or not yet in the menu. Pick each macro and fill in Title, Description, Category, Keywords and Affects. Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
 4. On **Check**, **Describe empty ones from code comments** fills every blank description at once. **Show every described macro in the menu** adds them all.
 5. Faster for many macros: **Check > Export catalog to CSV**, fill it in Excel, save as **CSV UTF-8**, then **Import catalog from CSV**.
 6. **Categories** sets your own categories and their order.
 7. **Look** sets the menu title, the default sort, and two ways to open the menu: **Alt+Shift+M** and a button on the **Add-ins** tab.
-8. Type **WRITE** beside **Save to template**, then save. Each save makes a dated backup of the template first and adds a line to **History**.
+8. Tick **Ready to save**, then **Save to template**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
 
 ## Using the menu
 
@@ -70,7 +70,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 33 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 36 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path. See `TESTING.md` for the checks run by hand.
