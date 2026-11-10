@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 0.1.2
+STATIONKEEPER MACROS 0.2.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -21,13 +21,18 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
      Tick "Show in the menu".
    - Many macros? Bulk tools tab > Export the list to Excel (CSV), fill it in Excel,
      save as CSV UTF-8, then Import the list from Excel (CSV).
-   - Look tab: set Alt+Shift+M and an Add-ins tab button.
+   - Settings tab: set Alt+Shift+M, an Add-ins tab button, and where backups go.
    - Tick Ready to save, then Save to template. A dated backup is made first.
+     The first time, it asks where backups should go.
+   - Test column: Test this macro, or Bulk tools > Test every macro. Tests run on a
+     scratch document. If Word shows an error, click End: the macro shows Failed.
+   - Bulk tools > Check the code health: missing libraries and risky lines.
 
 4. USE THE MENU
    - In any document based on the template: Alt+Shift+M, the Add-ins tab button,
      or View > Macros > StationkeeperMacros.
    - Type to search. Up/Down move, Enter runs, Esc closes.
+   - One Ctrl+Z undoes a whole macro.
 
 IF THE ADMIN SAYS WORD IS NOT LETTING IT LOOK INSIDE THE TEMPLATE
    Turn on File > Options > Trust Center > Trust Center Settings > Macro Settings >

@@ -341,13 +341,20 @@ Private Sub ShowDetail()
     txtDesc.Text = Dash(e("description"), "No description yet.")
     info = "Category:  " & Dash(e("category"), "Uncategorized") & vbCrLf & _
            "What it affects:  " & Dash(e("affects"), "not set") & vbCrLf & _
-           "Works on:  " & Dash(e("workson"), "not set") & vbCrLf & _
+           "Works on:  " & Dash(e("workson"), "not set") & NeedsNote(e("workson")) & vbCrLf & _
            "Does it change the document?  " & Dash(e("changes"), "not set")
     lblInfo.Caption = info
     btnPin.Caption = IIf(SK_IsPinned(e("run")), "Unpin", "Pin to top")
     btnRun.Enabled = True
     btnPin.Enabled = True
 End Sub
+
+Private Function NeedsNote(ByVal w As String) As String
+    Select Case LCase$(w)
+        Case "selection", "table at the cursor", "list at the cursor"
+            NeedsNote = " (checked before it runs)"
+    End Select
+End Function
 
 Private Sub SelectRun(ByVal run As String)
     Dim i As Long
@@ -360,19 +367,25 @@ Private Sub SelectRun(ByVal run As String)
 End Sub
 
 Private Sub RunSelected()
-    Dim e As Object, keep As Boolean, ok As Boolean, run As String
+    Dim e As Object, keep As Boolean, ok As Boolean, run As String, why As String
     If lstMacros.ListIndex < 0 Then Exit Sub
     Set e = mItems(mView(lstMacros.ListIndex))
+    ' Check what the macro needs before it can fail.
+    If Not SK_NeedsMet(e("workson"), why) Then
+        lblStatus.Caption = why & " " & e("title") & " works on: " & LCase$(e("workson")) & "."
+        Beep
+        Exit Sub
+    End If
     If mModel("look")("confirmChanges") = "1" And LCase$(Left$(e("changes"), 3)) = "yes" Then
         If MsgBox(e("title") & " changes the document. Run it?", vbYesNo + vbQuestion, SK_APP) <> vbYes Then Exit Sub
     End If
     keep = chkKeep.Value
     run = e("run")
     If Not keep Then Me.Hide
-    ok = SK_RunMacro(run)
+    ok = SK_RunMacro(run, e("title"))
     If keep Then
-        lblStatus.Caption = IIf(ok, "Ran " & e("title") & " at " & Format$(Now, "h:nn am/pm") & ".", _
-                                    e("title") & " stopped with an error.")
+        lblStatus.Caption = IIf(ok, "Ran " & e("title") & " at " & Format$(Now, "h:nn am/pm") & _
+                                    ". One Ctrl+Z undoes all of it.", e("title") & " could not run.")
         RefreshList
         SelectRun run
     Else

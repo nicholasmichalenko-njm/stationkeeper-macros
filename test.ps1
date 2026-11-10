@@ -40,6 +40,8 @@ function TR1($word, [string]$macro, [string]$a) { RunW $word "SK_Test.$macro" $a
 Remove-Item (Join-Path $work 'Stationkeeper Macros backups') -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $sample -Force -ErrorAction SilentlyContinue
 Get-ChildItem $work -Filter '~$*' -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+$setKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\Settings'
+$prevBackup = (Get-ItemProperty $setKey -ErrorAction SilentlyContinue).backupDir
 foreach ($k in @('Team Sample Template.dotm')) { Remove-Item "HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\$k" -Recurse -ErrorAction SilentlyContinue }
 
 try {
@@ -68,6 +70,9 @@ try {
     Invoke-WordJob -Root $Root -Job {
         param($word)
         $d = OpenDoc $word $sample
+        [string]$bk = Join-Path $work 'Stationkeeper Macros backups'
+        $set = TR1 $word 'T_SetBackup' $bk
+        Check 'backup folder chosen and kept' ($set -eq $bk) $set
         $scan = TR $word 'T_Scan'
         $ok = ($scan -like 'the VBA project | 8 | 2 |*') -and ($scan -match 'Module1.FitTablesToMargins') -and ($scan -notmatch 'HelperNotAMacro|NeedsArgs|ReturnsValue|AutoOpen|StationkeeperMacros|T_Scan')
         Check 'scan finds 8 macros in 2 modules, skips helpers/args/functions/Auto/kit' $ok $scan
@@ -101,7 +106,7 @@ try {
         $adm = TR $word 'T_Admin'
         Check 'admin loads and edits' (($adm -match '^8 rows') -and ($adm -match 'pending')) $adm
         Check 'admin list has In menu and Description columns' (($adm -match 'Clear Direct Formatting \| Not set \| Missing') -and ($adm -match '\| Shown \| Written')) ''
-        Check 'admin tabs and labels' (($adm -match 'Macros\|Categories\|Look\|Bulk tools\|History\|') -and ($adm -match 'A=What this macro affects') -and ($adm -match 'Ch=Does this change the document\?') -and ($adm -match 'also box=none')) ''
+        Check 'admin tabs and labels' (($adm -match 'Macros\|Categories\|Settings\|Bulk tools\|History\|') -and ($adm -match 'A=What this macro affects') -and ($adm -match 'Ch=Does this change the document\?') -and ($adm -match 'also box=none')) ''
         Check 'Save disabled with nothing to save' ($adm -match 'gate0: pending=0 unticked=False ticked=False') ''
         Check 'Save needs Ready to save ticked' ($adm -match 'gate1: pending=\d+ unticked=False ticked=True') ''
         $csv = TR $word 'T_Csv'
@@ -150,6 +155,37 @@ try {
         $d.Close([ref]0)
     }
 
+
+    # 7b. 0.2.0: health check, test runs, crash markers, one-step undo, needs check, test all.
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        [void]$d.VBProject.VBComponents.Import([string](Join-Path $Root 'test\Module3.bas'))
+        $d.Save()
+        $h = TR $word 'T_Health'
+        Write-Output "HEALTH: $h"
+        Check 'health points to Debug > Compile' ($h -match 'Debug > Compile') ''
+        Check 'no missing libraries' ($h -match 'Every library the code uses is present') ''
+        Check 'health: saves, closes or deletes files' ($h -match 'Module3.SaveCopyToC\{Saves, closes or deletes files') ''
+        Check 'health: hides its own errors' ($h -match 'Module3.QuietErrors\{Hides its own errors') ''
+        Check 'health: alerts off and never back on' ($h -match 'Module3.AlertsOff\{Turns Word alerts off') ''
+        Check 'health: fixed file path' ($h -match 'Module3.FixedPath\{Uses a fixed file path') ''
+        Check 'health: clean macros have no notes' ($h -notmatch 'Module1\.|Module2\.|TwoEdits') ''
+        $t1 = TR1 $word 'T_TestOne' 'Module2.WriteTestMarker'
+        Check 'test run passes on a scratch document and closes it' (($t1 -match '^Passed') -and ($t1 -match 'state=Passed') -and ($t1 -match 'docs=1')) $t1
+        $t2 = TR1 $word 'T_TestOne' 'Module1.Nope'
+        Check 'test run of a missing macro fails' (($t2 -match '^Failed') -and ($t2 -match 'state=Failed') -and ($t2 -match 'docs=1')) $t2
+        $mk = TR $word 'T_Marker'
+        Check 'a run that never finished shows Failed' ($mk -match '^Failed .*stopped with an error during a test') $mk
+        $u = TR $word 'T_Undo'
+        Check 'one Ctrl+Z undoes a whole macro run' ($u -match 'after run \[BBB AAA base\] after one undo \[base\]') $u
+        $n = TR $word 'T_Needs'
+        Check 'needs check: table and selection' ($n -match 'table:False\(Put the cursor in a table first.\) sel:False\(Select some text first.\) table after:True sel after:True whole:True') $n
+        $ta = TR $word 'T_TestAll'
+        Check 'test all runs the safe macros and skips the file-changing one' (($ta -match 'Passed: 12') -and ($ta -match 'Failed: 0') -and ($ta -match 'ends Word\): 1') -and ($ta -match 'docs=1')) $ta
+        $d.Close([ref]0)
+    }
+
     # 8. Update the kit in place (Organizer).
     Invoke-WordJob -Root $Root -Job {
         param($word)
@@ -180,6 +216,8 @@ catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)
 }
 finally {
+    if ($null -ne $prevBackup) { Set-ItemProperty $setKey -Name backupDir -Value $prevBackup }
+    else { Remove-ItemProperty $setKey -Name backupDir -ErrorAction SilentlyContinue }
     Write-Output ''
     Write-Output ("RESULT: {0} checks, {1} failed." -f $results.Count, $fails)
     $results | Set-Content (Join-Path $work 'test-results.txt')

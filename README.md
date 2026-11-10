@@ -35,8 +35,8 @@ It works with whatever macros are already in the template: one module or many. I
 4. **Bulk tools** work on the whole list at once: **Fill blank descriptions from code comments**, **Show every described macro in the menu**, **Remove macros that are gone**, export and import for Excel, and **Read macros from .bas files**. Each button has a sentence beside it saying what it does.
 5. Faster for many macros: **Bulk tools > Export the list to Excel (CSV)**, fill it in Excel, save as **CSV UTF-8**, then **Import the list from Excel (CSV)**.
 6. **Categories** sets your own categories and their order.
-7. **Look** sets the menu title, the default sort, and two ways to open the menu: **Alt+Shift+M** and a button on the **Add-ins** tab.
-8. Tick **Ready to save**, then **Save to template**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
+7. **Settings** sets the menu title, the default sort, two ways to open the menu (**Alt+Shift+M** and a button on the **Add-ins** tab), and **where backups go**.
+8. Tick **Ready to save**, then **Save to template**. The first time, the admin asks where backups should go (a folder beside the template is suggested). You can change it on **Settings**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
 
 ## Using the menu
 
@@ -44,7 +44,18 @@ Run `StationkeeperMacros` (or press Alt+Shift+M, or use the Add-ins tab button) 
 
 - Type to search. The list narrows with every letter and says where each match came from (title, keywords, what it affects, category, description).
 - Up and Down move, Enter runs, Esc closes.
+- **One Ctrl+Z undoes a whole macro.** Each run is one step on Word's Undo list, named "Stationkeeper: <title>".
+- **The menu checks what a macro needs first.** A macro set to work on a selection, a table at the cursor or a list at the cursor will not run until that is true, and the menu says what to do.
 - Pins, Most used and Recent belong to each person on their own PC and are never saved in the template.
+
+## Testing macros
+
+- **Test column** in the admin's list: Passed, Failed or Not tested (on this PC). **Show > Test failed / Not tested** lists them.
+- **Test this macro** (Macros tab) runs it on a scratch document made from the template, or on a fresh copy of a sample document you pick (**Bulk tools > Choose a test document**). Your real files and the sample are never changed.
+- **Test every macro** (Bulk tools) runs them one after another. Macros whose code saves, closes or deletes files, or ends Word, are skipped (test them one at a time).
+- If a macro hits an error it doesn't handle, Word shows its own error dialog: click **End**. That macro is then marked **Failed**. The same happens when a macro from the menu stops with an error.
+- **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
+- Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
 ## "Trust access to the VBA project object model"
 
@@ -61,7 +72,7 @@ A `Public Sub` (or plain `Sub`) with no arguments, in a standard module. These a
 ## Where things are kept
 
 - **The catalog** (titles, descriptions, categories, keywords, what it affects, show or hide, history): a hidden XML part inside the template, namespace `urn:stationkeeper:macros:1`. Changing it never touches code, so a code signature stays valid.
-- **Backups and a readable copy of the catalog:** `Stationkeeper Macros backups` beside the template (or in Documents if that folder can't be written).
+- **Backups, a readable copy of the catalog, and Excel exports:** the folder each person chooses the first time they save or export (kept in their Windows profile, for every template).
 - **Each person's pins, counts and preferences:** their Windows profile (`HKCU\Software\VB and VBA Program Settings\Stationkeeper Macros`).
 
 ## Build and test (developers)
@@ -70,7 +81,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 37 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 51 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path. See `TESTING.md` for the checks run by hand.

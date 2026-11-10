@@ -25,6 +25,16 @@ Private WithEvents lstAffects As MSForms.ListBox
 Private WithEvents cboChanges As MSForms.ComboBox
 Private WithEvents chkShown As MSForms.CheckBox
 Private lblComment As MSForms.Label
+Private lblHealth As MSForms.Label
+Private lblTest As MSForms.Label
+Private WithEvents btnTestOne As MSForms.CommandButton
+Private WithEvents btnHealth As MSForms.CommandButton
+Private WithEvents btnTestAll As MSForms.CommandButton
+Private WithEvents btnTestDoc As MSForms.CommandButton
+Private lblTestDoc As MSForms.Label
+Private lblHealthAll As MSForms.Label
+Private WithEvents btnBackupDir As MSForms.CommandButton
+Private lblBackupPath As MSForms.Label
 
 ' Categories page
 Private WithEvents lstCats As MSForms.ListBox
@@ -125,7 +135,7 @@ Private Sub UserForm_Initialize()
     Set mp = AddTo(Me, "Forms.MultiPage.1", "mp", 6, 24, 772, 444)
     mp.Pages(0).Caption = "Macros"
     mp.Pages(1).Caption = "Categories"
-    mp.Pages.Add "pLook", "Look"
+    mp.Pages.Add "pSettings", "Settings"
     mp.Pages.Add "pBulk", "Bulk tools"
     mp.Pages.Add "pHistory", "History"
 
@@ -136,17 +146,19 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblFilter", "Show", 244, 6, 60, 14
     Set cboFilter = AddTo(pg, "Forms.ComboBox.1", "cboFilter", 244, 20, 118, 20)
     cboFilter.Style = fmStyleDropDownList
-    For Each v In Array("All", "Description missing", "Shown in menu", "Not shown in menu", "Hidden", "Macro gone")
+    For Each v In Array("All", "Description missing", "Shown in menu", "Not shown in menu", "Hidden", "Macro gone", _
+                        "Test failed", "Not tested", "Health notes")
         cboFilter.AddItem v
     Next
     ' Column headings (a ListBox filled in code cannot show its own).
     Dim hd As MSForms.Label
-    Set hd = Lbl(pg, "hdMacro", "Macro", 12, 46, 180, 12): hd.Font.Bold = True
-    Set hd = Lbl(pg, "hdMenu", "In menu", 202, 46, 70, 12): hd.Font.Bold = True
-    Set hd = Lbl(pg, "hdDesc", "Description", 274, 46, 84, 12): hd.Font.Bold = True
+    Set hd = Lbl(pg, "hdMacro", "Macro", 12, 46, 148, 12): hd.Font.Bold = True
+    Set hd = Lbl(pg, "hdMenu", "In menu", 162, 46, 60, 12): hd.Font.Bold = True
+    Set hd = Lbl(pg, "hdDesc", "Description", 224, 46, 62, 12): hd.Font.Bold = True
+    Set hd = Lbl(pg, "hdTest", "Test", 286, 46, 60, 12): hd.Font.Bold = True
     Set lstEntries = AddTo(pg, "Forms.ListBox.1", "lstEntries", 8, 60, 354, 354)
-    lstEntries.ColumnCount = 3
-    lstEntries.ColumnWidths = "190 pt;72 pt;72 pt"
+    lstEntries.ColumnCount = 4
+    lstEntries.ColumnWidths = "150 pt;62 pt;62 pt;56 pt"
     lstEntries.IntegralHeight = False
 
     Set lblMacro = Lbl(pg, "lblMacro", "", 372, 6, 386, 14)
@@ -156,11 +168,11 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblC", "Category", 372, 60, 180, 14
     Set cboCategory = AddTo(pg, "Forms.ComboBox.1", "cboCategory", 372, 74, 186, 20)
     cboCategory.Style = fmStyleDropDownCombo
-    Lbl pg, "lblW", "Works on", 568, 60, 180, 14
+    Lbl pg, "lblW", "Works on (checked before it runs)", 568, 60, 190, 14
     Set cboWorksOn = AddTo(pg, "Forms.ComboBox.1", "cboWorksOn", 568, 74, 190, 20)
     cboWorksOn.Style = fmStyleDropDownCombo
     For Each v In Array("Selection", "Selection or whole document", "Whole document", "Cursor position", _
-                        "Table at the cursor", "Section at the cursor", "Template")
+                        "Table at the cursor", "List at the cursor", "Section at the cursor", "Template")
         cboWorksOn.AddItem v
     Next
     Lbl pg, "lblD", "Description (what it does, in plain words)", 372, 98, 260, 14
@@ -173,7 +185,7 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblK", "Search keywords (commas between)", 372, 198, 260, 14
     Set txtKeywords = AddTo(pg, "Forms.TextBox.1", "txtKeywords", 372, 212, 386, 20)
     Lbl pg, "lblA", "What this macro affects", 372, 236, 186, 14
-    Set lstAffects = AddTo(pg, "Forms.ListBox.1", "lstAffects", 372, 250, 186, 124)
+    Set lstAffects = AddTo(pg, "Forms.ListBox.1", "lstAffects", 372, 250, 186, 100)
     lstAffects.ListStyle = fmListStyleOption
     lstAffects.MultiSelect = fmMultiSelectMulti
     lstAffects.IntegralHeight = False
@@ -185,9 +197,15 @@ Private Sub UserForm_Initialize()
     Next
     Set chkShown = Chk(pg, "chkShown", "Show in the menu", 568, 282, 190, 18)
     chkShown.Font.Bold = True
-    Set lblComment = Lbl(pg, "lblComment", "", 372, 378, 386, 36)
+    Set btnTestOne = Btn(pg, "btnTestOne", "Test this macro", 568, 306, 190, 22)
+    Set lblTest = Lbl(pg, "lblTest", "", 568, 332, 190, 44)
+    lblTest.WordWrap = True
+    Set lblComment = Lbl(pg, "lblComment", "", 372, 356, 190, 58)
     lblComment.ForeColor = &H808080
     lblComment.WordWrap = True
+    Set lblHealth = Lbl(pg, "lblHealth", "", 568, 378, 190, 36)
+    lblHealth.ForeColor = &H99&
+    lblHealth.WordWrap = True
 
     ' ----- Categories -----
     Set pg = mp.Pages(1)
@@ -221,6 +239,10 @@ Private Sub UserForm_Initialize()
     Set btnButton = Btn(pg, "btnButton", "Add a button on the Add-ins tab", 186, 194, 220, 24)
     Lbl pg, "lblOpen2", "Anyone can also run StationkeeperMacros from View > Macros, or add it to the Quick Access Toolbar.", _
         8, 226, 600, 14
+    Lbl pg, "lblBk", "Backups of templates and the Excel exports go to (your choice, on this PC):", 8, 260, 600, 14
+    Set lblBackupPath = Lbl(pg, "lblBackupPath", "", 8, 276, 600, 14)
+    lblBackupPath.Font.Bold = True
+    Set btnBackupDir = Btn(pg, "btnBackupDir", "Choose the backup folder", 8, 294, 170, 24)
 
     ' ----- Bulk tools: each button does one thing to many macros at once -----
     Set pg = mp.Pages(3)
@@ -244,6 +266,14 @@ Private Sub UserForm_Initialize()
     Set btnReadBas = Btn(pg, "btnReadBas", "Read macros from .bas files", 8, 232, 260, 24)
     Lbl pg, "lblB6", "Only needed when Word will not let the admin look inside the template. In the VBA editor, " & _
         "right-click each module > Export File, then pick the .bas file(s) here. One file or many.", 278, 236, 480, 42
+    Set btnHealth = Btn(pg, "btnHealth", "Check the code health", 8, 290, 260, 24)
+    Set lblHealthAll = Lbl(pg, "lblB7", "Looks for missing libraries and notes risky lines in each macro (see the Health notes filter). " & _
+        "Runs nothing. Needs VBA project access. To compile, use Debug > Compile in the VBA editor.", 278, 294, 480, 28)
+    Set btnTestAll = Btn(pg, "btnTestAll", "Test every macro", 8, 326, 260, 24)
+    Lbl pg, "lblB8", "Runs each macro on a scratch document, one after another, and fills the Test column. Skips macros " & _
+        "that save, close or delete files. If Word shows an error, click End: that macro is marked Failed.", 278, 330, 480, 40
+    Set btnTestDoc = Btn(pg, "btnTestDoc", "Choose a test document", 8, 374, 260, 24)
+    Set lblTestDoc = Lbl(pg, "lblB9", "", 278, 378, 480, 28)
 
     ' ----- History -----
     Set pg = mp.Pages(4)
@@ -275,6 +305,9 @@ Private Sub UserForm_Initialize()
     Next
     AddExtraAffects
     cboFilter.ListIndex = 0
+    If mModel("scanAvailable") Then mModel("health") = SK_Health(mModel) Else mModel("health") = ""
+    UpdateBackupLabel
+    UpdateTestDocLabel
     FillCats
     FillCategoryCombo
     FillHistory
@@ -327,6 +360,9 @@ Private Sub FillList(Optional ByVal keepRun As String = "")
             Case "Not shown in menu": okRow = (e("found") And e("shown") <> "1")
             Case "Hidden": okRow = (e("shown") = "0")
             Case "Macro gone": okRow = (Not e("found"))
+            Case "Test failed": okRow = (SK_TestState(e("run")) = "Failed")
+            Case "Not tested": okRow = (e("found") And SK_TestState(e("run")) = "Not tested")
+            Case "Health notes": okRow = (Len(e("issues")) > 0)
             Case Else: okRow = True
         End Select
         If okRow And Len(q) > 0 Then
@@ -356,6 +392,7 @@ Private Sub FillList(Optional ByVal keepRun As String = "")
         lstEntries.AddItem e("title")
         lstEntries.List(i - 1, 1) = MenuCol(e)
         lstEntries.List(i - 1, 2) = DescCol(e)
+        lstEntries.List(i - 1, 3) = SK_TestState(e("run"))
         mView(i - 1) = idx(i)
     Next
     mLoading = False
@@ -402,7 +439,7 @@ Private Sub LoadFields()
     en = Not (mCur Is Nothing)
     txtTitle.Enabled = en: cboCategory.Enabled = en: cboWorksOn.Enabled = en
     txtDescription.Enabled = en: txtKeywords.Enabled = en: lstAffects.Enabled = en
-    cboChanges.Enabled = en: chkShown.Enabled = en: btnUseComment.Enabled = en
+    cboChanges.Enabled = en: chkShown.Enabled = en: btnUseComment.Enabled = en: btnTestOne.Enabled = en
     For i = 0 To lstAffects.ListCount - 1
         lstAffects.Selected(i) = False
     Next
@@ -411,6 +448,8 @@ Private Sub LoadFields()
         txtTitle.Text = "": cboCategory.Text = "": cboWorksOn.Text = "": txtDescription.Text = ""
         txtKeywords.Text = "": cboChanges.Text = "": chkShown.Value = False
         lblComment.Caption = ""
+        lblTest.Caption = ""
+        lblHealth.Caption = ""
         mLoading = False
         Exit Sub
     End If
@@ -437,6 +476,8 @@ Private Sub LoadFields()
         lblComment.Caption = ""
     End If
     btnUseComment.Enabled = (Len(mCur("comment")) > 0)
+    btnTestOne.Enabled = mCur("found")
+    ShowTestAndHealth
     mLoading = False
 End Sub
 
@@ -495,6 +536,7 @@ Private Sub UpdateRow()
     lstEntries.List(i, 0) = mCur("title")
     lstEntries.List(i, 1) = MenuCol(mCur)
     lstEntries.List(i, 2) = DescCol(mCur)
+    lstEntries.List(i, 3) = SK_TestState(mCur("run"))
     mLoading = False
     lblMacro.Caption = "Macro: " & mCur("run") & "     Status: " & SK_EntryStatus(mCur)
 End Sub
@@ -740,7 +782,7 @@ Private Function KeepRunNow() As String
 End Function
 
 ' ---------------------------------------------------------------------
-' Look page events
+' Settings page events
 ' ---------------------------------------------------------------------
 Private Sub txtMenuTitle_Change()
     If mLoading Then Exit Sub
@@ -834,6 +876,7 @@ End Sub
 
 Private Sub btnExportCsv_Click()
     Dim p As String
+    If Not EnsureBackupDir() Then Exit Sub
     On Error GoTo Fail
     p = SK_ExportCsv(mModel)
     MsgBox "Saved:" & vbCr & p & vbCr & vbCr & "Edit it in Excel, save as CSV UTF-8, then use Import.", vbInformation, SK_APP
@@ -894,6 +937,145 @@ Fail:
 End Sub
 
 ' ---------------------------------------------------------------------
+' Tests, health and settings
+' ---------------------------------------------------------------------
+Private Sub ShowTestAndHealth()
+    Dim d As String
+    If mCur Is Nothing Then Exit Sub
+    d = SK_TestDetail(mCur("run"))
+    If Len(d) = 0 Then d = "Not tested on this PC yet."
+    lblTest.Caption = d
+    If Not mModel("scanAvailable") Then
+        lblHealth.Caption = "Health: needs VBA project access."
+    ElseIf Len(mCur("issues")) > 0 Then
+        lblHealth.Caption = "Health: " & Replace(mCur("issues"), vbLf, "; ") & "."
+    Else
+        lblHealth.Caption = ""
+    End If
+End Sub
+
+Private Sub UpdateBackupLabel()
+    Dim d As String: d = SK_BackupDir()
+    If Len(d) = 0 Then d = "Not chosen yet. You will be asked at the first save."
+    lblBackupPath.Caption = d
+End Sub
+
+Private Sub UpdateTestDocLabel()
+    Dim d As String: d = SK_GetTestDoc()
+    If Len(d) = 0 Then
+        lblTestDoc.Caption = "Tests now use a new blank document made from this template. Pick a sample document " & _
+            "(with tables, lists and captions) to test macros that need them. The sample is never changed."
+    Else
+        lblTestDoc.Caption = "Tests use a fresh copy of: " & d & ". The file itself is never changed."
+    End If
+End Sub
+
+' Makes sure a backup folder is chosen. Asks the first time.
+Private Function EnsureBackupDir() As Boolean
+    Dim r As VbMsgBoxResult, d As String, sug As String
+    If Len(SK_BackupDir()) > 0 Then EnsureBackupDir = True: Exit Function
+    If SK_Quiet Then Exit Function
+    sug = SK_SuggestedBackupDir()
+    r = MsgBox("Before each save, Stationkeeper Macros keeps a dated backup of the template." & vbCr & vbCr & _
+               "Where should backups go?" & vbCr & vbCr & "Yes: " & sug & vbCr & "No: choose another folder", _
+               vbYesNoCancel + vbQuestion, SK_APP)
+    If r = vbYes Then
+        d = sug
+    ElseIf r = vbNo Then
+        d = SK_PickFolder("Choose where Stationkeeper Macros keeps backups", ThisDocument.Path)
+    End If
+    If Len(d) > 0 Then
+        SK_SetBackupDir d
+        UpdateBackupLabel
+        EnsureBackupDir = (Len(SK_BackupDir()) > 0)
+    End If
+End Function
+
+Private Sub btnBackupDir_Click()
+    Dim d As String, start As String
+    start = SK_BackupDir()
+    If Len(start) = 0 Then start = ThisDocument.Path
+    d = SK_PickFolder("Choose where Stationkeeper Macros keeps backups", start)
+    If Len(d) = 0 Then Exit Sub
+    SK_SetBackupDir d
+    UpdateBackupLabel
+End Sub
+
+Private Sub btnTestOne_Click()
+    Dim r As String, run As String
+    If mCur Is Nothing Then Exit Sub
+    run = mCur("run")
+    If SK_IsRisky(mCur) Then
+        If MsgBox(mCur("title") & " looks like it saves, closes or deletes files, or ends Word. A test runs it for real " & _
+                  "on a scratch document. Test it anyway?", vbYesNo + vbExclamation, SK_APP) <> vbYes Then Exit Sub
+    End If
+    lblTest.Caption = "Testing... If Word shows an error, click End."
+    DoEvents
+    r = SK_TestMacro(run, mCur("workson"))
+    UpdateRow
+    ShowTestAndHealth
+    If Left$(r, 7) = "Skipped" Or Left$(r, 3) = "Not" Then lblTest.Caption = r
+End Sub
+
+Private Sub btnHealth_Click()
+    Dim h As String, n As Long, e As Object
+    If Not mModel("scanAvailable") Then
+        MsgBox SK_NoAccessMessage(), vbInformation, SK_APP
+        Exit Sub
+    End If
+    h = SK_Health(mModel)
+    mModel("health") = h
+    For Each e In mModel("entries")
+        If Len(e("issues")) > 0 Then n = n + 1
+    Next
+    FillList KeepRunNow()
+    MsgBox h & vbCr & vbCr & n & " macro(s) have health notes. Use Show > Health notes to list them.", _
+        vbInformation, SK_APP
+End Sub
+
+Private Sub btnTestAll_Click()
+    Dim n As Long, e As Object, r As String, risky As Boolean
+    For Each e In mModel("entries")
+        If e("found") Then n = n + 1
+    Next
+    If n = 0 Then Exit Sub
+    If Not mModel("scanAvailable") Then
+        If MsgBox("Word is not letting the admin read the code, so it cannot tell which macros save, close or delete files." & _
+                  vbCr & "Test all " & n & " macros anyway?", vbYesNo + vbExclamation, SK_APP) <> vbYes Then Exit Sub
+        risky = True
+    Else
+        If MsgBox("Test " & n & " macros, one after another, each on its own scratch document?" & vbCr & vbCr & _
+                  "Macros that save, close or delete files are skipped. If Word shows an error, click End: " & _
+                  "that macro is marked Failed and the rest are not tested this time.", _
+                  vbOKCancel + vbInformation, SK_APP) <> vbOK Then Exit Sub
+    End If
+    r = SK_TestAll(mModel, risky)
+    FillList KeepRunNow()
+    MsgBox r, vbInformation, SK_APP
+End Sub
+
+Private Sub btnTestDoc_Click()
+    Dim p As String
+    With Application.FileDialog(3)
+        .Title = "Pick a sample document for tests (it is never changed)"
+        .Filters.Clear
+        .Filters.Add "Word documents", "*.docx;*.docm;*.doc"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then
+            If Len(SK_GetTestDoc()) > 0 Then
+                If MsgBox("Stop using the sample document, and test on a new blank document from this template?", _
+                          vbYesNo + vbQuestion, SK_APP) = vbYes Then SK_SetTestDoc ""
+                UpdateTestDocLabel
+            End If
+            Exit Sub
+        End If
+        p = .SelectedItems(1)
+    End With
+    SK_SetTestDoc p
+    UpdateTestDocLabel
+End Sub
+
+' ---------------------------------------------------------------------
 ' Save and close
 ' ---------------------------------------------------------------------
 Private Sub btnSave_Click()
@@ -905,6 +1087,9 @@ Private Sub btnSave_Click()
     If Not chkReady.Value Then
         MsgBox "Tick Ready to save first.", vbInformation, SK_APP
         Exit Sub
+    End If
+    If Not EnsureBackupDir() Then
+        If MsgBox("No backup folder is chosen. Save without a backup?", vbYesNo + vbExclamation, SK_APP) <> vbYes Then Exit Sub
     End If
     KeepCategory
     Dim e As Object
@@ -963,7 +1148,7 @@ End Function
 
 Public Function TestRow(ByVal i As Long) As String
     If i >= lstEntries.ListCount Then Exit Function
-    TestRow = lstEntries.List(i, 0) & " | " & lstEntries.List(i, 1) & " | " & lstEntries.List(i, 2)
+    TestRow = lstEntries.List(i, 0) & " | " & lstEntries.List(i, 1) & " | " & lstEntries.List(i, 2) & " | " & lstEntries.List(i, 3)
 End Function
 
 Public Function TestSaveGate() As String

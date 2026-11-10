@@ -138,3 +138,63 @@ Public Function T_NoAccess() As String
     SK_Quiet = False
     T_NoAccess = s
 End Function
+
+Public Function T_SetBackup(ByVal d As String) As String
+    SK_SetBackupDir d
+    T_SetBackup = SK_BackupDir()
+End Function
+
+Public Function T_Health() As String
+    Dim m As Object, e As Object, s As String
+    Set m = SK_LoadModel()
+    s = "libs: " & SK_Health(m) & " ##"
+    For Each e In m("entries")
+        If Len(e("issues")) > 0 Then s = s & " " & e("run") & "{" & Replace(e("issues"), vbLf, "; ") & "}"
+    Next
+    T_Health = s
+End Function
+
+Public Function T_TestOne(ByVal run As String) As String
+    T_TestOne = SK_TestMacro(run, "") & " | state=" & SK_TestState(run) & " | " & SK_TestDetail(run) & " | docs=" & Documents.Count
+End Function
+
+Public Function T_Marker() As String
+    Dim m As Object
+    SaveSetting SK_APP, SK_UserKey(), "mark|Module1.TOCFix", "test|2026-11-10 10:00"
+    Set m = SK_LoadModel()
+    T_Marker = SK_TestState("Module1.TOCFix") & " " & SK_TestDetail("Module1.TOCFix")
+End Function
+
+Public Function T_TestAll() As String
+    Dim m As Object
+    Set m = SK_LoadModel()
+    SK_Health m
+    T_TestAll = Replace(SK_TestAll(m, False), vbCr, " / ") & " | docs=" & Documents.Count
+End Function
+
+Public Function T_Undo() As String
+    Dim d As Object, a As String, b As String
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.Content.Text = "base"
+    SK_RunMacro "Module3.TwoEdits", "Two Edits"
+    a = d.Content.Text
+    d.Undo 1
+    b = d.Content.Text
+    d.Close SaveChanges:=0
+    T_Undo = "after run [" & Replace(a, vbCr, "") & "] after one undo [" & Replace(b, vbCr, "") & "]"
+End Function
+
+Public Function T_Needs() As String
+    Dim d As Object, why As String, s As String, t As Object
+    Set d = Documents.Add
+    s = "table:" & SK_NeedsMet("Table at the cursor", why) & "(" & why & ")"
+    s = s & " sel:" & SK_NeedsMet("Selection", why) & "(" & why & ")"
+    Set t = d.Tables.Add(d.Range(0, 0), 2, 2)
+    t.Cell(1, 1).Select
+    s = s & " table after:" & SK_NeedsMet("Table at the cursor", why)
+    d.Range.Select
+    s = s & " sel after:" & SK_NeedsMet("Selection", why)
+    s = s & " whole:" & SK_NeedsMet("Whole document", why)
+    d.Close SaveChanges:=0
+    T_Needs = s
+End Function

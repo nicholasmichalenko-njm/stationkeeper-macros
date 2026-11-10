@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.1.2
+' Stationkeeper Macros 0.2.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.1.2"
+Public Const SK_VERSION As String = "0.2.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 
 Public SK_LastScanMethod As String
@@ -303,6 +303,7 @@ Public Function SK_NewEntry(ByVal run As String) As Object
     e("isNew") = True
     e("relinked") = ""
     e("comment") = ""
+    e("issues") = ""
     Set SK_NewEntry = e
 End Function
 
@@ -359,6 +360,7 @@ Public Function SK_LoadModel() As Object
     End If
 
     ' Match the catalog with the macros really in the template.
+    SK_SettleMarkers
     Set found = SK_Scan()
     If Not SK_ScanAvailable Then
         ' Cannot look inside the template: trust the catalog as saved.
@@ -583,6 +585,7 @@ Public Function SK_SaveModel(ByVal m As Object, ByVal summary As String) As Stri
         On Error GoTo 0
     End If
 
+    If Len(bdir) = 0 Then msg = msg & "No backup made: no backup folder is chosen (Settings tab)." & vbCr
     msg = msg & "Saved to " & ThisDocument.Name & "."
     If Len(dst) > 0 Then msg = msg & vbCr & "Backup: " & dst
     SK_SaveModel = msg
@@ -615,23 +618,45 @@ Private Function SK_Ext() As String
     If InStrRev(n, ".") > 0 Then SK_Ext = Mid$(n, InStrRev(n, ".")) Else SK_Ext = ".dotm"
 End Function
 
-' Folder for backups and readable copies: beside the template, else Documents.
+' ---------------------------------------------------------------------
+' Backups folder. Each person chooses it once (the admin asks), and it is
+' kept in their Windows profile for every template. "" = not chosen yet.
+' ---------------------------------------------------------------------
 Public Function SK_BackupDir() As String
-    Dim p As String, d As String
-    On Error Resume Next
-    p = ThisDocument.Path
-    If Len(p) > 0 And LCase$(Left$(p, 4)) <> "http" Then
-        d = p & "\Stationkeeper Macros backups"
-        If Len(Dir$(d, vbDirectory)) = 0 Then MkDir d
-        If Err.Number = 0 And Len(Dir$(d, vbDirectory)) > 0 Then
-            SK_BackupDir = d
-            Exit Function
-        End If
+    Dim d As String
+    d = GetSetting(SK_APP, "Settings", "backupDir", "")
+    If Len(d) > 0 Then
+        On Error Resume Next
+        If Len(Dir$(d, vbDirectory)) = 0 Then d = ""
+        If Err.Number <> 0 Then d = ""
         Err.Clear
     End If
-    d = Environ$("USERPROFILE") & "\Documents\Stationkeeper Macros backups"
-    If Len(Dir$(d, vbDirectory)) = 0 Then MkDir d
-    If Len(Dir$(d, vbDirectory)) > 0 Then SK_BackupDir = d
+    SK_BackupDir = d
+End Function
+
+Public Function SK_SetBackupDir(ByVal d As String) As Boolean
+    On Error Resume Next
+    If Len(d) > 0 Then
+        If Len(Dir$(d, vbDirectory)) = 0 Then MkDir d
+    End If
+    SaveSetting SK_APP, "Settings", "backupDir", d
+    SK_SetBackupDir = (Err.Number = 0)
+End Function
+
+' The folder suggested the first time: beside the template, else Documents.
+Public Function SK_SuggestedBackupDir() As String
+    Dim p As String
+    p = ThisDocument.Path
+    If Len(p) = 0 Or LCase$(Left$(p, 4)) = "http" Then p = Environ$("USERPROFILE") & "\Documents"
+    SK_SuggestedBackupDir = p & "\Stationkeeper Macros backups"
+End Function
+
+Public Function SK_PickFolder(ByVal title As String, ByVal initial As String) As String
+    With Application.FileDialog(4)
+        .Title = title
+        If Len(initial) > 0 Then .InitialFileName = initial & "\"
+        If .Show = -1 Then SK_PickFolder = .SelectedItems(1)
+    End With
 End Function
 
 Public Function SK_SidecarPath() As String
@@ -700,6 +725,7 @@ Public Function SK_ExportCsv(ByVal m As Object) As String
             SK_CsvQ(e("workson")) & "," & SK_CsvQ(e("changes")) & "," & _
             SK_CsvQ(SK_YesNo(e("shown"))) & "," & SK_CsvQ(SK_EntryStatus(e)) & vbCrLf
     Next
+    If Len(SK_BackupDir()) = 0 Then Err.Raise vbObjectError + 1, SK_APP, "Choose a backup folder first (Settings tab)."
     path = SK_BackupDir() & "\" & SK_BaseName() & " - macro catalog " & Format$(Now, "yyyy-mm-dd hhnn") & ".csv"
     SK_WriteUtf8 path, s
     SK_ExportCsv = path
@@ -823,16 +849,271 @@ End Function
 ' Running a macro, and what each person sees (kept in their Windows
 ' profile, never in the template)
 ' ---------------------------------------------------------------------
-Public Function SK_RunMacro(ByVal run As String) As Boolean
+' Runs a macro as one undo step ("Stationkeeper: <title>" on the Undo list).
+' A marker is set before and cleared after. If Word stops the macro with an
+' error dialog and the person clicks End, the marker stays, and the next time
+' the menu or admin opens, the macro is recorded as Failed on this PC.
+Public Function SK_RunMacro(ByVal run As String, Optional ByVal title As String = "") As Boolean
+    Dim rec As Boolean, t As Single
     On Error GoTo Fail
     SaveSetting SK_APP, SK_UserKey(), "uses|" & run, CStr(SK_Uses(run) + 1)
     SaveSetting SK_APP, SK_UserKey(), "last|" & run, Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    SaveSetting SK_APP, SK_UserKey(), "mark|" & run, "menu|" & Format$(Now, "yyyy-mm-dd hh:nn")
+    If Len(title) = 0 Then title = SK_Friendly(SK_NamePart(run))
+    rec = SK_StartUndo(title)
+    t = Timer
     Application.Run run
+    If rec Then Application.UndoRecord.EndCustomRecord
+    SaveSetting SK_APP, SK_UserKey(), "mark|" & run, ""
+    SK_SetResult run, "Passed", Format$(Timer - t, "0.00") & " s, run from the menu"
     SK_RunMacro = True
     Exit Function
 Fail:
-    MsgBox run & " stopped with an error:" & vbCr & Err.Description, vbExclamation, SK_APP
+    If rec Then
+        On Error Resume Next
+        Application.UndoRecord.EndCustomRecord
+    End If
+    SaveSetting SK_APP, SK_UserKey(), "mark|" & run, ""
+    If Err.Number = -2147352573 Or InStr(Err.Description, "run the specified macro") > 0 Then
+        SK_SetResult run, "Failed", "the macro is not in the template"
+    End If
+    If Not SK_Quiet Then MsgBox run & " could not run:" & vbCr & Err.Description, vbExclamation, SK_APP
 End Function
+
+Private Function SK_StartUndo(ByVal title As String) As Boolean
+    On Error Resume Next
+    If Application.UndoRecord.IsRecordingCustomRecord Then Exit Function
+    Application.UndoRecord.StartCustomRecord Left$("Stationkeeper: " & title, 64)
+    SK_StartUndo = (Err.Number = 0)
+End Function
+
+' ---------------------------------------------------------------------
+' Test results (per PC): Passed or Failed, with date and detail
+' ---------------------------------------------------------------------
+Public Function SK_SetResult(ByVal run As String, ByVal state As String, ByVal detail As String) As Boolean
+    SaveSetting SK_APP, SK_UserKey(), "result|" & run, state & "|" & Format$(Now, "yyyy-mm-dd hh:nn") & "|" & detail
+    SK_SetResult = True
+End Function
+
+Public Function SK_TestState(ByVal run As String) As String
+    Dim v As String
+    v = GetSetting(SK_APP, SK_UserKey(), "result|" & run, "")
+    If Len(v) = 0 Then SK_TestState = "Not tested" Else SK_TestState = Split(v, "|")(0)
+End Function
+
+Public Function SK_TestDetail(ByVal run As String) As String
+    Dim v As Variant
+    v = Split(GetSetting(SK_APP, SK_UserKey(), "result|" & run, ""), "|")
+    If UBound(v) >= 2 Then SK_TestDetail = v(0) & " " & v(1) & ": " & v(2)
+End Function
+
+' Turns markers left by runs that never finished into Failed results.
+Public Function SK_SettleMarkers() As Long
+    Dim a As Variant, i As Long, k As String, v As String
+    On Error Resume Next
+    a = GetAllSettings(SK_APP, SK_UserKey())
+    If IsEmpty(a) Then Exit Function
+    For i = LBound(a, 1) To UBound(a, 1)
+        k = a(i, 0): v = a(i, 1)
+        If Left$(k, 5) = "mark|" And Len(v) > 0 Then
+            SK_SetResult Mid$(k, 6), "Failed", IIf(Left$(v, 4) = "test", "stopped with an error during a test", _
+                                                   "stopped with an error when run from the menu")
+            SaveSetting SK_APP, SK_UserKey(), k, ""
+            SK_SettleMarkers = SK_SettleMarkers + 1
+        End If
+    Next
+End Function
+
+' ---------------------------------------------------------------------
+' What a macro needs before it runs (from its "Works on" answer)
+' ---------------------------------------------------------------------
+Public Function SK_NeedsMet(ByVal worksOn As String, ByRef why As String) As Boolean
+    why = ""
+    On Error Resume Next
+    If Documents.Count = 0 Then
+        why = "Open a document first."
+        Exit Function
+    End If
+    Select Case LCase$(worksOn)
+        Case "selection"
+            If Selection.Type = wdSelectionIP Or Len(Selection.Range.Text) = 0 Then why = "Select some text first."
+        Case "table at the cursor"
+            If Not Selection.Information(wdWithInTable) Then why = "Put the cursor in a table first."
+        Case "list at the cursor"
+            If Selection.Range.ListFormat.ListType = wdListNoNumbering Then why = "Put the cursor in a list first."
+    End Select
+    SK_NeedsMet = (Len(why) = 0)
+End Function
+
+' ---------------------------------------------------------------------
+' Test runs: each test uses a fresh scratch document, never a real file
+' ---------------------------------------------------------------------
+Public Function SK_GetTestDoc() As String
+    Dim d As String
+    d = GetSetting(SK_APP, SK_UserKey(), "pref|testDoc", "")
+    If Len(d) > 0 Then
+        On Error Resume Next
+        If Len(Dir$(d)) = 0 Then d = ""
+    End If
+    SK_GetTestDoc = d
+End Function
+
+Public Function SK_SetTestDoc(ByVal path As String) As Boolean
+    SaveSetting SK_APP, SK_UserKey(), "pref|testDoc", path
+    SK_SetTestDoc = True
+End Function
+
+' Returns "Passed ...", "Failed ..." or "Skipped ...".
+Public Function SK_TestMacro(ByVal run As String, ByVal worksOn As String) As String
+    Dim prev As Object, scratch As Object, t As Single, why As String, src As String, rec As Boolean
+    On Error Resume Next
+    Set prev = ActiveDocument
+    Err.Clear
+    On Error GoTo MakeFail
+    src = SK_GetTestDoc()
+    If Len(src) > 0 Then
+        Set scratch = Documents.Add(Template:=src)
+        scratch.AttachedTemplate = ThisDocument.FullName
+    Else
+        Set scratch = Documents.Add(Template:=ThisDocument.FullName)
+    End If
+    scratch.Activate
+    scratch.Range(0, 0).Select
+    On Error GoTo 0
+
+    If Not SK_NeedsMet(worksOn, why) Then
+        SK_TestMacro = "Skipped: " & why & " Pick a test document that starts there (Bulk tools)."
+        GoTo Tidy
+    End If
+
+    SaveSetting SK_APP, SK_UserKey(), "mark|" & run, "test|" & Format$(Now, "yyyy-mm-dd hh:nn")
+    t = Timer
+    On Error GoTo RunFail
+    Application.Run run
+    On Error GoTo 0
+    SaveSetting SK_APP, SK_UserKey(), "mark|" & run, ""
+    SK_SetResult run, "Passed", Format$(Timer - t, "0.00") & " s, test on a scratch document"
+    SK_TestMacro = "Passed in " & Format$(Timer - t, "0.00") & " s"
+    GoTo Tidy
+RunFail:
+    SaveSetting SK_APP, SK_UserKey(), "mark|" & run, ""
+    SK_SetResult run, "Failed", Err.Description
+    SK_TestMacro = "Failed: " & Err.Description
+    Resume Tidy
+MakeFail:
+    SK_TestMacro = "Not tested: could not make a scratch document (" & Err.Description & ")"
+    Resume Tidy
+Tidy:
+    On Error Resume Next
+    If Not scratch Is Nothing Then scratch.Close SaveChanges:=0
+    If Not prev Is Nothing Then prev.Activate
+End Function
+
+' Tests every macro found. Skips the ones whose code saves, closes or deletes
+' files or ends Word, unless includeRisky. Returns a summary.
+Public Function SK_TestAll(ByVal m As Object, ByVal includeRisky As Boolean) As String
+    Dim e As Object, r As String, nP As Long, nF As Long, nS As Long, nR As Long, failed As String
+    For Each e In m("entries")
+        If e("found") Then
+            If Not includeRisky And SK_IsRisky(e) Then
+                nR = nR + 1
+            Else
+                r = SK_TestMacro(e("run"), e("workson"))
+                If Left$(r, 6) = "Passed" Then
+                    nP = nP + 1
+                ElseIf Left$(r, 6) = "Failed" Then
+                    nF = nF + 1
+                    failed = failed & vbCr & "  " & e("title") & ": " & Mid$(r, 9)
+                Else
+                    nS = nS + 1
+                End If
+            End If
+        End If
+    Next
+    SK_TestAll = "Passed: " & nP & "    Failed: " & nF & "    Skipped (needs a selection, table or list): " & nS & _
+        "    Not run (saves, closes or deletes files, or ends Word): " & nR & failed
+End Function
+
+Public Function SK_IsRisky(ByVal e As Object) As Boolean
+    SK_IsRisky = (InStr(e("issues"), "Saves, closes or deletes files") > 0 Or InStr(e("issues"), "Ends Word") > 0)
+End Function
+
+' ---------------------------------------------------------------------
+' Health check of the code (needs VBA project access). Never runs anything.
+' Sets e("issues") on each macro; returns notes for the whole template.
+' ---------------------------------------------------------------------
+Public Function SK_Health(ByVal m As Object) As String
+    Dim e As Object, r As Object, s As String, nm As String
+    If Not m("scanAvailable") Then
+        SK_Health = "The health check needs ""Trust access to the VBA project object model""."
+        Exit Function
+    End If
+    On Error Resume Next
+    For Each r In ThisDocument.VBProject.References
+        If r.IsBroken Then
+            nm = r.Description
+            If Len(nm) = 0 Then nm = r.FullPath
+            If Len(nm) = 0 Then nm = r.GUID
+            s = s & "Missing library: " & nm & ". Macros that use it fail on this PC." & vbCr
+        End If
+    Next
+    Err.Clear
+    On Error GoTo 0
+    For Each e In m("entries")
+        If e("found") Then e("issues") = SK_IssuesFor(e("run"))
+    Next
+    If Len(s) = 0 Then s = "Every library the code uses is present."
+    SK_Health = s & vbCr & "To check the code compiles, open the VBA editor (Alt+F11) and choose Debug > Compile."
+End Function
+
+Private Function SK_IssuesFor(ByVal run As String) As String
+    Dim cm As Object, st As Long, n As Long, lines As Variant, i As Long, t As String, low As String
+    Dim body As String, b As String, out As String
+    On Error GoTo NoCode
+    Set cm = ThisDocument.VBProject.VBComponents(SK_ModulePart(run)).CodeModule
+    st = cm.ProcStartLine(SK_NamePart(run), 0)
+    n = cm.ProcCountLines(SK_NamePart(run), 0)
+    lines = Split(cm.Lines(st, n), vbCrLf)
+    On Error GoTo 0
+    For i = 0 To UBound(lines)
+        t = Trim$(lines(i))
+        low = LCase$(t)
+        If Left$(t, 1) <> "'" And Left$(low, 4) <> "rem " And Len(t) > 0 Then
+            body = body & low & vbLf
+            If low = "stop" Then out = SK_AddIssue(out, "Has a Stop line, so it pauses in the VBA editor")
+            If t Like "*""[A-Za-z]:\*" Or t Like "*""\\*" Then out = SK_AddIssue(out, "Uses a fixed file path that may not exist on other PCs")
+            If Left$(low, 5) = "kill " Or InStr(low, " kill ") > 0 Or Left$(low, 9) = "filecopy " Then out = SK_AddIssue(out, "Saves, closes or deletes files")
+        End If
+    Next
+    b = Replace(body, " ", "")
+    If InStr(b, ".saveas") > 0 Or (SK_Count(b, ".save") > SK_Count(b, ".saved")) Or InStr(b, ".close") > 0 Then _
+        out = SK_AddIssue(out, "Saves, closes or deletes files")
+    If InStr(b, "application.quit") > 0 Then out = SK_AddIssue(out, "Ends Word")
+    If (InStr(b, "displayalerts=false") > 0 Or InStr(b, "displayalerts=wdalertsnone") > 0 Or InStr(b, "displayalerts=0") > 0) And _
+       Not (InStr(b, "displayalerts=true") > 0 Or InStr(b, "displayalerts=wdalertsall") > 0 Or InStr(b, "displayalerts=-1") > 0) Then _
+        out = SK_AddIssue(out, "Turns Word alerts off and never back on")
+    If InStr(b, "screenupdating=false") > 0 And InStr(b, "screenupdating=true") = 0 Then _
+        out = SK_AddIssue(out, "Turns screen updating off and never back on")
+    If InStr(b, "onerrorresumenext") > 0 And InStr(b, "onerrorgoto") = 0 Then _
+        out = SK_AddIssue(out, "Hides its own errors (On Error Resume Next), so a test cannot see them")
+    SK_IssuesFor = out
+    Exit Function
+NoCode:
+    SK_IssuesFor = ""
+End Function
+
+Private Function SK_AddIssue(ByVal out As String, ByVal issue As String) As String
+    If InStr(vbLf & out & vbLf, vbLf & issue & vbLf) > 0 Then
+        SK_AddIssue = out
+    Else
+        SK_AddIssue = out & IIf(Len(out) > 0, vbLf, "") & issue
+    End If
+End Function
+
+Private Function SK_Count(ByVal s As String, ByVal f As String) As Long
+    SK_Count = (Len(s) - Len(Replace(s, f, ""))) / Len(f)
+End Function
+
 
 Public Function SK_UserKey() As String
     SK_UserKey = ThisDocument.Name

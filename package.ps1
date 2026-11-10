@@ -1,6 +1,6 @@
 # Zips the built kit for handing out: kit, import files, read-me.
-# Usage: powershell -ExecutionPolicy Bypass -File package.ps1 -Version 0.1.2
-param([string]$Root = $PSScriptRoot, [string]$Version = '0.1.2')
+# Usage: powershell -ExecutionPolicy Bypass -File package.ps1 -Version 0.2.0
+param([string]$Root = $PSScriptRoot, [string]$Version = '0.2.0')
 $ErrorActionPreference = 'Stop'
 $stage = Join-Path $Root "build\Stationkeeper Macros $Version"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
