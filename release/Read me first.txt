@@ -1,0 +1,38 @@
+STATIONKEEPER MACROS 0.1.0
+A menu and a bookshelf for the macros in a Word template. It never edits your code.
+
+1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
+
+2. ADD IT TO THE TEMPLATE (no VBA editor needed)
+   - If this file came by email, Teams or the web: right-click "Stationkeeper Macros Kit.dotm"
+     > Properties > tick Unblock > OK.
+   - Word: File > Open "Stationkeeper Macros Kit.dotm". Enable macros if asked.
+   - View > Macros > StationkeeperMacrosInstall > Run. Pick your template (closed, or open and saved).
+   - Or in the VBA editor: File > Import File, the three files in "Import files"
+     (keep each .frx beside its .frm).
+
+3. DESCRIBE YOUR MACROS (the admin)
+   - Open your template itself (File > Open the .dotm).
+   - View > Macros > StationkeeperMacrosAdmin > Run.
+   - Pick each macro: title, description, category, keywords, what it affects.
+     Tick "Show in the menu".
+   - Many macros? Check tab > Export catalog to CSV, fill it in Excel,
+     save as CSV UTF-8, then Import catalog from CSV.
+   - Look tab: set Alt+Shift+M and an Add-ins tab button.
+   - Type WRITE, then Save to template. A dated backup is made first.
+
+4. USE THE MENU
+   - In any document based on the template: Alt+Shift+M, the Add-ins tab button,
+     or View > Macros > StationkeeperMacros.
+   - Type to search. Up/Down move, Enter runs, Esc closes.
+
+IF THE ADMIN SAYS WORD IS NOT LETTING IT LOOK INSIDE THE TEMPLATE
+   Turn on File > Options > Trust Center > Trust Center Settings > Macro Settings >
+   "Trust access to the VBA project object model", then open the admin again.
+   Only the person running the admin needs this. The menu never does.
+   Or: export your module(s) from the VBA editor (right-click > Export File) and use
+   Check tab > Read macros from .bas files.
+
+TO TAKE IT OUT
+   Open the kit, run StationkeeperMacrosRemove, pick the template.
+   Your macros and the descriptions stay.
