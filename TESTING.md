@@ -1,6 +1,6 @@
 # Testing
 
-## Automated: `test.ps1` (51 checks, 2026-11-10, Word 16.0.17932, Windows)
+## Automated: `test.ps1` (58 checks, 2026-11-10, Word 16.0.17932, Windows)
 
 Runs every step in its own hidden Word and always closes it. Changes no Word or Windows settings.
 
@@ -11,7 +11,8 @@ Runs every step in its own hidden Word and always closes it. Changes no Word or 
 | Catalog | Saves into the template with a dated backup; survives close and reopen; saves from a document based on the template; a macro moved to another module keeps its description |
 | Menu | Lists only macros put in the menu; search by keyword prefix, description and affects; no-match message; runs a macro by Module.Macro |
 | Admin | Tabs are Macros, Categories, Settings, Bulk tools, History; labels read "What this macro affects" and "Does this change the document?"; no Also in Stationkeeper box; opens, edits, counts pending changes; list shows In menu and Description columns; Save is off with nothing to save and needs Ready to save ticked |
-| CSV | Export and import round trip with quotes, commas and line breaks |
+| CSV | Export and update round trip with quotes, commas and line breaks |
+| Lists | Excel export read back; a primary list edited in Excel (changed description and category, blank title left alone, Show in menu Yes, a row for a macro not in the template skipped, preview counts); a Word table; JSON with escapes, unicode, true and a bare macro name; the primary list shown in the admin |
 | Opening the menu | Alt+Shift+M and the Add-ins tab button |
 | Backups | Folder chosen per person and kept; saves back up into it |
 | Health | Missing libraries; notes for saves/closes/deletes files, hides its own errors, alerts off, fixed path; clean macros get no notes |

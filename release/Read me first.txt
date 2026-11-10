@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 0.2.0
+STATIONKEEPER MACROS 0.3.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -19,8 +19,10 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
    - Pick each macro: title, description, category, keywords, what it affects,
      and whether it changes the document.
      Tick "Show in the menu".
-   - Many macros? Bulk tools tab > Export the list to Excel (CSV), fill it in Excel,
-     save as CSV UTF-8, then Import the list from Excel (CSV).
+   - Many macros? Keep a primary list: Bulk tools > Export the list to Excel, edit it,
+     then Bulk tools > Update from the primary list. It shows what will change first.
+     Any Excel, CSV, Word table or JSON list works (Update from a list file).
+     Blank cells leave values as they are.
    - Settings tab: set Alt+Shift+M, an Add-ins tab button, and where backups go.
    - Tick Ready to save, then Save to template. A dated backup is made first.
      The first time, it asks where backups should go.

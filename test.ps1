@@ -40,6 +40,7 @@ function TR1($word, [string]$macro, [string]$a) { RunW $word "SK_Test.$macro" $a
 Remove-Item (Join-Path $work 'Stationkeeper Macros backups') -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $sample -Force -ErrorAction SilentlyContinue
 Get-ChildItem $work -Filter '~$*' -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+$excelBefore = @(Get-Process EXCEL -ErrorAction SilentlyContinue | ForEach-Object Id)
 $setKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\Settings'
 $prevBackup = (Get-ItemProperty $setKey -ErrorAction SilentlyContinue).backupDir
 foreach ($k in @('Team Sample Template.dotm')) { Remove-Item "HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\$k" -Recurse -ErrorAction SilentlyContinue }
@@ -110,7 +111,7 @@ try {
         Check 'Save disabled with nothing to save' ($adm -match 'gate0: pending=0 unticked=False ticked=False') ''
         Check 'Save needs Ready to save ticked' ($adm -match 'gate1: pending=\d+ unticked=False ticked=True') ''
         $csv = TR $word 'T_Csv'
-        Check 'CSV export and import round trip (quotes, commas, line breaks)' (($csv -like 'Updated 8 macro(s)*') -and ($csv -match 'line one\\nline two, with comma')) $csv
+        Check 'CSV export and import round trip (quotes, commas, line breaks)' (($csv -match '8 row\(s\) read') -and ($csv -match '1 macro\(s\) changed: descriptions 1') -and ($csv -match 'line one\\nline two, with comma')) $csv
         $sc = TR $word 'T_Shortcut'
         Check 'shortcut and Add-ins button' (($sc -match 'Alt\+Shift\+M now opens') -and ($sc -match 'now has a Stationkeeper Macros button')) $sc
         $d.Save()
@@ -186,6 +187,63 @@ try {
         $d.Close([ref]0)
     }
 
+    # 7c. 0.3.0: update from lists. Excel export, primary list edited in Excel, a Word table, JSON.
+    [string]$primaryX = Join-Path $work 'Macro primary list.xlsx'
+    [string]$wordList = Join-Path $work 'Macro list.docx'
+    [string]$jsonList = Join-Path $work 'macro list.json'
+    Remove-Item $primaryX, $wordList, $jsonList -Force -ErrorAction SilentlyContinue
+    $script:exported = ''
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        $x = TR $word 'T_ExportXlsx'
+        Check 'export the list to Excel and read it back' (($x -match 'rows=13') -and ($x -match '\.xlsx')) $x
+        $script:exported = ($x -split ' \| ')[0]
+        [void](TR1 $word 'T_MakeDocxList' $wordList)
+        $d.Close([ref]0)
+    }
+    # Edit the exported list in Excel, the way a person keeping the primary list would.
+    $xl = New-Object -ComObject Excel.Application
+    try {
+        $xl.Visible = $false; $xl.DisplayAlerts = $false
+        $wb = $xl.Workbooks.Open([string]$script:exported)
+        $ws = $wb.Worksheets.Item('Macros')
+        $last = $ws.UsedRange.Rows.Count
+        for ($r = 2; $r -le $last; $r++) {
+            $mac = [string]$ws.Cells.Item($r, 1).Text
+            if ($mac -eq 'Module1.ShowHiddenText') { $ws.Cells.Item($r, 4).Value2 = 'From the primary list'; $ws.Cells.Item($r, 2).Value2 = ''; $ws.Cells.Item($r, 3).Value2 = 'View' }
+            if ($mac -eq 'Module1.ClearDirectFormatting') { $ws.Cells.Item($r, 9).Value2 = 'Yes' }
+        }
+        $ws.Cells.Item($last + 1, 1).Value2 = 'Module9.NotHere'
+        $ws.Cells.Item($last + 1, 4).Value2 = 'Not in this template'
+        $wb.SaveAs($primaryX, 51)
+        $wb.Close($false)
+    }
+    finally { $xl.Quit(); [void][Runtime.InteropServices.Marshal]::ReleaseComObject($xl) }
+    $json = '{"macros": [' + "`n" +
+        '  {"Macro": "Module1.TOCFix", "Description": "Updates every table of contents.\nSecond line with \"quotes\" and caf\u00e9.", "Category": "Fields", "Show in menu": true},' + "`n" +
+        '  {"Macro": "Gone.Macro", "Title": "Not here"},' + "`n" +
+        '  {"macro": "UpdateAllFields", "keywords": "fields, toc, f9", "workson": "Whole document", "note": null, "count": 3}' + "`n" + ']}'
+    [IO.File]::WriteAllText($jsonList, $json, (New-Object System.Text.UTF8Encoding($true)))
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        $ux = TR1 $word 'T_UpdateFrom' $primaryX
+        Write-Output "EXCEL: $ux"
+        Check 'Excel list: preview counts the changes' (($ux -match 'PREVIEW 14 row\(s\) read') -and ($ux -match '2 macro\(s\) will change') -and ($ux -match 'skipped: Module9\.NotHere')) ''
+        Check 'Excel list: description and category applied, blank title left alone' ($ux -match 'ShowHiddenText: title=Show Hidden Text\|cat=View\|desc=From the primary list') ''
+        Check 'Excel list: Show in menu Yes applied' ($ux -match 'ClearDirectFormatting: [^#]*\|shown=1') ''
+        $uw = TR1 $word 'T_UpdateFrom' $wordList
+        Write-Output "WORD: $uw"
+        Check 'Word table list: applied, unknown macro skipped' (($uw -match 'FitTablesToMargins: [^#]*cat=Tables\|desc=Sets every table to the full text width\.') -and ($uw -match 'skipped: NoSuch\.Macro')) ''
+        $uj = TR1 $word 'T_UpdateFrom' $jsonList
+        Write-Output "JSON: $uj"
+        Check 'JSON list: escapes, unicode, true, bare macro name' (($uj -match 'TOCFix: [^#]*cat=Fields\|desc=Updates every table of contents\.\\nSecond line with "quotes" and caf.\.') -and ($uj -match 'TOCFix: [^#]*shown=1') -and ($uj -match 'UpdateAllFields: [^#]*kw=fields, toc, f9\|works=Whole document') -and ($uj -match 'skipped: Gone\.Macro')) ''
+        $pl = TR1 $word 'T_PrimaryLabel' $primaryX
+        Check 'primary list shown in the admin and its button turned on' (($pl -match 'Macro primary list\.xlsx') -and ($pl -match 'enabled=True')) $pl
+        $d.Close([ref]0)
+    }
+
     # 8. Update the kit in place (Organizer).
     Invoke-WordJob -Root $Root -Job {
         param($word)
@@ -216,6 +274,10 @@ catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)
 }
 finally {
+    # End only Excel started by automation during this run (never one a person opened).
+    Get-CimInstance Win32_Process -Filter "Name='EXCEL.EXE'" -ErrorAction SilentlyContinue |
+        Where-Object { ($excelBefore -notcontains $_.ProcessId) -and ($_.CommandLine -match '/automation|-Embedding') } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     if ($null -ne $prevBackup) { Set-ItemProperty $setKey -Name backupDir -Value $prevBackup }
     else { Remove-ItemProperty $setKey -Name backupDir -ErrorAction SilentlyContinue }
     Write-Output ''

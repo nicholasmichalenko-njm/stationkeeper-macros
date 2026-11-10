@@ -33,7 +33,7 @@ It works with whatever macros are already in the template: one module or many. I
 2. View > Macros > `StationkeeperMacrosAdmin` > Run.
 3. On **Macros**, the list has three columns: the macro, **In menu** (Shown, Hidden, Not set, or Macro gone) and **Description** (Written or Missing). Use **Show** to list only the ones still missing a description or not yet in the menu. Pick each macro and fill in Title, Description, Category, Keywords, **What this macro affects** and **Does this change the document?** Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
 4. **Bulk tools** work on the whole list at once: **Fill blank descriptions from code comments**, **Show every described macro in the menu**, **Remove macros that are gone**, export and import for Excel, and **Read macros from .bas files**. Each button has a sentence beside it saying what it does.
-5. Faster for many macros: **Bulk tools > Export the list to Excel (CSV)**, fill it in Excel, save as **CSV UTF-8**, then **Import the list from Excel (CSV)**.
+5. Faster for many macros: keep a **primary list** (see below).
 6. **Categories** sets your own categories and their order.
 7. **Settings** sets the menu title, the default sort, two ways to open the menu (**Alt+Shift+M** and a button on the **Add-ins** tab), and **where backups go**.
 8. Tick **Ready to save**, then **Save to template**. The first time, the admin asks where backups should go (a folder beside the template is suggested). You can change it on **Settings**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
@@ -47,6 +47,30 @@ Run `StationkeeperMacros` (or press Alt+Shift+M, or use the Add-ins tab button) 
 - **One Ctrl+Z undoes a whole macro.** Each run is one step on Word's Undo list, named "Stationkeeper: <title>".
 - **The menu checks what a macro needs first.** A macro set to work on a selection, a table at the cursor or a list at the cursor will not run until that is true, and the menu says what to do.
 - Pins, Most used and Recent belong to each person on their own PC and are never saved in the template.
+
+## The primary list: update many macros at once
+
+Keep one list with the latest titles, categories, descriptions and the rest, and update any template from it in one step.
+
+1. **Bulk tools > Export the list to Excel** makes a workbook (sheet "Macros") with one row per macro. Say Yes to use it as the primary list, or move it somewhere shared first (OneDrive or SharePoint) and choose it on **Settings > Choose the primary list**.
+2. Edit the list in Excel. Add rows for macros other templates have: rows for macros a template doesn't contain are skipped and listed, so one list can serve many templates.
+3. **Bulk tools > Update from the primary list** shows what will change (how many titles, categories, descriptions and so on, which rows were skipped, which macros aren't on the list) and changes nothing until you say Yes. Then tick **Ready to save** and save.
+
+**Update from a list file** does the same from any file: Excel (.xlsx, .xlsm, .xls), CSV, a **table in a Word document**, or **JSON**.
+
+| Column | Notes |
+|---|---|
+| Macro | Required. `Module.Macro`, or just the macro name if no other module has one with the same name. |
+| Title, Category, Description, Keywords | Text. A new category is added to the category list. |
+| What it affects | Comma-separated. "Affects" also works. |
+| Works on | For example Selection, Table at the cursor, Whole document. |
+| Does it change the document | For example Yes; No, it only reports. |
+| Show in menu | Yes or No (also True/False, 1/0). |
+
+- **Blank cells leave values as they are.** Clear a value in the admin itself.
+- Other columns (Status, Test, your own notes) are ignored. In Excel the sheet named "Macros" is read (otherwise the first sheet), and the header can sit below a title row.
+- In Word, the first table whose first row has a Macro column is read (keep it a simple table, no merged cells).
+- JSON: a list of objects, or `{"macros": [ ... ]}`, with the same names as keys (`"Show in menu": true` works).
 
 ## Testing macros
 
@@ -81,7 +105,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 51 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 58 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path. See `TESTING.md` for the checks run by hand.

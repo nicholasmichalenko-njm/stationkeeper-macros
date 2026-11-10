@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.2.0
+' Stationkeeper Macros 0.3.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.2.0"
+Public Const SK_VERSION As String = "0.3.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 
 Public SK_LastScanMethod As String
@@ -774,75 +774,405 @@ Public Function SK_ParseCsv(ByVal text As String) As Collection
     Set SK_ParseCsv = rows
 End Function
 
-' Updates the catalog from a CSV made by Export (edit it in Excel, save as CSV UTF-8).
-' Rows are matched by the Macro column. Rows for macros not in the template are skipped.
-Public Function SK_ImportCsv(ByVal m As Object, ByVal path As String) As String
-    Dim rows As Collection, hdr As Collection, row As Collection, e As Object, hit As Object
-    Dim cols As Object, i As Long, r As Long, nUpd As Long, nSkip As Long, key As String, v As String
-    Dim fields As Variant, f As Variant
-
-    Set rows = SK_ParseCsv(SK_ReadUtf8(path))
-    If rows.Count < 2 Then
-        SK_ImportCsv = "The file has no rows to import."
-        Exit Function
-    End If
-    Set hdr = rows(1)
-    Set cols = CreateObject("Scripting.Dictionary")
-    For i = 1 To hdr.Count
-        cols(LCase$(Trim$(hdr(i)))) = i
-    Next
-    If Not cols.Exists("macro") Then
-        SK_ImportCsv = "The file needs a Macro column. Start from Export to CSV."
-        Exit Function
-    End If
-
-    fields = Array("title|title", "category|category", "description|description", "keywords|keywords", _
-                   "affects|affects", "what it affects|affects", "works on|workson", _
-                   "changes the document|changes", "does it change the document|changes")
-    For r = 2 To rows.Count
-        Set row = rows(r)
-        key = SK_CsvCell(row, cols("macro"))
-        Set hit = Nothing
-        If Len(key) > 0 Then
-            For Each e In m("entries")
-                If LCase$(e("run")) = LCase$(key) Then Set hit = e: Exit For
-            Next
-            If hit Is Nothing Then
-                For Each e In m("entries")
-                    If LCase$(SK_NamePart(e("run"))) = LCase$(SK_NamePart(key)) Then Set hit = e: Exit For
-                Next
-            End If
-        End If
-        If hit Is Nothing Then
-            If Len(key) > 0 Then nSkip = nSkip + 1
-        Else
-            For Each f In fields
-                If cols.Exists(Split(f, "|")(0)) Then
-                    hit(Split(f, "|")(1)) = SK_CsvCell(row, cols(Split(f, "|")(0)))
-                End If
-            Next
-            If cols.Exists("show in menu") Then
-                v = LCase$(Trim$(SK_CsvCell(row, cols("show in menu"))))
-                If v = "yes" Or v = "y" Or v = "1" Or v = "true" Then
-                    hit("shown") = "1"
-                ElseIf v = "no" Or v = "n" Or v = "0" Or v = "false" Then
-                    hit("shown") = "0"
-                End If
-            End If
-            If Len(hit("category")) > 0 Then SK_AddUnique m("cats"), hit("category")
-            nUpd = nUpd + 1
-        End If
-    Next
-    SK_ImportCsv = "Updated " & nUpd & " macro(s) from the CSV." & _
-        IIf(nSkip > 0, " Skipped " & nSkip & " row(s) for macros not in this template.", "")
+' ---------------------------------------------------------------------
+' Lists: update titles, categories, descriptions and the rest from a file.
+' Excel (.xlsx/.xlsm/.xls), CSV, a table in a Word file, or JSON.
+' Each row needs a Macro column (Module.Macro, or just the macro name).
+' Blank cells leave values as they are. Rows for macros that are not in
+' the template are skipped and listed. Code is never changed.
+' ---------------------------------------------------------------------
+Public Function SK_FieldKey(ByVal h As String) As String
+    h = LCase$(Trim$(Replace(Replace(Replace(h, "?", ""), ":", ""), "_", " ")))
+    Select Case h
+        Case "macro", "macro name", "run": SK_FieldKey = "run"
+        Case "title", "title in the menu", "name": SK_FieldKey = "title"
+        Case "category": SK_FieldKey = "category"
+        Case "description": SK_FieldKey = "description"
+        Case "keywords", "search keywords": SK_FieldKey = "keywords"
+        Case "what it affects", "what this macro affects", "affects": SK_FieldKey = "affects"
+        Case "works on", "workson": SK_FieldKey = "workson"
+        Case "does it change the document", "does this change the document", "changes the document", "changes"
+            SK_FieldKey = "changes"
+        Case "show in menu", "show in the menu", "showinmenu", "in menu", "shown": SK_FieldKey = "shown"
+    End Select
 End Function
 
-Private Function SK_CsvCell(ByVal row As Collection, ByVal idx As Long) As String
-    Dim s As String
-    If idx >= 1 And idx <= row.Count Then
-        s = Replace(row(idx), vbCrLf, vbLf)
-        SK_CsvCell = Trim$(Replace(s, vbLf, vbCrLf))
+Public Function SK_ReadListFile(ByVal path As String) As Collection
+    Select Case LCase$(Mid$(path, InStrRev(path, ".") + 1))
+        Case "csv", "txt": Set SK_ReadListFile = SK_RowsFromCells(SK_ParseCsv(SK_ReadUtf8(path)))
+        Case "xlsx", "xlsm", "xls": Set SK_ReadListFile = SK_RowsFromCells(SK_CellsFromExcel(path))
+        Case "docx", "docm", "doc": Set SK_ReadListFile = SK_RowsFromCells(SK_CellsFromWord(path))
+        Case "json": Set SK_ReadListFile = SK_RowsFromJson(path)
+        Case Else: Err.Raise vbObjectError + 2, SK_APP, "Use an Excel, CSV, Word or JSON file."
+    End Select
+End Function
+
+' Rows of cells (a Collection of Collections) to rows of fields. The header
+' row is the first row with a Macro column; rows above it are ignored.
+Private Function SK_RowsFromCells(ByVal cells As Collection) As Collection
+    Dim res As New Collection, row As Collection, cols As Object, d As Object, i As Long, r As Long, hdr As Long
+    Dim k As Variant, v As String
+    For r = 1 To cells.Count
+        Set row = cells(r)
+        For i = 1 To row.Count
+            If SK_FieldKey(row(i)) = "run" Then hdr = r: Exit For
+        Next
+        If hdr > 0 Then Exit For
+    Next
+    If hdr = 0 Then Err.Raise vbObjectError + 3, SK_APP, "No Macro column found. The first row of the list needs a column named Macro."
+    Set cols = CreateObject("Scripting.Dictionary")
+    Set row = cells(hdr)
+    For i = 1 To row.Count
+        If Len(SK_FieldKey(row(i))) > 0 Then
+            If Not cols.Exists(SK_FieldKey(row(i))) Then cols(SK_FieldKey(row(i))) = i
+        End If
+    Next
+    For r = hdr + 1 To cells.Count
+        Set row = cells(r)
+        Set d = CreateObject("Scripting.Dictionary")
+        For Each k In cols.Keys
+            If cols(k) <= row.Count Then
+                v = Replace(Replace(row(cols(k)), vbCrLf, vbLf), vbCr, vbLf)
+                d(k) = Trim$(Replace(v, vbLf, vbCrLf))
+            End If
+        Next
+        If d.Exists("run") Then
+            If Len(d("run")) > 0 Then res.Add d
+        End If
+    Next
+    Set SK_RowsFromCells = res
+End Function
+
+Private Function SK_CellsFromExcel(ByVal path As String) As Collection
+    Dim xl As Object, wb As Object, ws As Object, v As Variant, r As Long, c As Long
+    Dim res As New Collection, row As Collection, en As Long, ed As String
+    On Error GoTo Fail
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Open(FileName:=path, UpdateLinks:=0, ReadOnly:=True, AddToMru:=False)
+    On Error Resume Next
+    Set ws = wb.Worksheets("Macros")
+    On Error GoTo Fail
+    If ws Is Nothing Then Set ws = wb.Worksheets(1)
+    v = ws.UsedRange.Value
+    wb.Close False
+    xl.Quit
+    Set xl = Nothing
+    If IsArray(v) Then
+        For r = LBound(v, 1) To UBound(v, 1)
+            Set row = New Collection
+            For c = LBound(v, 2) To UBound(v, 2)
+                If IsError(v(r, c)) Or IsEmpty(v(r, c)) Then row.Add "" Else row.Add CStr(v(r, c))
+            Next
+            res.Add row
+        Next
     End If
+    Set SK_CellsFromExcel = res
+    Exit Function
+Fail:
+    en = Err.Number: ed = Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+    Err.Raise vbObjectError + 4, SK_APP, "Could not read the Excel file: " & ed
+End Function
+
+Private Function SK_CellsFromWord(ByVal path As String) As Collection
+    Dim d As Object, t As Object, tbl As Object, res As New Collection, row As Collection
+    Dim r As Long, c As Long, txt As String, ed As String
+    On Error GoTo Fail
+    Set d = Documents.Open(FileName:=path, ReadOnly:=True, AddToRecentFiles:=False, Visible:=False)
+    For Each t In d.Tables
+        For c = 1 To t.Rows(1).Cells.Count
+            If SK_FieldKey(SK_CellText(t.Rows(1).Cells(c))) = "run" Then Set tbl = t: Exit For
+        Next
+        If Not tbl Is Nothing Then Exit For
+    Next
+    If Not tbl Is Nothing Then
+        For r = 1 To tbl.Rows.Count
+            Set row = New Collection
+            For c = 1 To tbl.Rows(r).Cells.Count
+                row.Add SK_CellText(tbl.Rows(r).Cells(c))
+            Next
+            res.Add row
+        Next
+    End If
+    d.Close SaveChanges:=0
+    Set SK_CellsFromWord = res
+    Exit Function
+Fail:
+    ed = Err.Description
+    On Error Resume Next
+    If Not d Is Nothing Then d.Close SaveChanges:=0
+    Err.Raise vbObjectError + 5, SK_APP, "Could not read the table in the Word file (use a simple table, no merged cells): " & ed
+End Function
+
+Private Function SK_CellText(ByVal cel As Object) As String
+    Dim t As String
+    t = cel.Range.Text
+    If Len(t) >= 2 Then t = Left$(t, Len(t) - 2)
+    SK_CellText = Replace(t, vbCr, vbCrLf)
+End Function
+
+' JSON: an array of objects, or an object with a "macros" array.
+Private Function SK_RowsFromJson(ByVal path As String) As Collection
+    Dim s As String, pos As Long, v As Variant, arr As Object, item As Variant, d As Object, k As Variant, key As String
+    Dim res As New Collection
+    s = SK_ReadUtf8(path)
+    pos = 1
+    SK_JsonAssign v, s, pos
+    If Not IsObject(v) Then Err.Raise vbObjectError + 6, SK_APP, "The JSON file needs a list of macros."
+    If TypeName(v) = "Dictionary" Then
+        If v.Exists("macros") Then Set arr = v("macros") Else Err.Raise vbObjectError + 6, SK_APP, "The JSON file needs a list of macros."
+    Else
+        Set arr = v
+    End If
+    For Each item In arr
+        If IsObject(item) Then
+            Set d = CreateObject("Scripting.Dictionary")
+            For Each k In item.Keys
+                key = SK_FieldKey(k)
+                If Len(key) > 0 And Not IsObject(item(k)) Then
+                    If IsNull(item(k)) Then
+                        d(key) = ""
+                    ElseIf VarType(item(k)) = vbBoolean Then
+                        d(key) = IIf(item(k), "Yes", "No")
+                    Else
+                        d(key) = Trim$(CStr(item(k)))
+                    End If
+                End If
+            Next
+            If d.Exists("run") Then
+                If Len(d("run")) > 0 Then res.Add d
+            End If
+        End If
+    Next
+    Set SK_RowsFromJson = res
+End Function
+
+Private Sub SK_JsonSkip(ByVal s As String, pos As Long)
+    Do While pos <= Len(s)
+        Select Case Mid$(s, pos, 1)
+            Case " ", vbTab, vbCr, vbLf, ChrW$(&HFEFF): pos = pos + 1
+            Case Else: Exit Do
+        End Select
+    Loop
+End Sub
+
+Private Sub SK_JsonAssign(ByRef v As Variant, ByVal s As String, pos As Long)
+    Dim num As String
+    SK_JsonSkip s, pos
+    If pos > Len(s) Then Err.Raise vbObjectError + 7, SK_APP, "The JSON file ends too early."
+    Select Case Mid$(s, pos, 1)
+        Case "{": Set v = SK_JsonObject(s, pos)
+        Case "[": Set v = SK_JsonArray(s, pos)
+        Case """": v = SK_JsonString(s, pos)
+        Case "t": v = True: pos = pos + 4
+        Case "f": v = False: pos = pos + 5
+        Case "n": v = Null: pos = pos + 4
+        Case Else
+            Do While pos <= Len(s) And InStr("+-0123456789.eE", Mid$(s, pos, 1)) > 0
+                num = num & Mid$(s, pos, 1)
+                pos = pos + 1
+            Loop
+            If Len(num) = 0 Then Err.Raise vbObjectError + 7, SK_APP, "The JSON file has something unexpected at character " & pos & "."
+            v = num
+    End Select
+End Sub
+
+Private Function SK_JsonObject(ByVal s As String, pos As Long) As Object
+    Dim d As Object, k As String, v As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    pos = pos + 1
+    Do
+        SK_JsonSkip s, pos
+        If pos > Len(s) Then Err.Raise vbObjectError + 7, SK_APP, "The JSON file ends too early."
+        If Mid$(s, pos, 1) = "}" Then pos = pos + 1: Exit Do
+        If Mid$(s, pos, 1) = "," Then pos = pos + 1: SK_JsonSkip s, pos
+        k = SK_JsonString(s, pos)
+        SK_JsonSkip s, pos
+        If Mid$(s, pos, 1) <> ":" Then Err.Raise vbObjectError + 7, SK_APP, "The JSON file is missing a colon at character " & pos & "."
+        pos = pos + 1
+        SK_JsonAssign v, s, pos
+        If IsObject(v) Then Set d(k) = v Else d(k) = v
+    Loop
+    Set SK_JsonObject = d
+End Function
+
+Private Function SK_JsonArray(ByVal s As String, pos As Long) As Collection
+    Dim c As New Collection, v As Variant
+    pos = pos + 1
+    Do
+        SK_JsonSkip s, pos
+        If pos > Len(s) Then Err.Raise vbObjectError + 7, SK_APP, "The JSON file ends too early."
+        If Mid$(s, pos, 1) = "]" Then pos = pos + 1: Exit Do
+        If Mid$(s, pos, 1) = "," Then pos = pos + 1: SK_JsonSkip s, pos
+        SK_JsonAssign v, s, pos
+        If IsObject(v) Then c.Add v Else c.Add v
+    Loop
+    Set SK_JsonArray = c
+End Function
+
+Private Function SK_JsonString(ByVal s As String, pos As Long) As String
+    Dim out As String, ch As String
+    If Mid$(s, pos, 1) <> """" Then Err.Raise vbObjectError + 7, SK_APP, "The JSON file expected text at character " & pos & "."
+    pos = pos + 1
+    Do While pos <= Len(s)
+        ch = Mid$(s, pos, 1)
+        If ch = """" Then
+            pos = pos + 1
+            SK_JsonString = out
+            Exit Function
+        ElseIf ch = "\" Then
+            pos = pos + 1
+            ch = Mid$(s, pos, 1)
+            Select Case ch
+                Case "n": out = out & vbCrLf
+                Case "r", "b", "f"
+                Case "t": out = out & vbTab
+                Case "u"
+                    out = out & ChrW$(CLng("&H" & Mid$(s, pos + 1, 4)))
+                    pos = pos + 4
+                Case Else: out = out & ch
+            End Select
+        Else
+            out = out & ch
+        End If
+        pos = pos + 1
+    Loop
+    Err.Raise vbObjectError + 7, SK_APP, "The JSON file has text that never ends."
+End Function
+
+Public Function SK_FindEntry(ByVal m As Object, ByVal key As String) As Object
+    Dim e As Object, hit As Object, n As Long
+    For Each e In m("entries")
+        If LCase$(e("run")) = LCase$(key) Then Set SK_FindEntry = e: Exit Function
+    Next
+    For Each e In m("entries")
+        If LCase$(SK_NamePart(e("run"))) = LCase$(SK_NamePart(key)) Then n = n + 1: Set hit = e
+    Next
+    If n = 1 Then Set SK_FindEntry = hit
+End Function
+
+Private Function SK_ShownFromText(ByVal v As String) As String
+    Select Case LCase$(Trim$(v))
+        Case "yes", "y", "1", "true", "shown", "show": SK_ShownFromText = "1"
+        Case "no", "n", "0", "false", "hidden", "hide": SK_ShownFromText = "0"
+    End Select
+End Function
+
+' Compares a list with the catalog. With apply=False it changes nothing and
+' only describes what would change. nChanged returns how many macros change.
+Public Function SK_UpdateFromRows(ByVal m As Object, ByVal rows As Collection, ByVal apply As Boolean, _
+                                  ByRef nChanged As Long) As String
+    Dim r As Object, e As Object, f As Variant, v As String, changed As Boolean, i As Long
+    Dim nSame As Long, nMissing As Long, missing As String, notOnList As Long
+    Dim per As Object, onList As Object, s As String, names As Variant, fields As Variant
+    fields = Array("title", "category", "description", "keywords", "affects", "workson", "changes", "shown")
+    names = Array("titles", "categories", "descriptions", "keywords", "what it affects", "works on", _
+                  "does it change the document", "show in menu")
+    Set per = CreateObject("Scripting.Dictionary")
+    Set onList = CreateObject("Scripting.Dictionary")
+    nChanged = 0
+    For Each r In rows
+        Set e = SK_FindEntry(m, r("run"))
+        If e Is Nothing Then
+            nMissing = nMissing + 1
+            If nMissing <= 8 Then missing = missing & IIf(Len(missing) > 0, ", ", "") & r("run")
+        Else
+            onList(LCase$(e("run"))) = True
+            changed = False
+            For Each f In fields
+                If r.Exists(f) Then
+                    v = r(f)
+                    If f = "shown" Then v = SK_ShownFromText(v)
+                    If Len(v) > 0 And v <> e(f) Then
+                        per(f) = per(f) + 1
+                        changed = True
+                        If apply Then
+                            e(f) = v
+                            If f = "category" Then SK_AddUnique m("cats"), v
+                        End If
+                    End If
+                End If
+            Next
+            If changed Then nChanged = nChanged + 1 Else nSame = nSame + 1
+        End If
+    Next
+    For Each e In m("entries")
+        If e("found") And Not onList.Exists(LCase$(e("run"))) Then notOnList = notOnList + 1
+    Next
+    s = rows.Count & " row(s) read." & vbCr
+    If nChanged > 0 Then
+        s = s & nChanged & " macro(s) " & IIf(apply, "changed", "will change") & ":"
+        For i = 0 To UBound(fields)
+            If per.Exists(fields(i)) Then s = s & " " & names(i) & " " & per(fields(i)) & ","
+        Next
+        s = Left$(s, Len(s) - 1) & "." & vbCr
+    End If
+    s = s & nSame & " macro(s) already match." & vbCr
+    If nMissing > 0 Then s = s & nMissing & " row(s) are for macros not in this template, skipped: " & missing & _
+        IIf(nMissing > 8, ", ...", "") & "." & vbCr
+    If notOnList > 0 Then s = s & notOnList & " macro(s) in this template are not on the list, left as they are." & vbCr
+    s = s & "Blank cells leave values as they are."
+    SK_UpdateFromRows = s
+End Function
+
+' Primary list for this template (per person, kept in their Windows profile).
+Public Function SK_GetPrimaryList() As String
+    SK_GetPrimaryList = GetSetting(SK_APP, SK_UserKey(), "pref|primaryList", "")
+End Function
+
+Public Function SK_SetPrimaryList(ByVal path As String) As Boolean
+    SaveSetting SK_APP, SK_UserKey(), "pref|primaryList", path
+    SK_SetPrimaryList = True
+End Function
+
+' Excel export: one row per macro, sheet "Macros", the same columns a list uses.
+Public Function SK_ExportXlsx(ByVal m As Object) As String
+    Dim xl As Object, wb As Object, ws As Object, e As Object, path As String, hdr As Variant
+    Dim data() As Variant, r As Long, c As Long, n As Long, ed As String, widths As Variant
+    If Len(SK_BackupDir()) = 0 Then Err.Raise vbObjectError + 1, SK_APP, "Choose a backup folder first (Settings tab)."
+    path = SK_BackupDir() & "\" & SK_BaseName() & " - macro list " & Format$(Now, "yyyy-mm-dd hhnn") & ".xlsx"
+    hdr = Array("Macro", "Title", "Category", "Description", "Keywords", "What it affects", "Works on", _
+                "Does it change the document", "Show in menu", "Status", "Test")
+    widths = Array(30, 28, 18, 60, 24, 24, 18, 22, 12, 22, 12)
+    n = m("entries").Count
+    ReDim data(1 To n + 1, 1 To 11)
+    For c = 0 To 10: data(1, c + 1) = hdr(c): Next
+    r = 1
+    For Each e In m("entries")
+        r = r + 1
+        data(r, 1) = e("run"): data(r, 2) = e("title"): data(r, 3) = e("category")
+        data(r, 4) = Replace(e("description"), vbCrLf, vbLf): data(r, 5) = e("keywords"): data(r, 6) = e("affects")
+        data(r, 7) = e("workson"): data(r, 8) = e("changes"): data(r, 9) = SK_YesNo(e("shown"))
+        data(r, 10) = SK_EntryStatus(e): data(r, 11) = SK_TestState(e("run"))
+    Next
+    On Error GoTo Fail
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Add
+    Set ws = wb.Worksheets(1)
+    ws.Name = "Macros"
+    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 11)).NumberFormat = "@"
+    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 11)).Value = data
+    ws.Rows(1).Font.Bold = True
+    For c = 0 To 10: ws.Columns(c + 1).ColumnWidth = widths(c): Next
+    ws.Columns(4).WrapText = True
+    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 11)).AutoFilter
+    wb.SaveAs FileName:=path, FileFormat:=51
+    wb.Close False
+    xl.Quit
+    SK_ExportXlsx = path
+    Exit Function
+Fail:
+    ed = Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+    Err.Raise vbObjectError + 8, SK_APP, "Could not make the Excel file: " & ed
 End Function
 
 ' ---------------------------------------------------------------------

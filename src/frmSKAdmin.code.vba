@@ -58,8 +58,13 @@ Private WithEvents btnButton As MSForms.CommandButton
 Private WithEvents btnFillComments As MSForms.CommandButton
 Private WithEvents btnShowDescribed As MSForms.CommandButton
 Private WithEvents btnDropMissing As MSForms.CommandButton
-Private WithEvents btnExportCsv As MSForms.CommandButton
-Private WithEvents btnImportCsv As MSForms.CommandButton
+Private WithEvents btnExportList As MSForms.CommandButton
+Private WithEvents btnUpdatePrimary As MSForms.CommandButton
+Private WithEvents btnUpdateFile As MSForms.CommandButton
+Private lblPrimaryBulk As MSForms.Label
+Private lblPrimaryPath As MSForms.Label
+Private WithEvents btnPrimaryChoose As MSForms.CommandButton
+Private WithEvents btnPrimaryClear As MSForms.CommandButton
 Private WithEvents btnReadBas As MSForms.CommandButton
 
 ' History page
@@ -243,37 +248,40 @@ Private Sub UserForm_Initialize()
     Set lblBackupPath = Lbl(pg, "lblBackupPath", "", 8, 276, 600, 14)
     lblBackupPath.Font.Bold = True
     Set btnBackupDir = Btn(pg, "btnBackupDir", "Choose the backup folder", 8, 294, 170, 24)
+    Lbl pg, "lblPl", "Primary list for this template (Excel, CSV, Word or JSON), on this PC:", 8, 330, 600, 14
+    Set lblPrimaryPath = Lbl(pg, "lblPrimaryPath", "", 8, 346, 750, 14)
+    lblPrimaryPath.Font.Bold = True
+    Set btnPrimaryChoose = Btn(pg, "btnPrimaryChoose", "Choose the primary list", 8, 364, 170, 24)
+    Set btnPrimaryClear = Btn(pg, "btnPrimaryClear", "Stop using it", 186, 364, 120, 24)
 
     ' ----- Bulk tools: each button does one thing to many macros at once -----
     Set pg = mp.Pages(3)
     Lbl pg, "lblBulkInfo", "Each button works on the whole list at once. Nothing is saved until you tick Ready to save and save.", _
         8, 6, 750, 14
-    Set btnFillComments = Btn(pg, "btnFillComments", "Fill blank descriptions from code comments", 8, 28, 260, 24)
-    Lbl pg, "lblB1", "Copies the comment written above each macro in the code into any description that is still blank.", _
-        278, 32, 480, 28
-    Set btnShowDescribed = Btn(pg, "btnShowDescribed", "Show every described macro in the menu", 8, 64, 260, 24)
-    Lbl pg, "lblB2", "Puts every macro that has a description into the menu. Macros you hid on purpose stay hidden.", _
-        278, 68, 480, 28
-    Set btnDropMissing = Btn(pg, "btnDropMissing", "Remove macros that are gone", 8, 100, 260, 24)
-    Lbl pg, "lblB3", "Clears out list entries whose macro was deleted from the template (In menu shows Macro gone).", _
-        278, 104, 480, 28
-    Set btnExportCsv = Btn(pg, "btnExportCsv", "Export the list to Excel (CSV)", 8, 148, 260, 24)
-    Lbl pg, "lblB4", "Saves every macro and its details as a CSV file, to fill in many descriptions quickly in Excel.", _
-        278, 152, 480, 28
-    Set btnImportCsv = Btn(pg, "btnImportCsv", "Import the list from Excel (CSV)", 8, 184, 260, 24)
-    Lbl pg, "lblB5", "Reads that file back in after you save it in Excel as CSV UTF-8. Rows match on the Macro column.", _
-        278, 188, 480, 28
-    Set btnReadBas = Btn(pg, "btnReadBas", "Read macros from .bas files", 8, 232, 260, 24)
-    Lbl pg, "lblB6", "Only needed when Word will not let the admin look inside the template. In the VBA editor, " & _
-        "right-click each module > Export File, then pick the .bas file(s) here. One file or many.", 278, 236, 480, 42
-    Set btnHealth = Btn(pg, "btnHealth", "Check the code health", 8, 290, 260, 24)
-    Set lblHealthAll = Lbl(pg, "lblB7", "Looks for missing libraries and notes risky lines in each macro (see the Health notes filter). " & _
-        "Runs nothing. Needs VBA project access. To compile, use Debug > Compile in the VBA editor.", 278, 294, 480, 28)
-    Set btnTestAll = Btn(pg, "btnTestAll", "Test every macro", 8, 326, 260, 24)
-    Lbl pg, "lblB8", "Runs each macro on a scratch document, one after another, and fills the Test column. Skips macros " & _
-        "that save, close or delete files. If Word shows an error, click End: that macro is marked Failed.", 278, 330, 480, 40
-    Set btnTestDoc = Btn(pg, "btnTestDoc", "Choose a test document", 8, 374, 260, 24)
-    Set lblTestDoc = Lbl(pg, "lblB9", "", 278, 378, 480, 28)
+    Set btnFillComments = Btn(pg, "btnFillComments", "Fill blank descriptions from code comments", 8, 26, 260, 22)
+    Lbl pg, "lblB1", "Copies the comment above each macro in the code into any description that is still blank.", 278, 30, 480, 14
+    Set btnShowDescribed = Btn(pg, "btnShowDescribed", "Show every described macro in the menu", 8, 54, 260, 22)
+    Lbl pg, "lblB2", "Puts every macro with a description into the menu. Macros you hid on purpose stay hidden.", 278, 58, 480, 14
+    Set btnDropMissing = Btn(pg, "btnDropMissing", "Remove macros that are gone", 8, 82, 260, 22)
+    Lbl pg, "lblB3", "Clears out entries whose macro was deleted from the template (In menu shows Macro gone).", 278, 86, 480, 14
+    Set btnExportList = Btn(pg, "btnExportList", "Export the list to Excel", 8, 120, 260, 22)
+    Lbl pg, "lblB4", "Saves every macro and its details as an Excel file. Start your primary list from it.", 278, 124, 480, 14
+    Set btnUpdatePrimary = Btn(pg, "btnUpdatePrimary", "Update from the primary list", 8, 148, 260, 22)
+    Set lblPrimaryBulk = Lbl(pg, "lblB5", "", 278, 152, 480, 14)
+    Set btnUpdateFile = Btn(pg, "btnUpdateFile", "Update from a list file", 8, 176, 260, 22)
+    Lbl pg, "lblB5b", "Excel, CSV, a Word table or JSON. Shows what will change first. Blank cells leave values as they are.", _
+        278, 180, 480, 14
+    Set btnReadBas = Btn(pg, "btnReadBas", "Read macros from .bas files", 8, 214, 260, 22)
+    Lbl pg, "lblB6", "Only when Word will not let the admin look inside the template: export each module " & _
+        "(VBA editor, right-click > Export File) and pick the file(s).", 278, 216, 480, 26
+    Set btnHealth = Btn(pg, "btnHealth", "Check the code health", 8, 252, 260, 22)
+    Set lblHealthAll = Lbl(pg, "lblB7", "Finds missing libraries and notes risky lines (Health notes filter). Runs nothing. " & _
+        "To compile, use Debug > Compile in the VBA editor.", 278, 254, 480, 26)
+    Set btnTestAll = Btn(pg, "btnTestAll", "Test every macro", 8, 288, 260, 22)
+    Lbl pg, "lblB8", "Runs each macro on a scratch document and fills the Test column. Skips macros that save, close or " & _
+        "delete files. If Word shows an error, click End: that macro is marked Failed.", 278, 290, 480, 26
+    Set btnTestDoc = Btn(pg, "btnTestDoc", "Choose a test document", 8, 324, 260, 22)
+    Set lblTestDoc = Lbl(pg, "lblB9", "", 278, 326, 480, 40)
 
     ' ----- History -----
     Set pg = mp.Pages(4)
@@ -308,6 +316,7 @@ Private Sub UserForm_Initialize()
     If mModel("scanAvailable") Then mModel("health") = SK_Health(mModel) Else mModel("health") = ""
     UpdateBackupLabel
     UpdateTestDocLabel
+    UpdatePrimaryLabels
     FillCats
     FillCategoryCombo
     FillHistory
@@ -874,39 +883,127 @@ Private Sub btnDropMissing_Click()
     UpdateHeader
 End Sub
 
-Private Sub btnExportCsv_Click()
-    Dim p As String
+Private Sub btnExportList_Click()
+    Dim p As String, note As String
     If Not EnsureBackupDir() Then Exit Sub
-    On Error GoTo Fail
-    p = SK_ExportCsv(mModel)
-    MsgBox "Saved:" & vbCr & p & vbCr & vbCr & "Edit it in Excel, save as CSV UTF-8, then use Import.", vbInformation, SK_APP
-    Exit Sub
-Fail:
-    MsgBox "Export failed: " & Err.Description, vbExclamation, SK_APP
+    On Error Resume Next
+    p = SK_ExportXlsx(mModel)
+    If Err.Number <> 0 Then
+        note = "Excel could not make the file (" & Err.Description & "), so this is a CSV file instead." & vbCr & vbCr
+        Err.Clear
+        p = SK_ExportCsv(mModel)
+    End If
+    If Err.Number <> 0 Then
+        MsgBox "Export failed: " & Err.Description, vbExclamation, SK_APP
+        Exit Sub
+    End If
+    On Error GoTo 0
+    If Len(SK_GetPrimaryList()) = 0 Then
+        If MsgBox(note & "Saved:" & vbCr & p & vbCr & vbCr & "Use this file as the primary list for this template? " & _
+                  "Move it somewhere shared first (OneDrive or SharePoint) if others will edit it, then choose it on Settings.", _
+                  vbYesNo + vbQuestion, SK_APP) = vbYes Then
+            SK_SetPrimaryList p
+            UpdatePrimaryLabels
+        End If
+    Else
+        MsgBox note & "Saved:" & vbCr & p, vbInformation, SK_APP
+    End If
 End Sub
 
-Private Sub btnImportCsv_Click()
-    Dim p As String, msg As String
-    On Error GoTo Fail
+Private Sub btnUpdatePrimary_Click()
+    Dim p As String
+    p = SK_GetPrimaryList()
+    If Len(p) = 0 Then
+        MsgBox "No primary list is chosen for this template yet. Choose one on Settings, or use Update from a list file.", _
+            vbInformation, SK_APP
+        Exit Sub
+    End If
+    If Len(Dir$(p)) = 0 Then
+        MsgBox "The primary list is not where it was:" & vbCr & p & vbCr & vbCr & "Choose it again on Settings.", _
+            vbExclamation, SK_APP
+        Exit Sub
+    End If
+    UpdateFromFile p, False
+End Sub
+
+Private Sub btnUpdateFile_Click()
+    Dim p As String, start As String
+    start = SK_GetPrimaryList()
+    If Len(start) > 0 Then start = Left$(start, InStrRev(start, "\")) Else start = SK_BackupDir()
+    p = PickListFile("Pick the list to update from", start)
+    If Len(p) = 0 Then Exit Sub
+    UpdateFromFile p, True
+End Sub
+
+Private Function PickListFile(ByVal title As String, ByVal start As String) As String
     With Application.FileDialog(3)
-        .Title = "Pick the catalog CSV to import"
+        .Title = title
         .Filters.Clear
-        .Filters.Add "CSV files", "*.csv"
+        .Filters.Add "Lists (Excel, CSV, Word, JSON)", "*.xlsx;*.xlsm;*.xls;*.csv;*.docx;*.docm;*.doc;*.json"
         .AllowMultiSelect = False
-        If .Show <> -1 Then Exit Sub
-        p = .SelectedItems(1)
+        If Len(start) > 0 Then .InitialFileName = start
+        If .Show = -1 Then PickListFile = .SelectedItems(1)
     End With
-    msg = SK_ImportCsv(mModel, p)
-    If Left$(msg, 8) = "Updated " Then Mark "Imported " & Mid$(p, InStrRev(p, "\") + 1)
-    FillCats
-    FillCategoryCombo
-    AddExtraAffects
-    FillList KeepRunNow()
-    UpdateHeader
-    MsgBox msg, vbInformation, SK_APP
+End Function
+
+' Shows what a list would change, then applies it if the person agrees.
+Private Sub UpdateFromFile(ByVal p As String, ByVal offerPrimary As Boolean)
+    Dim rows As Collection, preview As String, n As Long, nm As String
+    nm = Mid$(p, InStrRev(p, "\") + 1)
+    On Error GoTo Fail
+    Set rows = SK_ReadListFile(p)
+    preview = SK_UpdateFromRows(mModel, rows, False, n)
+    On Error GoTo 0
+    If n = 0 Then
+        MsgBox "Nothing to change from " & nm & "." & vbCr & vbCr & preview, vbInformation, SK_APP
+    Else
+        If MsgBox("From " & nm & ":" & vbCr & vbCr & preview & vbCr & vbCr & "Apply these changes? " & _
+                  "They are saved when you tick Ready to save and save.", vbYesNo + vbQuestion, SK_APP) <> vbYes Then Exit Sub
+        SK_UpdateFromRows mModel, rows, True, n
+        Mark "Updated " & n & " macro(s) from " & nm
+        FillCats
+        FillCategoryCombo
+        AddExtraAffects
+        FillList KeepRunNow()
+        UpdateHeader
+    End If
+    If offerPrimary And LCase$(SK_GetPrimaryList()) <> LCase$(p) Then
+        If MsgBox("Use " & nm & " as the primary list for this template from now on?", vbYesNo + vbQuestion, SK_APP) = vbYes Then
+            SK_SetPrimaryList p
+            UpdatePrimaryLabels
+        End If
+    End If
     Exit Sub
 Fail:
-    MsgBox "Import failed: " & Err.Description, vbExclamation, SK_APP
+    MsgBox "Could not read " & nm & ":" & vbCr & Err.Description, vbExclamation, SK_APP
+End Sub
+
+Private Sub UpdatePrimaryLabels()
+    Dim p As String
+    p = SK_GetPrimaryList()
+    If Len(p) = 0 Then
+        lblPrimaryPath.Caption = "None yet. Export the list to Excel to start one, or choose an existing list."
+        lblPrimaryBulk.Caption = "No primary list chosen yet (Settings tab)."
+    Else
+        lblPrimaryPath.Caption = p
+        lblPrimaryBulk.Caption = "From " & Mid$(p, InStrRev(p, "\") + 1) & ". Shows what will change first."
+    End If
+    btnUpdatePrimary.Enabled = (Len(p) > 0)
+End Sub
+
+Private Sub btnPrimaryChoose_Click()
+    Dim p As String, start As String
+    start = SK_GetPrimaryList()
+    If Len(start) > 0 Then start = Left$(start, InStrRev(start, "\")) Else start = SK_BackupDir()
+    p = PickListFile("Choose the primary list for this template", start)
+    If Len(p) = 0 Then Exit Sub
+    SK_SetPrimaryList p
+    UpdatePrimaryLabels
+End Sub
+
+Private Sub btnPrimaryClear_Click()
+    SK_SetPrimaryList ""
+    UpdatePrimaryLabels
 End Sub
 
 Private Sub btnReadBas_Click()
@@ -1144,6 +1241,10 @@ Public Function TestLabels() As String
     Set c = mp.Pages(0).Controls("txtAlso")
     s = s & " | also box=" & IIf(c Is Nothing, "none", "present")
     TestLabels = s
+End Function
+
+Public Function TestPrimary() As String
+    TestPrimary = lblPrimaryPath.Caption & " | " & lblPrimaryBulk.Caption & " | enabled=" & btnUpdatePrimary.Enabled
 End Function
 
 Public Function TestRow(ByVal i As Long) As String

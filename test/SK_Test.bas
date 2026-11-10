@@ -83,17 +83,17 @@ Public Function T_Admin() As String
 End Function
 
 Public Function T_Csv() As String
-    Dim m As Object, p As String, msg As String, e As Object, s As String, txt As String
+    Dim m As Object, p As String, msg As String, e As Object, s As String, txt As String, n As Long
     Set m = SK_LoadModel()
     p = SK_ExportCsv(m)
     txt = SK_ReadUtf8(p)
     txt = Replace(txt, "Test description 1", "Changed in Excel, line one" & vbCrLf & "line two, with comma")
     SK_WriteUtf8 p, txt
-    msg = SK_ImportCsv(m, p)
+    msg = SK_UpdateFromRows(m, SK_ReadListFile(p), True, n)
     For Each e In m("entries")
         If InStr(e("description"), "Changed in Excel") > 0 Then s = e("run") & ": " & Replace(e("description"), vbCrLf, "\n")
     Next
-    T_Csv = msg & " | " & s & " | " & p
+    T_Csv = Replace(msg, vbCr, " / ") & " | " & s & " | " & p
 End Function
 
 Public Function T_Shortcut() As String
@@ -197,4 +197,56 @@ Public Function T_Needs() As String
     s = s & " whole:" & SK_NeedsMet("Whole document", why)
     d.Close SaveChanges:=0
     T_Needs = s
+End Function
+
+Public Function T_ExportXlsx() As String
+    Dim m As Object, p As String, rows As Collection
+    Set m = SK_LoadModel()
+    p = SK_ExportXlsx(m)
+    Set rows = SK_ReadListFile(p)
+    T_ExportXlsx = p & " | rows=" & rows.Count & " | first=" & rows(1)("run")
+End Function
+
+Public Function T_MakeDocxList(ByVal path As String) As String
+    Dim d As Object, t As Object
+    Set d = Documents.Add
+    d.Content.Text = "Macro list for the team template"
+    d.Content.InsertParagraphAfter
+    Set t = d.Tables.Add(d.Paragraphs(2).Range, 3, 3)
+    t.Cell(1, 1).Range.Text = "Macro": t.Cell(1, 2).Range.Text = "Category": t.Cell(1, 3).Range.Text = "Description"
+    t.Cell(2, 1).Range.Text = "Module1.FitTablesToMargins": t.Cell(2, 2).Range.Text = "Tables"
+    t.Cell(2, 3).Range.Text = "Sets every table to the full text width."
+    t.Cell(3, 1).Range.Text = "NoSuch.Macro": t.Cell(3, 2).Range.Text = "X": t.Cell(3, 3).Range.Text = "Y"
+    d.SaveAs2 FileName:=path, FileFormat:=16
+    d.Close SaveChanges:=0
+    T_MakeDocxList = path
+End Function
+
+Private Function T_Show(ByVal m As Object, ByVal key As String) As String
+    Dim e As Object
+    Set e = SK_FindEntry(m, key)
+    If e Is Nothing Then T_Show = key & ": none": Exit Function
+    T_Show = SK_NamePart(e("run")) & ": title=" & e("title") & "|cat=" & e("category") & "|desc=" & _
+        Replace(e("description"), vbCrLf, "\n") & "|kw=" & e("keywords") & "|works=" & e("workson") & "|shown=" & e("shown")
+End Function
+
+Public Function T_UpdateFrom(ByVal path As String) As String
+    Dim m As Object, rows As Collection, a As String, b As String, n1 As Long, n2 As Long, s As String, k As Variant
+    Set m = SK_LoadModel()
+    Set rows = SK_ReadListFile(path)
+    a = SK_UpdateFromRows(m, rows, False, n1)
+    b = SK_UpdateFromRows(m, rows, True, n2)
+    s = "PREVIEW " & Replace(a, vbCr, " / ") & " || APPLIED " & n2 & " ||"
+    For Each k In Array("ShowHiddenText", "ClearDirectFormatting", "TOCFix", "UpdateAllFields", "FitTablesToMargins")
+        s = s & " " & T_Show(m, CStr(k)) & " ##"
+    Next
+    T_UpdateFrom = s
+End Function
+
+Public Function T_PrimaryLabel(ByVal path As String) As String
+    SK_SetPrimaryList path
+    Load frmSKAdmin
+    T_PrimaryLabel = frmSKAdmin.TestPrimary()
+    Unload frmSKAdmin
+    SK_SetPrimaryList ""
 End Function
