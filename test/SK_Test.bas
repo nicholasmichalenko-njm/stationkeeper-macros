@@ -73,6 +73,7 @@ Public Function T_Admin() As String
     Dim s As String
     Load frmSKAdmin
     s = frmSKAdmin.TestState()
+    s = s & " || labels: " & frmSKAdmin.TestLabels()
     s = s & " || rows: " & frmSKAdmin.TestRow(0) & " ## " & frmSKAdmin.TestRow(3) & " ## " & frmSKAdmin.TestRow(7)
     s = s & " || gate0: " & frmSKAdmin.TestSaveGate()
     s = s & " || " & frmSKAdmin.TestEditFirst("Edited by the admin self-test")
@@ -116,35 +117,6 @@ Public Function T_AdminQuiet() As String
     T_AdminQuiet = s
 End Function
 
-' Runs inside a normally started Word (not automation), so Word's real
-' "Trust access to the VBA project object model" setting applies.
-Public Sub T_OffRun()
-    Dim s As String, c As New Collection, found As Collection, d As Object, vbp As Object, n As Long
-    SK_Quiet = True
-    On Error Resume Next
-    Set vbp = ThisDocument.VBProject
-    n = -1: n = vbp.VBComponents.Count
-    s = "VBA project readable: " & IIf(Err.Number = 0 And n >= 0, "yes", "no (" & Err.Number & ")") & vbCrLf
-    Err.Clear
-    s = s & "scan: " & T_Scan() & " err=" & Err.Number & vbCrLf: Err.Clear
-    s = s & "model: " & T_ModelSummary() & " err=" & Err.Number & vbCrLf: Err.Clear
-    s = s & "menu: " & T_MenuSearch("") & " err=" & Err.Number & vbCrLf: Err.Clear
-    s = s & "menu search: " & T_MenuSearch("alp") & " err=" & Err.Number & vbCrLf: Err.Clear
-    s = s & "admin: " & T_AdminQuiet() & " err=" & Err.Number & vbCrLf: Err.Clear
-    c.Add Left$(ThisDocument.Path, InStrRev(ThisDocument.Path, "\")) & "test\Module1.bas"
-    c.Add Left$(ThisDocument.Path, InStrRev(ThisDocument.Path, "\")) & "test\Module2.bas"
-    Set found = SK_ReadBasFiles(c)
-    s = s & "bas files: " & found.Count & " |"
-    For Each d In found
-        s = s & " " & d("run") & "{" & d("comment") & "}"
-    Next
-    s = s & " err=" & Err.Number & vbCrLf: Err.Clear
-    s = s & "run: " & T_Run("Module1.ShowHiddenText") & " err=" & Err.Number & vbCrLf: Err.Clear
-    s = s & "check: " & Replace(Left$(SK_CheckReport(SK_LoadModel()), 400), vbCrLf, " / ") & vbCrLf
-    SK_WriteUtf8 ThisDocument.Path & "\off-results.txt", s
-    Application.Quit SaveChanges:=0
-End Sub
-
 Public Function T_NoAccess() As String
     Dim s As String, c As New Collection, found As Collection, d As Object, root As String
     SK_ForceNoAccess = True
@@ -161,7 +133,7 @@ Public Function T_NoAccess() As String
     For Each d In found
         s = s & " " & d("run") & "{" & d("comment") & "}"
     Next
-    s = s & " ## check: " & Replace(Left$(SK_CheckReport(SK_LoadModel()), 1500), vbCrLf, " / ")
+    s = s & " ## msg: " & Replace(SK_NoAccessMessage(), vbCr, " / ")
     SK_ForceNoAccess = False
     SK_Quiet = False
     T_NoAccess = s

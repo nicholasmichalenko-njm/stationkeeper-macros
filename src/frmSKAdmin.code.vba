@@ -23,7 +23,6 @@ Private WithEvents btnUseComment As MSForms.CommandButton
 Private WithEvents txtKeywords As MSForms.TextBox
 Private WithEvents lstAffects As MSForms.ListBox
 Private WithEvents cboChanges As MSForms.ComboBox
-Private WithEvents txtAlso As MSForms.TextBox
 Private WithEvents chkShown As MSForms.CheckBox
 Private lblComment As MSForms.Label
 
@@ -46,8 +45,6 @@ Private WithEvents btnShortcut As MSForms.CommandButton
 Private WithEvents btnButton As MSForms.CommandButton
 
 ' Check page
-Private txtCheck As MSForms.TextBox
-Private WithEvents btnRecheck As MSForms.CommandButton
 Private WithEvents btnFillComments As MSForms.CommandButton
 Private WithEvents btnShowDescribed As MSForms.CommandButton
 Private WithEvents btnDropMissing As MSForms.CommandButton
@@ -129,7 +126,7 @@ Private Sub UserForm_Initialize()
     mp.Pages(0).Caption = "Macros"
     mp.Pages(1).Caption = "Categories"
     mp.Pages.Add "pLook", "Look"
-    mp.Pages.Add "pCheck", "Check"
+    mp.Pages.Add "pBulk", "Bulk tools"
     mp.Pages.Add "pHistory", "History"
 
     ' ----- Macros -----
@@ -175,20 +172,18 @@ Private Sub UserForm_Initialize()
     txtDescription.ScrollBars = fmScrollBarsVertical
     Lbl pg, "lblK", "Search keywords (commas between)", 372, 198, 260, 14
     Set txtKeywords = AddTo(pg, "Forms.TextBox.1", "txtKeywords", 372, 212, 386, 20)
-    Lbl pg, "lblA", "Affects", 372, 236, 120, 14
+    Lbl pg, "lblA", "What this macro affects", 372, 236, 186, 14
     Set lstAffects = AddTo(pg, "Forms.ListBox.1", "lstAffects", 372, 250, 186, 124)
     lstAffects.ListStyle = fmListStyleOption
     lstAffects.MultiSelect = fmMultiSelectMulti
     lstAffects.IntegralHeight = False
-    Lbl pg, "lblCh", "Changes the document", 568, 236, 190, 14
+    Lbl pg, "lblCh", "Does this change the document?", 568, 236, 190, 14
     Set cboChanges = AddTo(pg, "Forms.ComboBox.1", "cboChanges", 568, 250, 190, 20)
     cboChanges.Style = fmStyleDropDownCombo
-    For Each v In Array("Yes", "No, report only", "No, view only", "Template only")
+    For Each v In Array("Yes", "No, it only reports", "No, it only changes the view", "It changes the template")
         cboChanges.AddItem v
     Next
-    Lbl pg, "lblAl", "Also in Stationkeeper (optional)", 568, 276, 190, 14
-    Set txtAlso = AddTo(pg, "Forms.TextBox.1", "txtAlso", 568, 290, 190, 20)
-    Set chkShown = Chk(pg, "chkShown", "Show in the menu", 568, 320, 190, 18)
+    Set chkShown = Chk(pg, "chkShown", "Show in the menu", 568, 282, 190, 18)
     chkShown.Font.Bold = True
     Set lblComment = Lbl(pg, "lblComment", "", 372, 378, 386, 36)
     lblComment.ForeColor = &H808080
@@ -227,24 +222,28 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblOpen2", "Anyone can also run StationkeeperMacros from View > Macros, or add it to the Quick Access Toolbar.", _
         8, 226, 600, 14
 
-    ' ----- Check -----
+    ' ----- Bulk tools: each button does one thing to many macros at once -----
     Set pg = mp.Pages(3)
-    Set txtCheck = AddTo(pg, "Forms.TextBox.1", "txtCheck", 8, 8, 500, 400)
-    txtCheck.MultiLine = True
-    txtCheck.WordWrap = True
-    txtCheck.ScrollBars = fmScrollBarsVertical
-    txtCheck.Locked = True
-    Set btnRecheck = Btn(pg, "btnRecheck", "Check again", 518, 8, 240, 24)
-    Set btnFillComments = Btn(pg, "btnFillComments", "Describe empty ones from code comments", 518, 40, 240, 24)
-    Set btnShowDescribed = Btn(pg, "btnShowDescribed", "Show every described macro in the menu", 518, 70, 240, 24)
-    Set btnDropMissing = Btn(pg, "btnDropMissing", "Remove entries whose macro is gone", 518, 100, 240, 24)
-    Set btnExportCsv = Btn(pg, "btnExportCsv", "Export catalog to CSV (for Excel)", 518, 150, 240, 24)
-    Set btnImportCsv = Btn(pg, "btnImportCsv", "Import catalog from CSV", 518, 180, 240, 24)
-    Lbl pg, "lblCsv", "Export, fill in descriptions in Excel, save as CSV UTF-8, then Import. Rows match on the Macro column.", _
-        518, 210, 240, 56
-    Set btnReadBas = Btn(pg, "btnReadBas", "Read macros from .bas files", 518, 276, 240, 24)
-    Lbl pg, "lblBas", "For when Word will not let the admin look inside the template. Export your module(s) from the " & _
-        "VBA editor (right-click > Export File), then pick the .bas file(s) here. One file or many.", 518, 304, 240, 70
+    Lbl pg, "lblBulkInfo", "Each button works on the whole list at once. Nothing is saved until you tick Ready to save and save.", _
+        8, 6, 750, 14
+    Set btnFillComments = Btn(pg, "btnFillComments", "Fill blank descriptions from code comments", 8, 28, 260, 24)
+    Lbl pg, "lblB1", "Copies the comment written above each macro in the code into any description that is still blank.", _
+        278, 32, 480, 28
+    Set btnShowDescribed = Btn(pg, "btnShowDescribed", "Show every described macro in the menu", 8, 64, 260, 24)
+    Lbl pg, "lblB2", "Puts every macro that has a description into the menu. Macros you hid on purpose stay hidden.", _
+        278, 68, 480, 28
+    Set btnDropMissing = Btn(pg, "btnDropMissing", "Remove macros that are gone", 8, 100, 260, 24)
+    Lbl pg, "lblB3", "Clears out list entries whose macro was deleted from the template (In menu shows Macro gone).", _
+        278, 104, 480, 28
+    Set btnExportCsv = Btn(pg, "btnExportCsv", "Export the list to Excel (CSV)", 8, 148, 260, 24)
+    Lbl pg, "lblB4", "Saves every macro and its details as a CSV file, to fill in many descriptions quickly in Excel.", _
+        278, 152, 480, 28
+    Set btnImportCsv = Btn(pg, "btnImportCsv", "Import the list from Excel (CSV)", 8, 184, 260, 24)
+    Lbl pg, "lblB5", "Reads that file back in after you save it in Excel as CSV UTF-8. Rows match on the Macro column.", _
+        278, 188, 480, 28
+    Set btnReadBas = Btn(pg, "btnReadBas", "Read macros from .bas files", 8, 232, 260, 24)
+    Lbl pg, "lblB6", "Only needed when Word will not let the admin look inside the template. In the VBA editor, " & _
+        "right-click each module > Export File, then pick the .bas file(s) here. One file or many.", 278, 236, 480, 42
 
     ' ----- History -----
     Set pg = mp.Pages(4)
@@ -279,7 +278,6 @@ Private Sub UserForm_Initialize()
     FillCats
     FillCategoryCombo
     FillHistory
-    txtCheck.Text = SK_CheckReport(mModel)
     mLoading = False
     FillList
     UpdateHeader
@@ -287,8 +285,7 @@ Private Sub UserForm_Initialize()
     If Not mModel("scanAvailable") Then
         mp.Value = 3
         If Not SK_Quiet Then
-            MsgBox "Word is not letting the admin look inside this template, so it shows only what was saved before." & _
-                vbCr & vbCr & "The Check tab shows two ways to list your macros.", vbInformation, SK_APP
+            MsgBox SK_NoAccessMessage(), vbInformation, SK_APP
         End If
     End If
 End Sub
@@ -405,14 +402,14 @@ Private Sub LoadFields()
     en = Not (mCur Is Nothing)
     txtTitle.Enabled = en: cboCategory.Enabled = en: cboWorksOn.Enabled = en
     txtDescription.Enabled = en: txtKeywords.Enabled = en: lstAffects.Enabled = en
-    cboChanges.Enabled = en: txtAlso.Enabled = en: chkShown.Enabled = en: btnUseComment.Enabled = en
+    cboChanges.Enabled = en: chkShown.Enabled = en: btnUseComment.Enabled = en
     For i = 0 To lstAffects.ListCount - 1
         lstAffects.Selected(i) = False
     Next
     If Not en Then
         lblMacro.Caption = "No macro matches this filter."
         txtTitle.Text = "": cboCategory.Text = "": cboWorksOn.Text = "": txtDescription.Text = ""
-        txtKeywords.Text = "": cboChanges.Text = "": txtAlso.Text = "": chkShown.Value = False
+        txtKeywords.Text = "": cboChanges.Text = "": chkShown.Value = False
         lblComment.Caption = ""
         mLoading = False
         Exit Sub
@@ -424,7 +421,6 @@ Private Sub LoadFields()
     txtDescription.Text = mCur("description")
     txtKeywords.Text = mCur("keywords")
     cboChanges.Text = mCur("changes")
-    txtAlso.Text = mCur("also")
     chkShown.Value = (mCur("shown") = "1")
     chkShown.Enabled = mCur("found")
     For Each a In Split(mCur("affects"), ",")
@@ -433,7 +429,7 @@ Private Sub LoadFields()
         Next
     Next
     If Not mCur("found") Then
-        lblComment.Caption = "This macro is not in the template anymore. Remove the entry on the Check tab, " & _
+        lblComment.Caption = "This macro is not in the template anymore. Remove it with Bulk tools > Remove macros that are gone, " & _
                              "or put the macro back."
     ElseIf Len(mCur("comment")) > 0 Then
         lblComment.Caption = "Code comment: " & mCur("comment")
@@ -636,12 +632,6 @@ Private Sub cboChanges_Change()
     MarkEdit
 End Sub
 
-Private Sub txtAlso_Change()
-    If mLoading Or mCur Is Nothing Then Exit Sub
-    mCur("also") = txtAlso.Text
-    MarkEdit
-End Sub
-
 Private Sub chkShown_Click()
     If mLoading Or mCur Is Nothing Then Exit Sub
     mCur("shown") = IIf(chkShown.Value, "1", "0")
@@ -795,11 +785,8 @@ Private Sub btnButton_Click()
 End Sub
 
 ' ---------------------------------------------------------------------
-' Check page events
+' Bulk tools events
 ' ---------------------------------------------------------------------
-Private Sub btnRecheck_Click()
-    txtCheck.Text = SK_CheckReport(mModel)
-End Sub
 
 Private Sub btnFillComments_Click()
     Dim e As Object, n As Long
@@ -812,7 +799,6 @@ Private Sub btnFillComments_Click()
     If n > 0 Then Mark "Described " & n & " macro(s) from code comments"
     FillList KeepRunNow()
     UpdateHeader
-    txtCheck.Text = SK_CheckReport(mModel)
     MsgBox IIf(n > 0, n & " macro(s) now use their code comment as the description. Review them on the Macros tab.", _
                     "No empty descriptions had a code comment to use."), vbInformation, SK_APP
 End Sub
@@ -828,7 +814,6 @@ Private Sub btnShowDescribed_Click()
     If n > 0 Then Mark "Showed " & n & " described macro(s)"
     FillList KeepRunNow()
     UpdateHeader
-    txtCheck.Text = SK_CheckReport(mModel)
     MsgBox n & " described macro(s) added to the menu. Macros you hid on purpose stay hidden.", vbInformation, SK_APP
 End Sub
 
@@ -845,7 +830,6 @@ Private Sub btnDropMissing_Click()
     Mark "Removed " & n & " entry(ies) whose macro is gone"
     FillList
     UpdateHeader
-    txtCheck.Text = SK_CheckReport(mModel)
 End Sub
 
 Private Sub btnExportCsv_Click()
@@ -876,7 +860,6 @@ Private Sub btnImportCsv_Click()
     AddExtraAffects
     FillList KeepRunNow()
     UpdateHeader
-    txtCheck.Text = SK_CheckReport(mModel)
     MsgBox msg, vbInformation, SK_APP
     Exit Sub
 Fail:
@@ -902,7 +885,6 @@ Private Sub btnReadBas_Click()
     mModel("foundCount") = mModel("entries").Count
     FillList KeepRunNow()
     UpdateHeader
-    txtCheck.Text = SK_CheckReport(mModel)
     MsgBox found.Count & " macro(s) found in " & paths.Count & " file(s); " & n & " new to the catalog." & vbCr & _
         "They stay listed after you save. If a macro is not really in this template, the menu says so when it is run.", _
         vbInformation, SK_APP
@@ -964,6 +946,19 @@ End Sub
 ' ---------------------------------------------------------------------
 Public Function TestState() As String
     TestState = lstEntries.ListCount & " rows; " & lblHeader.Caption
+End Function
+
+Public Function TestLabels() As String
+    Dim s As String, i As Long, c As Object
+    For i = 0 To mp.Pages.Count - 1
+        s = s & mp.Pages(i).Caption & "|"
+    Next
+    s = s & " A=" & mp.Pages(0).Controls("lblA").Caption & " | Ch=" & mp.Pages(0).Controls("lblCh").Caption
+    On Error Resume Next
+    Set c = Nothing
+    Set c = mp.Pages(0).Controls("txtAlso")
+    s = s & " | also box=" & IIf(c Is Nothing, "none", "present")
+    TestLabels = s
 End Function
 
 Public Function TestRow(ByVal i As Long) As String

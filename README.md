@@ -3,7 +3,7 @@
 A menu and a bookshelf for the macros in a Word template.
 
 - **The menu** (`StationkeeperMacros`): search as you type, sort by category, A to Z, most used or recent, filter by what a macro affects, read what it does, and run it. It can stay open beside the document.
-- **The admin** (`StationkeeperMacrosAdmin`): see every macro in the template, then give each one a title, description, category, keywords and "affects" tags, and choose which ones show in the menu. Set and order your own categories, export the catalog to Excel and back, and check for macros that were added, moved or removed.
+- **The admin** (`StationkeeperMacrosAdmin`): see every macro in the template, then give each one a title, description, category, keywords, what each one affects and whether it changes the document, and choose which ones show in the menu. Set and order your own categories, export the catalog to Excel and back, and check for macros that were added, moved or removed.
 
 It works with whatever macros are already in the template: one module or many. It never edits your code. Part of the Stationkeeper suite and separate from the Stationkeeper app.
 
@@ -31,9 +31,9 @@ It works with whatever macros are already in the template: one module or many. I
 
 1. Open the template itself (File > Open the .dotm).
 2. View > Macros > `StationkeeperMacrosAdmin` > Run.
-3. On **Macros**, the list has three columns: the macro, **In menu** (Shown, Hidden, Not set, or Macro gone) and **Description** (Written or Missing). Use **Show** to list only the ones still missing a description or not yet in the menu. Pick each macro and fill in Title, Description, Category, Keywords and Affects. Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
-4. On **Check**, **Describe empty ones from code comments** fills every blank description at once. **Show every described macro in the menu** adds them all.
-5. Faster for many macros: **Check > Export catalog to CSV**, fill it in Excel, save as **CSV UTF-8**, then **Import catalog from CSV**.
+3. On **Macros**, the list has three columns: the macro, **In menu** (Shown, Hidden, Not set, or Macro gone) and **Description** (Written or Missing). Use **Show** to list only the ones still missing a description or not yet in the menu. Pick each macro and fill in Title, Description, Category, Keywords, **What this macro affects** and **Does this change the document?** Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
+4. **Bulk tools** work on the whole list at once: **Fill blank descriptions from code comments**, **Show every described macro in the menu**, **Remove macros that are gone**, export and import for Excel, and **Read macros from .bas files**. Each button has a sentence beside it saying what it does.
+5. Faster for many macros: **Bulk tools > Export the list to Excel (CSV)**, fill it in Excel, save as **CSV UTF-8**, then **Import the list from Excel (CSV)**.
 6. **Categories** sets your own categories and their order.
 7. **Look** sets the menu title, the default sort, and two ways to open the menu: **Alt+Shift+M** and a button on the **Add-ins** tab.
 8. Tick **Ready to save**, then **Save to template**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
@@ -42,7 +42,7 @@ It works with whatever macros are already in the template: one module or many. I
 
 Run `StationkeeperMacros` (or press Alt+Shift+M, or use the Add-ins tab button) in any document based on the template.
 
-- Type to search. The list narrows with every letter and says where each match came from (title, keywords, affects, category, description).
+- Type to search. The list narrows with every letter and says where each match came from (title, keywords, what it affects, category, description).
 - Up and Down move, Enter runs, Esc closes.
 - Pins, Most used and Recent belong to each person on their own PC and are never saved in the template.
 
@@ -52,7 +52,7 @@ Word blocks a template from reading its own code unless this setting is on (File
 
 - **The menu never needs it.** It runs from the saved catalog.
 - **The admin is best with it on, for the person running the admin only.** With it on, the admin lists every macro live, reads code comments, and spots macros that were added, moved or removed.
-- **Without it,** the admin opens on the Check tab and offers **Read macros from .bas files**: export your module(s) from the VBA editor (right-click > Export File) and pick the file(s).
+- **Without it,** the admin says so, opens on **Bulk tools**, and offers **Read macros from .bas files**: export your module(s) from the VBA editor (right-click > Export File) and pick the file(s).
 
 ## What counts as a macro
 
@@ -60,7 +60,7 @@ A `Public Sub` (or plain `Sub`) with no arguments, in a standard module. These a
 
 ## Where things are kept
 
-- **The catalog** (titles, descriptions, categories, keywords, affects, show or hide, history): a hidden XML part inside the template, namespace `urn:stationkeeper:macros:1`. Changing it never touches code, so a code signature stays valid.
+- **The catalog** (titles, descriptions, categories, keywords, what it affects, show or hide, history): a hidden XML part inside the template, namespace `urn:stationkeeper:macros:1`. Changing it never touches code, so a code signature stays valid.
 - **Backups and a readable copy of the catalog:** `Stationkeeper Macros backups` beside the template (or in Documents if that folder can't be written).
 - **Each person's pins, counts and preferences:** their Windows profile (`HKCU\Software\VB and VBA Program Settings\Stationkeeper Macros`).
 
@@ -70,7 +70,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 36 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 37 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path. See `TESTING.md` for the checks run by hand.

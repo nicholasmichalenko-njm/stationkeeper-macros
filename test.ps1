@@ -101,6 +101,7 @@ try {
         $adm = TR $word 'T_Admin'
         Check 'admin loads and edits' (($adm -match '^8 rows') -and ($adm -match 'pending')) $adm
         Check 'admin list has In menu and Description columns' (($adm -match 'Clear Direct Formatting \| Not set \| Missing') -and ($adm -match '\| Shown \| Written')) ''
+        Check 'admin tabs and labels' (($adm -match 'Macros\|Categories\|Look\|Bulk tools\|History\|') -and ($adm -match 'A=What this macro affects') -and ($adm -match 'Ch=Does this change the document\?') -and ($adm -match 'also box=none')) ''
         Check 'Save disabled with nothing to save' ($adm -match 'gate0: pending=0 unticked=False ticked=False') ''
         Check 'Save needs Ready to save ticked' ($adm -match 'gate1: pending=\d+ unticked=False ticked=True') ''
         $csv = TR $word 'T_Csv'
@@ -170,7 +171,7 @@ try {
         Check 'no access: admin opens' ($na -match 'admin: 8 rows') ''
         Check 'no access: reads .bas files, one module or many' ($na -match 'bas: 8 \|') ''
         Check 'no access: comments read from .bas' (($na -match 'Module1.RepeatHeaderRows\{Repeats the header row') -and ($na -match 'ShowHiddenText\{Turns hidden text')) ''
-        Check 'no access: Check tab explains the two ways forward' ($na -match 'Trust access to the VBA project object model') ''
+        Check 'no access: message explains the two ways forward' (($na -match 'Trust access to the VBA project object model') -and ($na -match 'Bulk tools > Read macros from .bas files')) ''
         $d.Close([ref]0)
     }
 

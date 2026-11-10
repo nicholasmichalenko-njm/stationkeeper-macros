@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.1.1
+' Stationkeeper Macros 0.1.2
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.1.1"
+Public Const SK_VERSION As String = "0.1.2"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 
 Public SK_LastScanMethod As String
@@ -669,38 +669,14 @@ End Function
 ' ---------------------------------------------------------------------
 ' Check, export and import
 ' ---------------------------------------------------------------------
-Public Function SK_CheckReport(ByVal m As Object) As String
-    Dim e As Object, s As String, nShown As Long, nDesc As Long, nUnd As Long, nNoKw As Long
-    Dim gone As String, moved As String, und As String
-
-    For Each e In m("entries")
-        If e("found") Then
-            If Len(Trim$(e("description"))) > 0 Then nDesc = nDesc + 1 Else nUnd = nUnd + 1: und = und & "   " & e("title") & "   (" & e("run") & ")" & vbCrLf
-            If e("shown") = "1" Then nShown = nShown + 1
-            If Len(Trim$(e("keywords"))) = 0 Then nNoKw = nNoKw + 1
-            If Len(e("relinked")) > 0 Then moved = moved & "   " & e("title") & ": " & e("relinked") & " is now " & e("run") & vbCrLf
-        Else
-            gone = gone & "   " & e("title") & "   (" & e("run") & ")" & vbCrLf
-        End If
-    Next
-
-    s = "Template: " & ThisDocument.Name & vbCrLf
-    s = s & "Macros found: " & m("foundCount") & " in " & m("moduleCount") & " module(s), read from " & m("scanMethod") & "." & vbCrLf
-    s = s & "In the menu: " & nShown & "    Described: " & nDesc & "    Not described: " & nUnd & "    No keywords: " & nNoKw & vbCrLf
-    If Not m("scanAvailable") Then
-        s = s & vbCrLf & "Word is not letting the admin look inside this template, so it cannot list its macros" & vbCrLf & _
-            "or tell whether an entry's macro is still there. Two ways forward:" & vbCrLf & _
-            "  1. Turn on File > Options > Trust Center > Trust Center Settings > Macro Settings >" & vbCrLf & _
-            "     ""Trust access to the VBA project object model"", then open the admin again. Only the" & vbCrLf & _
-            "     person running the admin needs this. People using the menu do not." & vbCrLf & _
-            "  2. Export your modules (VBA editor > right-click the module > Export File) and use" & vbCrLf & _
-            "     ""Read macros from .bas files"" on this tab." & vbCrLf
-    End If
-    If Len(gone) > 0 Then s = s & vbCrLf & "Not found (the catalog has it, the template does not):" & vbCrLf & gone
-    If Len(moved) > 0 Then s = s & vbCrLf & "Moved to another module (followed by name):" & vbCrLf & moved
-    If Len(und) > 0 Then s = s & vbCrLf & "Not described yet:" & vbCrLf & und
-    s = s & vbCrLf & "Stationkeeper Macros " & SK_VERSION
-    SK_CheckReport = s
+Public Function SK_NoAccessMessage() As String
+    SK_NoAccessMessage = "Word is not letting the admin look inside this template, so the list shows only what was saved before." & _
+        vbCr & vbCr & "To list every macro, do one of these:" & vbCr & _
+        "1. Turn on File > Options > Trust Center > Trust Center Settings > Macro Settings > " & _
+        """Trust access to the VBA project object model"", then open the admin again. " & _
+        "Only the person running the admin needs this. People using the menu do not." & vbCr & _
+        "2. Export your module(s) from the VBA editor (right-click > Export File), then use " & _
+        "Bulk tools > Read macros from .bas files."
 End Function
 
 Private Function SK_CsvQ(ByVal v As Variant) As String
@@ -717,11 +693,11 @@ End Function
 
 Public Function SK_ExportCsv(ByVal m As Object) As String
     Dim s As String, e As Object, path As String
-    s = "Macro,Title,Category,Description,Keywords,Affects,Works on,Changes the document,Also in Stationkeeper,Show in menu,Status" & vbCrLf
+    s = "Macro,Title,Category,Description,Keywords,What it affects,Works on,Does it change the document,Show in menu,Status" & vbCrLf
     For Each e In m("entries")
         s = s & SK_CsvQ(e("run")) & "," & SK_CsvQ(e("title")) & "," & SK_CsvQ(e("category")) & "," & _
             SK_CsvQ(e("description")) & "," & SK_CsvQ(e("keywords")) & "," & SK_CsvQ(e("affects")) & "," & _
-            SK_CsvQ(e("workson")) & "," & SK_CsvQ(e("changes")) & "," & SK_CsvQ(e("also")) & "," & _
+            SK_CsvQ(e("workson")) & "," & SK_CsvQ(e("changes")) & "," & _
             SK_CsvQ(SK_YesNo(e("shown"))) & "," & SK_CsvQ(SK_EntryStatus(e)) & vbCrLf
     Next
     path = SK_BackupDir() & "\" & SK_BaseName() & " - macro catalog " & Format$(Now, "yyyy-mm-dd hhnn") & ".csv"
@@ -795,8 +771,8 @@ Public Function SK_ImportCsv(ByVal m As Object, ByVal path As String) As String
     End If
 
     fields = Array("title|title", "category|category", "description|description", "keywords|keywords", _
-                   "affects|affects", "works on|workson", "changes the document|changes", _
-                   "also in stationkeeper|also")
+                   "affects|affects", "what it affects|affects", "works on|workson", _
+                   "changes the document|changes", "does it change the document|changes")
     For r = 2 To rows.Count
         Set row = rows(r)
         key = SK_CsvCell(row, cols("macro"))

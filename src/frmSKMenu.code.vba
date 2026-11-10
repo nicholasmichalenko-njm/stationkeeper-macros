@@ -70,7 +70,7 @@ Private Sub UserForm_Initialize()
     cboSort.AddItem "Most used"
     cboSort.AddItem "Recent"
 
-    AddLabel "lblAff", "Affects", 444, 8, 120, 14
+    AddLabel "lblAff", "What it affects", 444, 8, 160, 14
     Set cboAffects = AddCtl("Forms.ComboBox.1", "cboAffects", 444, 22, 206, 20)
     cboAffects.Style = fmStyleDropDownList
 
@@ -340,10 +340,9 @@ Private Sub ShowDetail()
     lblRun.Caption = e("run")
     txtDesc.Text = Dash(e("description"), "No description yet.")
     info = "Category:  " & Dash(e("category"), "Uncategorized") & vbCrLf & _
-           "Affects:  " & Dash(e("affects"), "not set") & vbCrLf & _
+           "What it affects:  " & Dash(e("affects"), "not set") & vbCrLf & _
            "Works on:  " & Dash(e("workson"), "not set") & vbCrLf & _
-           "Changes the document:  " & Dash(e("changes"), "not set")
-    If Len(e("also")) > 0 Then info = info & vbCrLf & "Also in Stationkeeper:  " & e("also")
+           "Does it change the document?  " & Dash(e("changes"), "not set")
     lblInfo.Caption = info
     btnPin.Caption = IIf(SK_IsPinned(e("run")), "Unpin", "Pin to top")
     btnRun.Enabled = True
