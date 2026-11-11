@@ -81,7 +81,14 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("Yes/No columns accept Yes or No."), _
         Array("In Word, run ChooseStandardsWorkbook once to point the tools at this file. The tools read it again whenever it changes."), _
         Array("Made " & Format$(Now, "yyyy-mm-dd") & " for " & ThisDocument.Name & " by Stationkeeper Tools " & SKW_VERSION & "."))
-    Sheet wb, 2, "Settings", Array( _
+    Dim moreSettings As Variant   ' a second list: one statement allows only 24 line continuations
+    moreSettings = Array( _
+        Array("DeckFooterText", "", "The footer every slide shows, such as Proprietary - Company Name (Deck Marking Check and Fix)."), _
+        Array("DeckMarking", "", "A marking every slide must show somewhere, such as CUI or Proprietary (Deck Marking Check and Fix)."), _
+        Array("DeckLanguage", "en-US", "The proofing language for slide text: en-US, en-GB or a number such as 1033 (Deck Language Check and Fix)."), _
+        Array("DeckTableStyle", "", "The team's table style: an id such as {5C22544A-7EE6-4342-B048-85BDC9FD1C3A}, or the name of a style a table in the deck uses (Deck Table Style Check and Fix)."), _
+        Array("DeckExtraColors", "", "Colors allowed besides the theme's, such as #003366; #C00000 (Deck Color Check)."))
+    Sheet wb, 2, "Settings", JoinRows(Array( _
         Array("Setting", "Value", "What it does"), _
         Array("StylePrefix", "", "Styles whose names start with this (for example AA) count as team styles and are allowed."), _
         Array("CaptionStyle", "Caption", "The style captions use."), _
@@ -103,7 +110,7 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("DeckMinFontSize", "10", "Smallest text size allowed on slides (Deck Small Text)."), _
         Array("DeckTemplate", "", "Full path of the team's PowerPoint template (.potx) that decks are checked and conformed against. Blank: the master most slides use."), _
         Array("DeckFirstSlideNumber", "1", "The number the first slide carries (Deck Slide Number Check and Fix)."), _
-        Array("DeckNumberTitleSlide", "No", "Yes: title slides show a number too. No: they do not."))
+        Array("DeckNumberTitleSlide", "No", "Yes: title slides show a number too. No: they do not.")), moreSettings)
     Sheet wb, 3, "Allowed styles", Array( _
         Array("Style", "Required", "Notes"), _
         Array("Normal", "", ""), Array("Heading 1", "Yes", ""), Array("Heading 2", "", ""), Array("Heading 3", "", ""), _
@@ -156,6 +163,15 @@ Fail:
     If Not wb Is Nothing Then wb.Close False
     If Not xl Is Nothing Then xl.Quit
     SKW_MakeStandardsWorkbook = "The workbook could not be made: " & ed
+End Function
+
+Private Function JoinRows(ByVal a As Variant, ByVal b As Variant) As Variant
+    Dim v() As Variant, i As Long, n As Long
+    ReDim v(0 To UBound(a) + UBound(b) + 1)
+    For i = 0 To UBound(a): v(i) = a(i): Next
+    n = UBound(a) + 1
+    For i = 0 To UBound(b): v(n + i) = b(i): Next
+    JoinRows = v
 End Function
 
 Private Sub Sheet(ByVal wb As Object, ByVal idx As Long, ByVal nm As String, ByVal rows As Variant)
@@ -383,6 +399,48 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKP_Fix.DeckBannedPhrasesFix", "Deck Banned Phrases Fix", "PowerPoint", _
         "On a copy: replaces the team's banned phrases that have a replacement and leaves a slide comment for each change; flags the rest to reword. The open deck is not changed.", _
         "powerpoint, deck, banned phrases, plain language, replace, comments", "Text", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Tidy.DeckAcronymFirstUseFix", "Deck Acronym First Use Fix", "PowerPoint", _
+        "On a copy: spells out each team acronym at its first use in body text, such as Request for Proposal (RFP), with a slide comment for each change. Titles stay short. The open deck is not changed.", _
+        "powerpoint, deck, acronyms, first use, spell out, define", "Acronyms", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Tidy.DeckMarkingCheck", "Deck Marking Check", "PowerPoint", _
+        "Report of slides without the team footer (DeckFooterText) or the marking (DeckMarking, such as CUI or Proprietary) in their text, footer, layout or master. Hidden slides count. Changes nothing.", _
+        "powerpoint, deck, marking, cui, proprietary, footer, banner, classification", "Headers and footers", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckMarkingFix", "Deck Marking Fix", "PowerPoint", _
+        "On a copy: puts the footer placeholder back on masters and layouts and shows the team footer on every slide. The open deck is not changed.", _
+        "powerpoint, deck, marking, cui, proprietary, footer, fix", "Headers and footers", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Tidy.DeckTextOverflowCheck", "Deck Text Overflow Check", "PowerPoint", _
+        "Report of text running past the bottom of its box or off the slide, and tables running off the slide. Changes nothing.", _
+        "powerpoint, deck, overflow, text, fit, off slide", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckLayoutDriftCheck", "Deck Layout Drift Check", "PowerPoint", _
+        "Report of titles and other placeholders moved, resized or restyled away from their layout. Changes nothing.", _
+        "powerpoint, deck, layout, title, drift, moved, placeholder, reset", "Layout", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckResetPlaceholders", "Deck Reset Placeholders", "PowerPoint", _
+        "On a copy: moves and resizes drifted placeholders back to their layout, titles back to the layout font and size. The open deck is not changed.", _
+        "powerpoint, deck, layout, title, drift, reset, placeholder, fix", "Layout", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Tidy.DeckPictureCheck", "Deck Picture Check", "PowerPoint", _
+        "Report of stretched pictures, pictures enlarged past 150 percent, and cropped pictures whose cut-off parts still travel in the file. Changes nothing.", _
+        "powerpoint, deck, pictures, images, stretched, distorted, cropped, resolution", "Figures", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckPictureAspectFix", "Deck Picture Aspect Fix", "PowerPoint", _
+        "On a copy: gives stretched pictures their own shape back, fitted inside the box they had. The open deck is not changed.", _
+        "powerpoint, deck, pictures, images, stretched, distorted, aspect ratio, fix", "Figures", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Tidy.DeckColorCheck", "Deck Color Check", "PowerPoint", _
+        "Report of fill, line and text colors that are not the theme colors (or DeckExtraColors), with the nearest theme color. Changes nothing.", _
+        "powerpoint, deck, colors, theme, brand, palette", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckLanguageCheck", "Deck Language Check", "PowerPoint", _
+        "Report of text marked with a proofing language other than the team language (DeckLanguage, en-US by default). Changes nothing.", _
+        "powerpoint, deck, language, proofing, spelling, dictionary", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckLanguageFix", "Deck Language Fix", "PowerPoint", _
+        "On a copy: marks all slide, notes, master, layout and SmartArt text with the team proofing language. The open deck is not changed.", _
+        "powerpoint, deck, language, proofing, spelling, fix", "Text", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Tidy.DeckLinksCheck", "Deck Links Check", "PowerPoint", _
+        "Report of linked pictures, objects and media, hyperlinks and embedded objects: missing files, links into one computer or someone's own folders, embedded files carrying their data. Changes nothing.", _
+        "powerpoint, deck, links, hyperlinks, embedded, ole, broken, delivery", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckTableStyleCheck", "Deck Table Style Check", "PowerPoint", _
+        "Report of tables not in the team table style (DeckTableStyle) and tables with no header row. Changes nothing.", _
+        "powerpoint, deck, tables, table style, header row", "Tables", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Tidy.DeckTableStyleFix", "Deck Table Style Fix", "PowerPoint", _
+        "On a copy: applies the team table style (DeckTableStyle) to every table. The open deck is not changed.", _
+        "powerpoint, deck, tables, table style, fix", "Tables", "Whole document", "No, it fixes a copy")
     s = s & "," & T("SKX_Book.BookFormulaErrors", "Book Formula Errors", "Excel", _
         "Report of cells showing an error (#REF!, #N/A, #DIV/0! and the rest) in the workbook open in Excel. Changes nothing.", _
         "excel, workbook, errors, ref, formulas", "Whole document", "Whole document", "No, it only reports")
@@ -433,6 +491,7 @@ Private Function SkKind(ByVal run As String) As String
         "AcronymQuickCheck|LoadTeamDictionaries|FontNotAllowed|PageLimitCounter|RemoveUnusedCustomStyles|" & _
         "ConvertToTeamList|InsertAcronymList|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckConformToTemplate|DeckRemoveUnusedLayouts|DeckFontFix|DeckSlideNumberCheck|DeckSlideNumberFix|DeckBannedPhrasesFix|" & _
+        "DeckAcronymFirstUseFix|DeckMarkingCheck|DeckMarkingFix|DeckLanguageCheck|DeckLanguageFix|DeckTableStyleCheck|DeckTableStyleFix|DeckColorCheck|" & _
         "BookLeftovers|BookBannedPhrases|BookAcronymCheck|BookFontAudit|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"

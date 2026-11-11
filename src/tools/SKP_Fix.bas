@@ -1149,3 +1149,26 @@ Public Function SKP_GoToMedia(ByVal p As Object, ByVal slideId As Long, ByVal sh
 Fail:
     SKP_GoToMedia = "PowerPoint could not show it: " & Err.Description
 End Function
+
+' ---------------------------------------------------------------------
+' Shared with SKP_Tidy (1.5.0)
+' ---------------------------------------------------------------------
+Public Function SKP_FixCopy(ByVal p As Object, ByVal what As String, ByVal target As String, ByRef c As Object) As String
+    SKP_FixCopy = FixCopy(p, what, target, c)
+End Function
+
+Public Sub SKP_FinishCopy(ByVal c As Object)
+    FinishCopy c
+End Sub
+
+Public Function SKP_SlideTitleOf(ByVal sld As Object) As String
+    SKP_SlideTitleOf = SlideTitleOf(sld)
+End Function
+
+Public Sub SKP_AddComment(ByVal sld As Object, ByVal notes As Object)
+    AddComment sld, notes
+End Sub
+
+Public Function SKP_IsTitleSlide(ByVal sld As Object) As Boolean
+    SKP_IsTitleSlide = IsTitleSlide(sld)
+End Function

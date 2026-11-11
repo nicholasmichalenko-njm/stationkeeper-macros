@@ -1015,3 +1015,146 @@ End Function
 Public Function TW_Names() As String
     TW_Names = SKW_Stem("Deck 1.4.pptx") & "|" & SKW_Ext("Book.xlsx") & "|" & SKW_Stem("C:\a.b\Deck") & "|" & SKW_Stem(".hidden") & "|" & SKW_Ext("Deck")
 End Function
+
+' ---------------------------------------------------------------------
+' 1.5.0: PowerPoint batch 3
+' ---------------------------------------------------------------------
+' A 24-bit bitmap w x h pixels at 72 dpi (one point a pixel), in TEMP.
+Private Function BigBmp(ByVal w As Long, ByVal h As Long) As String
+    Dim p As String, f As Integer, b() As Byte, rowLen As Long, size As Long, i As Long
+    p = Environ$("TEMP") & "\skw_test_" & w & "x" & h & ".bmp"
+    rowLen = ((w * 3 + 3) \ 4) * 4
+    size = 54 + rowLen * h
+    ReDim b(0 To size - 1)
+    b(0) = 66: b(1) = 77
+    PutLong b, 2, size: PutLong b, 10, 54: PutLong b, 14, 40: PutLong b, 18, w: PutLong b, 22, h
+    b(26) = 1: b(28) = 24
+    PutLong b, 34, rowLen * h: PutLong b, 38, 2835: PutLong b, 42, 2835
+    For i = 54 To size - 1
+        b(i) = (i * 7) Mod 256
+    Next
+    f = FreeFile
+    Open p For Binary Access Write As #f
+    Put #f, 1, b
+    Close #f
+    BigBmp = p
+End Function
+
+Private Sub PutLong(ByRef b() As Byte, ByVal at As Long, ByVal v As Long)
+    b(at) = v And &HFF&: b(at + 1) = (v \ &H100&) And &HFF&: b(at + 2) = (v \ &H10000) And &HFF&: b(at + 3) = (v \ &H1000000) And &HFF&
+End Sub
+
+' Sets a team setting in the standards read into memory (not the workbook). Returns what SKW_Setting now reads.
+Public Function TW_SetSetting(ByVal arg As String) As String
+    Dim a As Variant, r As Object, rs As Collection
+    a = Split(arg, "|")
+    Set rs = SKW_Rows("Settings")
+    For Each r In rs
+        If LCase$(r("setting")) = LCase$(CStr(a(0))) Then
+            r("value") = CStr(a(1))
+            TW_SetSetting = SKW_Setting(CStr(a(0)), "?")
+            Exit Function
+        End If
+    Next
+    Set r = CreateObject("Scripting.Dictionary")
+    r("setting") = CStr(a(0)): r("value") = CStr(a(1))
+    rs.Add r
+    TW_SetSetting = SKW_Setting(CStr(a(0)), "?")
+End Function
+
+' Deck 1.5: an acronym in a title and in the body, a moved and shrunk title, a French paragraph, an off-theme
+' color, an overflowing text box, a wrong footer, a stretched and a cropped picture, a local hyperlink and a
+' web one, a table in another style with no header row, and a CUI marking on slide 4 only.
+Public Function TW_MakeDeck3(ByVal path As String) As String
+    Dim p As Object, s As Object, sh As Object, tb As Object, bmp As String, w As Single, h As Single
+    Set mPP = CreateObject("PowerPoint.Application")
+    mPPMine = (mPP.Presentations.Count = 0)
+    Set p = mPP.Presentations.Add(0)
+    w = p.PageSetup.SlideWidth: h = p.PageSetup.SlideHeight
+    ' 1: title slide; RFP only in the title
+    Set s = p.Slides.AddSlide(1, p.Designs(1).SlideMaster.CustomLayouts(1))
+    s.Shapes(1).TextFrame.TextRange.Text = "Approach for the RFP"
+    ' 2: title moved and shrunk; body with RFP, a French paragraph and an off-theme color; overflow; wrong footer
+    Set s = p.Slides.AddSlide(2, p.Designs(1).SlideMaster.CustomLayouts(2))
+    s.Shapes(1).TextFrame.TextRange.Text = "Overview"
+    s.Shapes(1).Top = s.Shapes(1).Top + 30
+    s.Shapes(1).TextFrame.TextRange.Font.Size = 20
+    s.Shapes(2).TextFrame.TextRange.Text = "We answer the RFP in full." & vbCr & "Bonjour tout le monde."
+    s.Shapes(2).TextFrame.TextRange.Paragraphs(1).Font.Color.RGB = RGB(&H12, &H34, &H56)
+    s.Shapes(2).TextFrame.TextRange.Paragraphs(2).LanguageID = 1036
+    Set tb = s.Shapes.AddTextbox(1, 40, 420, 220, 30)
+    tb.Name = "Tight box"
+    tb.TextFrame.AutoSize = 0
+    tb.TextFrame.WordWrap = -1
+    tb.TextFrame.TextRange.Text = "This text is far too long for its small box." & vbCr & "A second line." & vbCr & "A third line." & vbCr & "A fourth line."
+    tb.Height = 30
+    s.HeadersFooters.Footer.Visible = -1
+    s.HeadersFooters.Footer.Text = "Draft"
+    ' 3: pictures, links, tables
+    Set s = p.Slides.AddSlide(3, p.Designs(1).SlideMaster.CustomLayouts(6))
+    s.Shapes(1).TextFrame.TextRange.Text = "Evidence"
+    bmp = BigBmp(100, 50)
+    Set sh = s.Shapes.AddPicture(bmp, 0, -1, 40, 150)
+    sh.Name = "Stretched photo"
+    sh.LockAspectRatio = 0
+    sh.Width = 200: sh.Height = 50
+    Set sh = s.Shapes.AddPicture(bmp, 0, -1, 300, 150)
+    sh.Name = "Cropped photo"
+    sh.PictureFormat.CropRight = 20
+    Set tb = s.Shapes.AddTextbox(1, 40, 260, 300, 30)
+    tb.Name = "Local link"
+    tb.TextFrame.TextRange.Text = "See the plan"
+    tb.TextFrame.TextRange.ActionSettings(1).Hyperlink.Address = "C:\Users\nobody\Secret plan.docx"
+    Set tb = s.Shapes.AddTextbox(1, 40, 300, 300, 30)
+    tb.Name = "Web link"
+    tb.TextFrame.TextRange.Text = "Our site"
+    tb.TextFrame.TextRange.ActionSettings(1).Hyperlink.Address = "https://example.com/"
+    Set sh = s.Shapes.AddTable(2, 2, 450, 150, 200, 60)
+    sh.Name = "Team table"
+    Set sh = s.Shapes.AddTable(2, 2, 450, 260, 200, 60)
+    sh.Name = "Odd table"
+    sh.Table.ApplyStyle "{2D5ABB26-0587-4C30-8999-92F81FD0307C}", False
+    sh.Table.FirstRow = False
+    ' 4: the marking
+    Set s = p.Slides.AddSlide(4, p.Designs(1).SlideMaster.CustomLayouts(2))
+    s.Shapes(1).TextFrame.TextRange.Text = "Close"
+    s.Shapes(2).TextFrame.TextRange.Text = "Thank you."
+    Set tb = s.Shapes.AddTextbox(1, 10, 5, 100, 20)
+    tb.TextFrame.TextRange.Text = "CUI"
+    p.SaveAs path
+    Set SKP_TestDeck = p
+    SKP_TestTemplate = ""
+    TW_MakeDeck3 = "slides=" & p.Slides.Count & " shapes3=" & p.Slides(3).Shapes.Count & " bmp=" & Len(Dir$(bmp))
+End Function
+
+' What a 1.5.0 fixed copy holds.
+Public Function TW_Inspect3(ByVal path As String) As String
+    Dim c As Object, s As String, sld As Object, sh As Object, lt As Object, ft As String, ph As Object
+    Set c = mPP.Presentations.Open(path, -1, 0, 0)
+    Set sld = c.Slides(2)
+    s = "body2=" & Replace(sld.Shapes(2).TextFrame.TextRange.Text, vbCr, " / ")
+    s = s & " | lang2=" & sld.Shapes(2).TextFrame.TextRange.Paragraphs(2).LanguageID
+    For Each lt In sld.CustomLayout.Shapes
+        If lt.Type = 14 Then
+            If lt.PlaceholderFormat.Type = 1 Then s = s & " | titleDy=" & Format$(sld.Shapes(1).Top - lt.Top, "0") & " titleSize=" & sld.Shapes(1).TextFrame.TextRange.Characters(1, 1).Font.Size
+        End If
+    Next
+    s = s & " | com2=" & sld.Comments.Count
+    s = s & " | footers="
+    For Each sld In c.Slides
+        ft = "-"
+        For Each ph In sld.Shapes
+            If ph.Type = 14 Then
+                If ph.PlaceholderFormat.Type = 15 Then ft = ph.TextFrame.TextRange.Text
+            End If
+        Next
+        s = s & "[" & ft & "]"
+    Next
+    Set sld = c.Slides(3)
+    s = s & " | pic=" & Format$(sld.Shapes("Stretched photo").Width, "0") & "x" & Format$(sld.Shapes("Stretched photo").Height, "0")
+    s = s & " | tables=" & sld.Shapes("Team table").Table.Style.Id & "," & sld.Shapes("Odd table").Table.Style.Id
+    On Error Resume Next
+    s = s & " | deflang=" & c.DefaultLanguageID
+    c.Close
+    TW_Inspect3 = s
+End Function

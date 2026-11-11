@@ -301,7 +301,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(16 modules and 1 form)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(17 modules and 1 form)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -313,7 +313,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 72 tools arrive described, categorised and in the menu' (($tc -like '72 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 86 tools arrive described, categorised and in the menu' (($tc -like '86 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -855,6 +855,69 @@ try {
             Write-Output "MEDIA: $md"
             Check 'media list: the two pictures and the linked one, by slide; two without alt text' (($md -match '^list: 3: \[2/[^/]+/Picture/Rocket on the pad\] \[2/[^/]+/Picture/\(none\)\] \[5/[^/]+/Linked picture/\(none\)\]') -and ($md -match 'noalt: 2:')) (Short $md 500)
             Check 'media list: names from alt text, a rename, and no duplicate names on a slide' (($md -match 'nameall: 1 renamed') -and ($md -match 'rename: [^|]*\| now Second photo') -and ($md -match 'dup: Slide 2 already has a shape named Second photo') -and ($md -match '\[S2 Picture - Rocket on the pad\]') -and ($md -match '\[Second photo\]')) ''
+        }
+        finally { [void](RunW $word 'SKW_Test.TW_CloseDeck') }
+        $doc.Close([ref]0)
+    }
+
+
+    # 20. 1.5.0: PowerPoint batch 3 on a deck with an acronym, a drifted title, French text, an off-theme color, an overflow, a wrong footer, pictures, links and tables.
+    [string]$deck3 = Join-Path $work 'Deck 1.5.pptx'
+    [string]$fx3 = Join-Path $work 'Deck 1.5 fixes'
+    Remove-Item $deck3 -Force -ErrorAction SilentlyContinue
+    Remove-Item $fx3 -Recurse -Force -ErrorAction SilentlyContinue
+    [void](New-Item $fx3 -ItemType Directory -Force)
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        try {
+            $m = RunW $word 'SKW_Test.TW_MakeDeck3' $deck3
+            Check '1.5.0: deck 1.5 made' ((Test-Path $deck3) -and ($m -like 'slides=4 *') -and ($m -notmatch 'bmp=0')) $m
+            $set = @(); foreach ($kv in @('DeckFooterText|CUI // Proprietary', 'DeckMarking|CUI', 'DeckTableStyle|{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}', 'DeckLanguage|en-US')) { $set += RunW $word 'SKW_Test.TW_SetSetting' $kv }
+            Check '1.5.0: the deck settings read back' (($set -join '|') -eq 'CUI // Proprietary|CUI|{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}|en-US') ($set -join '|')
+            $p = Join-Path $fx3 'acronyms.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckAcronymFirstUseFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect3' $p
+            Check 'acronym first use: RFP spelled out in the body of slide 2, the title left short, a comment says so' (($r -match '^[1-9]\d* spelled out at first use') -and ($r -match '\| 2 \| RFP \| Request for Proposal \(RFP\) \|') -and ($i -match 'body2=We answer the Request for Proposal \(RFP\) in full\.') -and ($i -match 'com2=[1-9]')) "$(Short $r 300) ## $(Short $i 300)"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckMarkingCheck'
+            Check 'marking check: three slides without a footer, one with Draft, three without CUI' ($r -like '3 slide(s) without a footer, 1 with a different footer, 3 without the marking.*') (Short $r)
+            $p = Join-Path $fx3 'marking.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckMarkingFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect3' $p
+            Check 'marking fix: the team footer on all four slides, so CUI shows everywhere' (($r -like '0 placeholder(s) back, 3 on, 4 set, 0 still unmarked.*') -and ($i -match 'footers=\[CUI // Proprietary\]\[CUI // Proprietary\]\[CUI // Proprietary\]\[CUI // Proprietary\]')) "$(Short $r 200) ## $(Short $i 400)"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTextOverflowCheck'
+            Check 'text overflow: the tight box' (($r -match '^1 overflow\(s\), 0 off the slide') -and ($r -match 'Tight box \| Text runs past the bottom of its box')) (Short $r)
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckLayoutDriftCheck'
+            Check 'layout drift: the slide 2 title moved down and shrunk' (($r -match '^1 placeholder\(s\) drifted, 1 title') -and ($r -match '\| 2 \| Title \| 30 pt down, text 20 pt \(layout \d+ pt\)')) (Short $r)
+            $p = Join-Path $fx3 'reset.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckResetPlaceholders|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect3' $p
+            Check 'reset placeholders: the title back in place and size' (($r -match '^1 placeholder\(s\) reset') -and ($i -match 'titleDy=0 titleSize=') -and ($i -notmatch 'titleSize=20 ')) "$(Short $r 200) ## $(Short $i 300)"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckPictureCheck'
+            Check 'picture check: one stretched (and so enlarged), one cropped' (($r -like '1 stretched, 1 enlarged, 1 cropped.*') -and ($r -match 'Stretched photo \| Stretched \| 100% too wide') -and ($r -match 'Cropped photo \| Cropped')) (Short $r 600)
+            $p = Join-Path $fx3 'pictures.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckPictureAspectFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect3' $p
+            Check 'picture aspect fix: the stretched one back to 2:1 inside its box' (($r -match '^1 picture\(s\) fixed') -and ($i -match 'pic=100x50')) "$(Short $r 200) ## $(Short $i 300)"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckColorCheck'
+            Check 'color check: the off-theme text color with its nearest theme color' (($r -match '^[1-9]\d* color\(s\) not in the theme') -and ($r -match '#123456 \| Text \| 1 \| 2 \| ')) (Short $r 500)
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckLanguageCheck'
+            Check 'language check: the French paragraph' (($r -match '^[1-9]\d* run\(s\) not in en-US') -and ($r -match 'fr-FR \| 1 \| Slide 2')) (Short $r)
+            $p = Join-Path $fx3 'language.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckLanguageFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect3' $p
+            Check 'language fix: all text and the deck default in en-US' (($r -match 'set to en-US') -and ($i -match 'lang2=1033') -and ($i -match 'deflang=1033')) "$(Short $r 200) ## $(Short $i 400)"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckLinksCheck'
+            Check 'links check: the link into a Users folder is flagged, the web link is not' (($r -like '2 link(s), 1 broken or local, 0 embedded.*') -and ($r -match 'Hyperlink \| C:\\Users\\nobody\\Secret plan\.docx \| File not found\. Points into') -and ($r -match 'https://example\.com/ \| Web address')) (Short $r 600)
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTableStyleCheck'
+            Check 'table style check: one table off style and without a header row' ($r -like '2 table(s), 1 off style, 1 without a header row.*') (Short $r)
+            $p = Join-Path $fx3 'tables.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckTableStyleFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect3' $p
+            Check 'table style fix: both tables in the team style' (($r -match '^1 table\(s\) restyled') -and ($i -match 'tables=\{5C22544A-7EE6-4342-B048-85BDC9FD1C3A\},\{5C22544A-7EE6-4342-B048-85BDC9FD1C3A\}')) "$(Short $r 200) ## $(Short $i 400)"
+            $a = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckPictureCheck'
+            $b = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTableStyleCheck'
+            Check 'the open deck is unchanged by the fixes and the picture measuring' (($a -like '1 stretched, 1 enlarged, 1 cropped.*') -and ($b -like '2 table(s), 1 off style*')) "$(Short $a 100) ## $(Short $b 100)"
         }
         finally { [void](RunW $word 'SKW_Test.TW_CloseDeck') }
         $doc.Close([ref]0)
