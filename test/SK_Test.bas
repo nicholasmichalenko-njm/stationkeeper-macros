@@ -397,6 +397,15 @@ Public Function T_SkLinkFiles() As String
         " | " & d("note")
 End Function
 
+' 1.2.0: the template a team macro gets is a local copy, never Stationkeeper's own file.
+Public Function T_SkAttachFile() As String
+    Dim f As String, live As String, d As Object
+    Set d = SK_LinkInfo()
+    f = SK_EffortFile("template")
+    live = d("dataDir") & "\templates\effort.dotx"
+    T_SkAttachFile = "file=" & f & " | same=" & (SK_ReadUtf8(f) = SK_ReadUtf8(live)) & " | live=" & (LCase$(f) = LCase$(live))
+End Function
+
 ' 1.1.0: sync warnings with stand-in file attributes ("" reads the real ones).
 Public Function T_SkWarn(ByVal attrs As String) As String
     Dim d As Object

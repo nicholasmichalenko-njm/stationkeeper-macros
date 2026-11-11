@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 1.1.0
+' Stationkeeper Macros 1.2.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.1.0"
+Public Const SK_VERSION As String = "1.2.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -1352,13 +1352,58 @@ End Function
 
 ' For your own macros that need effort data: the path of a part ("rules", "template" or "dictionary")
 ' to read now: the live file when the folder is complete, else the tools' last complete copy, else "".
+' 1.2.0: the template is always a local copy (Stationkeeper Tools\Attach\r<revision>), so a document attached to it
+' never holds Stationkeeper's own file open: Windows cannot replace a file Word holds, and Stationkeeper
+' would have to wait to publish the effort's next template.
 Public Function SK_EffortFile(ByVal part As String) As String
-    Dim d As Object, rel As String
+    Dim d As Object, rel As String, f As String
     Set d = SK_LinkInfo()
     rel = SK_PartFile(part)
     If Len(rel) = 0 Then Exit Function
     If InStr("," & d("parts") & ",", "," & LCase$(part) & ",") = 0 Then Exit Function
-    If d("cached") Then SK_EffortFile = SK_CacheRoot(d("dataDir")) & "\" & rel Else SK_EffortFile = d("dataDir") & "\" & rel
+    If d("cached") Then f = SK_CacheRoot(d("dataDir")) & "\" & rel Else f = d("dataDir") & "\" & rel
+    If LCase$(part) = "template" And Not d("cached") Then f = SK_AttachCopy(f, d("dataDir"), d("revision"))
+    SK_EffortFile = f
+End Function
+
+' A copy of the effort's template to attach documents to, one folder per revision; the live file if the copy
+' cannot be made (a full disk, a locked profile).
+Private Function SK_AttachCopy(ByVal src As String, ByVal dataDir As String, ByVal rev As String) As String
+    Dim fso As Object, base As String, dirR As String, dst As String, sub1 As Object, nm As String
+    On Error GoTo Fallback
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    base = Environ$("LOCALAPPDATA") & "\Stationkeeper Tools"
+    If Not fso.FolderExists(base) Then fso.CreateFolder base
+    base = base & "\Attach"                ' beside the tools' Effort cache, which keeps only its own revision folders
+    If Not fso.FolderExists(base) Then fso.CreateFolder base
+    nm = SK_PathKey(dataDir) & "-r" & IIf(Len(rev) > 0, rev, "0")   ' one effort's revision: two efforts may share a number
+    dirR = base & "\" & nm
+    dst = dirR & "\effort.dotx"
+    If Not fso.FileExists(dst) Then
+        If Not fso.FolderExists(dirR) Then fso.CreateFolder dirR
+        fso.CopyFile src, dst & ".tmp", True
+        fso.MoveFile dst & ".tmp", dst
+        On Error Resume Next            ' older revisions go, except one a document still holds open
+        For Each sub1 In fso.GetFolder(base).SubFolders
+            If LCase$(sub1.Name) <> LCase$(nm) Then sub1.Delete True
+        Next
+        On Error GoTo Fallback
+    End If
+    SK_AttachCopy = dst
+    Exit Function
+Fallback:
+    SK_AttachCopy = src
+End Function
+
+' Eight hex digits from a folder's path (case ignored), to tell efforts apart in a folder name.
+Private Function SK_PathKey(ByVal p As String) As String
+    Dim i As Long, h As Double
+    p = LCase$(p)
+    For i = 1 To Len(p)
+        h = h * 31 + AscW(Mid$(p, i, 1)) + 65536
+        h = h - Int(h / 4294967296#) * 4294967296#
+    Next
+    SK_PathKey = Right$("0000000" & Hex$(Int(h / 65536)) & Right$("000" & Hex$(h - Int(h / 65536) * 65536), 4), 8)
 End Function
 
 ' The folder picker. Returns the folder kept, or "" if the person cancelled.

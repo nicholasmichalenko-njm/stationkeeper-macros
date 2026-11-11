@@ -79,7 +79,7 @@ The strip under the list shows where the Stationkeeper data comes from, with **L
   - a file in `Stationkeeper Data` is online-only right now (it names the file);
   - OneDrive kept conflicting copies (`rules-PCNAME.json`, `manifest (1).json`) because two PCs saved the effort at once. The real files are still the ones used.
 - **The link comes to you (1.1.0).** When the document you opened the menu from sits inside an effort folder (that folder or one above it holds `Stationkeeper Data`) and the menu reads another effort or none, the strip offers it: "This document is in Effort B, but the menu reads Effort A. Switch?" with **Use this folder**. Nothing changes until you click it.
-- **Your own macros that need effort data** can call `SK_EffortFile("rules")` (or `"template"`, `"dictionary"`): it returns the file to read now (the live file, else the last complete copy), or "" when there is none.
+- **Your own macros that need effort data** can call `SK_EffortFile("rules")` (or `"template"`, `"dictionary"`): it returns the file to read now (the live file, else the last complete copy), or "" when there is none. The template is always a local copy (`%LOCALAPPDATA%\Stationkeeper Tools\Attach`, one folder per effort and revision), so a document attached to it never holds Stationkeeper's own file open (1.2.0).
 
 ## The primary list: update many macros at once
 

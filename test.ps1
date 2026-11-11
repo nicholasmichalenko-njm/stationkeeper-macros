@@ -676,6 +676,8 @@ try {
             Check 'an effort list replaces the sheet, even an empty one' (($r -match 'banned=leverage \|') -and ($r -match 'placeholders=0 \|')) ''
             Check 'a list the effort does not set stays from the workbook' ($r -match 'acronyms=1 \|') ''
             Check 'the effort''s template and dictionary come from the local copy' (($r -match 'source=[^|]*\\Effort cache\\r3\\templates\\effort\.dotx \|') -and ($r -match 'dic=[^|]*\\Effort cache\\r3\\dictionaries\\effort\.dic$')) ''
+            $at = TR $word 'T_SkAttachFile'
+            Check '1.2.0: a team macro gets a copy of the template to attach, never Stationkeeper''s own file' (($at -match '^file=[^|]*\\Stationkeeper Tools\\Attach\\[0-9A-F]{8}-r3\\effort\.dotx \|') -and ($at -match 'same=True') -and ($at -match 'live=False')) $at
             $c = RunW $word 'SKW_Test.TW_Cache'
             Check 'local copy: one revision folder' ($c -eq 'folders: r3 | root=r3') $c
             $b = RunW $word 'SKW_Test.TW_EffortBanned'
