@@ -81,11 +81,11 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later)
+## Stationkeeper Tools (0.4.0 and later; 20 tools in 0.5.0)
 
 Checking and fixing tools for Word documents, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
-**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies six modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies nine modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook.** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
@@ -101,9 +101,19 @@ Checking and fixing tools for Word documents, in the same kit. They work on thei
 | Clear Direct Formatting (Selection) | Clears hand formatting in the selection; keeps emphasis and list numbering | Yes, one Ctrl+Z |
 | Table Standards Audit | Each table against the team table types: style, repeating header row, rows breaking across pages, width, floating or nested tables, cell styles, a caption above or below | No, report |
 | Apply Team Table Type | Sets the table at the cursor to a team type: style, header row, rows kept whole, width, cell styles, padding | Yes, one Ctrl+Z |
+| Section Map | Every section: first page, orientation, paper, margins, columns, how it starts, headers and footers linked or own, page number restarts | No, report |
+| Banned Phrases Review | The team's banned phrases (Banned phrases sheet) in the selection or the whole body: replacements as tracked changes, a comment naming the rule on each | Yes, one Ctrl+Z |
+| Caption Audit | Tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side (settings TableCaptionPosition, FigureCaptionPosition), repeated captions | No, report |
+| Import Team Styles | Brings the style definitions in from the team template (setting StyleSource, else the attached template) and lists which changed | Yes, one Ctrl+Z |
+| Remap Style | Changes every use of one style to another, or every pair on the Style map sheet | Yes, one Ctrl+Z |
+| Keep-With-Next Audit | Headings and captions above tables that can be stranded at a page bottom, long kept chains | No, report |
+| Break Hygiene | Manual page and column breaks, empty paragraphs used as spacing, line breaks ending paragraphs, body text starting a new page | No, report |
+| Typed Lists Finder | Paragraphs starting with a typed bullet or number instead of a real list | No, report |
+| Toggle Field Codes | Shows or hides field codes (Alt+F9) | View only |
+| TOC Check | Headings missing from the contents, entries whose heading changed, page numbers out of date | No, report |
 
 How they behave:
-- **Reports** open as a new Word document with one table (Rule, Finding, Where, Page, Text) and the standards used at the top. They change nothing in your document, not even its Undo list.
+- **Reports** open as a new Word document with one table and the standards used at the top. They change nothing in your document, not even its Undo list (the report is written as a web page and opened, so Word edits nothing while making it).
 - **Fixes** are one step on Undo, named "Stationkeeper: ...".
 - **Co-authored files:** on a SharePoint or OneDrive file with AutoSave on, the fixes do not run (to protect co-authors' edits); the reports still do.
 - **Test every macro** in the admin runs the report tools quietly and closes their reports; the setup tools wait for a person.
@@ -132,7 +142,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 81 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 94 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -150,7 +160,7 @@ build.ps1, test.ps1
 
 ## Next
 
-- Stationkeeper Tools, ten at a time, a release for each: captions, banned phrases, pagination and lists (0.5.0); acronym quick check, typography, dictionaries, fonts, PDF (0.6.0); utilities (0.7.0); PowerPoint (0.8.0); Excel (0.9.0).
+- Stationkeeper Tools, ten at a time, a release for each: acronym quick check, typography, dictionaries, fonts, PDF (0.6.0); utilities (0.7.0); PowerPoint (0.8.0); Excel (0.9.0).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

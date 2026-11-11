@@ -1,6 +1,6 @@
 # Testing
 
-## Automated: `test.ps1` (81 checks, 2026-11-10, Word 16.0.17932, Windows)
+## Automated: `test.ps1` (94 checks, 2026-11-10, Word 16.0.17932, Windows)
 
 Runs every step in its own hidden Word and always closes it. Changes no Word or Windows settings. A guard looks for a dialog every 15 seconds; a dialog still open at the next look is written into the results and that Word is ended, so a VBA error never stalls the run.
 
@@ -24,6 +24,7 @@ Runs every step in its own hidden Word and always closes it. Changes no Word or 
 | Defect document | Built in VBA with direct font, size and spacing, a custom style, a good and a broken REF, an INCLUDETEXT to a missing file, a link to a missing bookmark, a comment, a tracked insertion, hidden text, a highlight, two placeholders, a captioned good table, a long wide table with no caption, a floating table, a TOC and a PAGE field |
 | Reports | Broken references (3, good REF not listed); field code report by type; leftovers (comment, tracked change, hidden, highlight, 2 placeholders); style inspector (font and size by hand); non-allowed styles with and without a workbook; direct formatting (bold and subscript treated as emphasis); table audit (good table clean, 6 findings on the bad one, floating table). Running every report leaves the document's Undo list exactly as it was |
 | Fixes | Clear direct formatting: back to the style, bold kept, one Ctrl+Z restores; apply table type: style, repeating header, rows whole, 100% width, then one Ctrl+Z (pressed from outside the macro, as a person would) restores it; safe update: the included file is not touched, the broken REF now shows its error, track changes put back |
+| Batch 2 (0.5.0) | A second defect set: banned phrases, typed bullet/number/letter beside a real list, three empty paragraphs, a line break, a page break, a heading without keep-with-next, two headings added after the contents, two pictures (one captioned with SEQ, one with a typed number), a landscape section with its own footer. Checks: all 13 reports leave Undo as it was; section map; caption audit (2 missing, 1 typed, the figure caption below not taken for the next figure's); keep-with-next; break hygiene (section break not counted as a page break); typed lists; TOC check (2 missing); field codes toggled and back; banned phrases (2 tracked replacements, 1 flag, 3 comments, tracking put back, one Ctrl+Z removes it all); remap style (one Ctrl+Z restores); import team styles (Normal restored from the template; one Ctrl+Z puts the changed size back) |
 | Co-authoring | With AutoSave on a cloud file (test switch), fixes are refused and reports still run |
 | Tools in the menu engine | A report tool runs through the menu's run (one Undo record open) and makes its report; Test every macro passes all 22 safe macros, skips the two that need a selection or table, closes every report and clears the quiet flag |
 | No VBA access | Catalog trusted (nothing marked missing); menu lists, searches and runs; admin opens; .bas files read (one module or many) with their comments; the opening message explains the two ways forward |

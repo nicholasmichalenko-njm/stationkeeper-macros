@@ -298,7 +298,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(6 modules)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(9 modules)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -307,10 +307,10 @@ try {
         [void]$d.VBProject.VBComponents.Import([string](Join-Path $Root 'test\SKW_Test.bas'))
         $d.Save()
         $names = @($d.VBProject.VBComponents | ForEach-Object Name) -join ','
-        Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review')) $names
+        Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 12 tools arrive described, categorised and in the menu' (($tc -like '12 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 22 tools arrive described, categorised and in the menu' (($tc -like '22 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -372,6 +372,58 @@ try {
         $r = RunW $word 'SKW_Test.TW_TestAll'
         Write-Output "TESTALL: $r"
         Check 'test every macro with the tools in: none fail, reports closed, quiet flag cleared' (($r -match 'Failed: 0') -and ($r -match 'docs before=(\d+) after=\1') -and ($r -match 'quiet flag=$')) ''
+        $doc.Close([ref]0)
+    }
+
+    # 10. 0.5.0: batch 2 on a fresh defect document with the batch 2 defects added.
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        [void](RunW $word 'SKW_Test.TW_BuildDefects')
+        $b = RunW $word 'SKW_Test.TW_BuildDefects2'
+        Check 'batch 2 defects added' ($b -match 'sections=2 pictures=2') $b
+        $u0 = RunW $word 'SKW_Test.TW_UndoList'
+        [void](RunW $word 'SKW_Test.TW_AllReports')
+        $u1 = RunW $word 'SKW_Test.TW_UndoList'
+        Check 'all 13 report tools leave the Undo list as it was' ($u0 -eq $u1) "before: $u0 ## after: $u1"
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_SectionMap'
+        Write-Output "SECTIONS: $($r.Substring(0, [Math]::Min(900, $r.Length)))"
+        Check 'section map: two sections, the second landscape with its own footer' (($r -like '2 section(s) mapped*') -and ($r -match 'Landscape') -and ($r -match 'same as previous / own')) ''
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_CaptionAudit'
+        Write-Output "CAPTIONS: $($r.Substring(0, [Math]::Min(900, $r.Length)))"
+        Check 'caption audit: two tables without captions, one typed number, good table and figure fine' ($r -like 'No caption 2, wrong side 0, wrong label 0, typed numbers 1, repeated 0*') ''
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_KeepWithNextAudit'
+        Write-Output "KEEP: $($r.Substring(0, [Math]::Min(600, $r.Length)))"
+        Check 'keep with next: the loose heading is listed' (($r -like 'Headings 1, captions [01], long chains 0*') -and ($r -match 'Loose heading')) ''
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_BreakHygiene'
+        Write-Output "BREAKS: $($r.Substring(0, [Math]::Min(600, $r.Length)))"
+        Check 'break hygiene: one page break (not the section break), one run of empty paragraphs, one line break' ($r -like 'Page breaks 1, column breaks 0, empty runs 1, line breaks 1, page break before 0*') ''
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_TypedListsFinder'
+        Check 'typed lists: bullet, number and letter found; the real list is not' (($r -like '3 typed list*') -and ($r -match 'Typed bullet') -and ($r -match 'Typed number') -and ($r -match 'Typed letter') -and ($r -notmatch 'Real list item')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_TOCCheck'
+        Write-Output "TOC: $($r.Substring(0, [Math]::Min(600, $r.Length)))"
+        Check 'TOC check: the two headings added later are missing' (($r -like 'Missing 2, no heading 0, old page numbers 0*') -and ($r -match 'Heading added later') -and ($r -match 'Loose heading')) ''
+        $r = RunW $word 'SKW_Test.TW_Toggle'
+        Check 'toggle field codes on and back off' ($r -match '^Field codes shown.* / Field results shown\. / now=False') $r
+        $r = RunW $word 'SKW_Test.TW_Banned'
+        Write-Output "BANNED: $r"
+        Check 'banned phrases: two replaced as tracked changes, one flagged, a comment each, tracking put back' (($r -match 'Changed 2 as tracked changes and flagged 1') -and ($r -match 'comments\+3') -and ($r -match 'track=False')) ''
+        $u = 1; [void]$doc.Undo([ref]$u)
+        $r2 = RunW $word 'SKW_Test.TW_Report' 'SKW_PreDeliveryLeftovers'
+        Check 'banned phrases: one Ctrl+Z takes the changes and comments back out' ($r2 -match '^Comments 1, tracked changes 1,') ($r2.Substring(0, [Math]::Min(120, $r2.Length)))
+        $r = RunW $word 'SKW_Test.TW_Remap'
+        $c1 = RunW $word 'SKW_Test.TW_StyleCount' 'Fancy Body'
+        [void]$doc.Undo([ref]$u)
+        $c2 = RunW $word 'SKW_Test.TW_StyleCount' 'Fancy Body'
+        Check 'remap style: Fancy Body to Normal, a missing style skipped, one Ctrl+Z restores' (($r -match 'Remapped 1 place') -and ($r -match 'No Such Style is not in this document') -and ($c1 -eq '0') -and ($c2 -eq '1')) "$r ## after=$c1 undo=$c2"
+        $s0 = RunW $word 'SKW_Test.TW_SetNormalSize' '20'
+        $r = RunW $word 'SKW_Test.TW_Import'
+        $s1 = RunW $word 'SKW_Test.TW_NormalSize'
+        [void]$doc.Undo([ref]$u)
+        $s2 = RunW $word 'SKW_Test.TW_NormalSize'
+        Write-Output "IMPORT: $r ## size set=$s0 after import=$s1 after one undo=$s2"
+        Check 'import team styles: Normal comes back from the template and is listed' (($r -match 'changed: [^.]*Normal') -and ($s1 -ne '20')) "$r ## after=$s1"
+        $script:importUndo = $s2
         $doc.Close([ref]0)
     }
 }

@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "0.4.0"
+Public Const SKW_VERSION As String = "0.5.0"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -151,41 +151,73 @@ End Function
 ' ---------------------------------------------------------------------
 Public Function SKW_Report(ByVal title As String, ByVal intro As String, ByVal cols As Variant, _
                            ByVal rows As Collection) As Object
-    Dim src As Object, d As Object, s As String, r As Variant, i As Long, t As Object, rng As Object
+    ' Written as an HTML file and opened as a new document, so nothing is edited in Word while it is
+    ' made: the checked document's Undo list cannot pick up a step (Word sometimes files edits made to
+    ' a hidden new document under the active one).
+    Dim src As Object, d As Object, h As String, r As Variant, i As Long, tmp As String, v As Variant
+    Dim parts() As String, one As String, n As Long
     Set src = ActiveDocument
-    Set d = Documents.Add(Visible:=Not SKW_IsQuiet())
-    s = title & vbCr & "Document: " & src.Name & "    " & Format$(Now, "yyyy-mm-dd hh:nn") & "    " & SKW_StdNote() & vbCr & _
-        Replace(intro, vbCrLf, vbCr) & vbCr
-    d.Content.Text = s
-    On Error Resume Next
-    d.Paragraphs(1).Style = d.Styles(wdStyleHeading1)
-    On Error GoTo 0
+    h = "<html><head><meta charset=""utf-8""><style>body{font-family:Calibri,sans-serif;font-size:10pt}" & _
+        "h1{font-size:16pt}table{border-collapse:collapse}th,td{border:1px solid #999;padding:2pt 4pt;vertical-align:top;font-size:9pt}" & _
+        "th{background:#DDEBF7;text-align:left}</style></head><body>" & _
+        "<h1>" & SKW_Html(title) & "</h1><p>Document: " & SKW_Html(src.Name) & " &nbsp; " & Format$(Now, "yyyy-mm-dd hh:nn") & _
+        " &nbsp; " & SKW_Html(SKW_StdNote()) & "</p><p>" & SKW_Html(intro) & "</p>"
     If rows.Count > 0 Then
-        s = Join(cols, vbTab)
-        For Each r In rows
-            s = s & vbCr
-            For i = LBound(r) To UBound(r)
-                s = s & IIf(i > LBound(r), vbTab, "") & SKW_Excerpt(CStr(r(i)), 400)
-            Next
+        h = h & "<table><thead><tr>"
+        For Each v In cols
+            h = h & "<th>" & SKW_Html(CStr(v)) & "</th>"
         Next
-        Set rng = d.Content
-        rng.Collapse 0
-        rng.InsertAfter s
-        Set t = rng.ConvertToTable(Separator:=wdSeparateByTabs)
-        On Error Resume Next
-        t.Style = "Table Grid"
-        t.Rows(1).HeadingFormat = True
-        t.Rows(1).Range.Font.Bold = True
-        On Error GoTo 0
+        h = h & "</tr></thead><tbody>"
+        ReDim parts(1 To rows.Count)
+        n = 0
+        For Each r In rows
+            n = n + 1
+            one = "<tr>"
+            For i = LBound(r) To UBound(r)
+                one = one & "<td>" & SKW_Html(SKW_Excerpt(CStr(r(i)), 400)) & "</td>"
+            Next
+            parts(n) = one & "</tr>"
+        Next
+        h = h & Join(parts, "") & "</tbody></table>"
     Else
-        d.Content.InsertAfter "No findings." & vbCr
+        h = h & "<p><b>No findings.</b></p>"
     End If
-    d.Saved = True
+    h = h & "</body></html>"
+    tmp = Environ$("TEMP") & "\Stationkeeper report " & Format$(Now, "hhnnss") & Int(Rnd() * 10000) & ".htm"
+    SKW_WriteUtf8 tmp, h
+    On Error Resume Next
+    Set d = Documents.Add(Template:=tmp, Visible:=Not SKW_IsQuiet())
+    If d Is Nothing Then
+        Err.Clear
+        Set d = Documents.Open(FileName:=tmp, AddToRecentFiles:=False, Visible:=Not SKW_IsQuiet())
+    End If
+    Kill tmp
+    On Error GoTo 0
+    If Not d Is Nothing Then d.Saved = True
     SKW_LastRows = rows.Count
     Set SKW_LastReport = d
     Set SKW_Report = d
     If SKW_IsQuiet() Then src.Activate
 End Function
+
+Public Function SKW_Html(ByVal s As String) As String
+    s = Replace(s, "&", "&amp;")
+    s = Replace(s, "<", "&lt;")
+    s = Replace(s, ">", "&gt;")
+    s = Replace(s, """", "&quot;")
+    SKW_Html = Replace(Replace(s, vbCrLf, "<br>"), vbCr, "<br>")
+End Function
+
+Public Sub SKW_WriteUtf8(ByVal path As String, ByVal text As String)
+    Dim st As Object
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 2
+    st.Charset = "utf-8"
+    st.Open
+    st.WriteText text
+    st.SaveToFile path, 2
+    st.Close
+End Sub
 
 Public Function SKW_Row(ParamArray v() As Variant) As Variant
     SKW_Row = v

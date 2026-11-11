@@ -60,7 +60,8 @@ Public Function TW_AllReports() As String
     Dim s As String, v As Variant
     SKW_Quiet = True
     For Each v In Array("SKW_FindBrokenReferences", "SKW_FieldCodeReport", "SKW_PreDeliveryLeftovers", "SKW_NonAllowedStyleReport", _
-                        "SKW_DirectFormattingReport", "SKW_TableStandardsAudit", "SKW_StyleInspector")
+                        "SKW_DirectFormattingReport", "SKW_TableStandardsAudit", "SKW_StyleInspector", "SKW_SectionMap", "SKW_CaptionAudit", _
+                        "SKW_KeepWithNextAudit", "SKW_BreakHygiene", "SKW_TypedListsFinder", "SKW_TOCCheck")
         s = s & v & ": " & Application.Run(CStr(v)) & " / "
         CloseReport
     Next
@@ -338,4 +339,123 @@ Public Function TW_TestAll() As String
     SK_Health m
     s = Replace(SK_TestAll(m, False), vbCr, " / ")
     TW_TestAll = s & " | docs before=" & n & " after=" & Documents.Count & " quiet flag=" & GetSetting("Stationkeeper Tools", "Run", "quiet", "")
+End Function
+
+' ---------------------------------------------------------------------
+' 0.5.0: batch 2 defects and checks
+' ---------------------------------------------------------------------
+Private Function TinyBmp() As String
+    Dim p As String, f As Integer, b() As Byte, i As Long, hdr As Variant
+    p = Environ$("TEMP") & "\skw_test.bmp"
+    hdr = Array(66, 77, 58, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0, 4, 0, 0, 0, _
+                19, 11, 0, 0, 19, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0)
+    ReDim b(0 To UBound(hdr))
+    For i = 0 To UBound(hdr)
+        b(i) = hdr(i)
+    Next
+    f = FreeFile
+    Open p For Binary Access Write As #f
+    Put #f, 1, b
+    Close #f
+    TinyBmp = p
+End Function
+
+Public Function TW_BuildDefects2() As String
+    Dim d As Object, r As Object, bmp As String, n As Long
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    d.TrackRevisions = False
+    AddPara d, "We utilize tools in order to win and/or lose."
+    AddPara d, ChrW(8226) & " Typed bullet one"
+    AddPara d, "1. Typed number one"
+    AddPara d, "a) Typed letter one"
+    Set r = AddPara(d, "Real list item")
+    r.ListFormat.ApplyBulletDefault
+    Set r = AddPara(d, "After the list.")
+    r.ListFormat.RemoveNumbers
+    AddPara d, ""
+    AddPara d, ""
+    AddPara d, ""
+    AddPara d, "After the gap."
+    Set r = AddPara(d, "Ends with a line break")
+    r.MoveEnd wdCharacter, -1
+    r.InsertAfter Chr(11)
+    Set r = AddPara(d, "Before break")
+    r.MoveEnd wdCharacter, -1
+    r.Collapse 0
+    r.InsertBreak wdPageBreak
+    AddPara d, "After break"
+    Set r = AddPara(d, "Loose heading", "Heading 2")
+    r.ParagraphFormat.KeepWithNext = False
+    AddPara d, "Text under the loose heading."
+    AddPara d, "Heading added later", "Heading 1"
+    AddPara d, "Text under the later heading."
+    bmp = TinyBmp()
+    Set r = AddPara(d, "")
+    r.Collapse wdCollapseStart
+    d.InlineShapes.AddPicture bmp, False, True, r
+    AddPara d, "Figure : Good figure", "Caption"
+    Set r = FindText(d, "Figure :")
+    r.Collapse 0
+    r.Move wdCharacter, -1
+    d.Fields.Add r, wdFieldEmpty, "SEQ Figure \* ARABIC", False
+    Set r = AddPara(d, "")
+    r.Collapse wdCollapseStart
+    d.InlineShapes.AddPicture bmp, False, True, r
+    AddPara d, "Figure 7: Typed number", "Caption"
+    Set r = AtEnd(d)
+    r.InsertBreak wdSectionBreakNextPage
+    n = d.Sections.Count
+    d.Sections(n).PageSetup.Orientation = wdOrientLandscape
+    d.Sections(n).Footers(wdHeaderFooterPrimary).LinkToPrevious = False
+    AddPara d, "Landscape section."
+    d.Range(0, 0).Select
+    TW_BuildDefects2 = "sections=" & d.Sections.Count & " pictures=" & d.InlineShapes.Count & " pages=" & d.ComputeStatistics(wdStatisticPages)
+End Function
+
+Public Function TW_Report(ByVal fn As String) As String
+    Dim s As String
+    SKW_Quiet = True
+    s = Application.Run(fn) & " ## " & ReportText()
+    CloseReport
+    TW_Report = s
+End Function
+
+Public Function TW_Banned() As String
+    Dim d As Object, s As String, n0 As Long
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    d.Range(0, 0).Select
+    n0 = d.Comments.Count
+    s = Replace(SKW_BannedPhrasesReview(), vbCr, " / ")
+    s = s & " ## comments+" & (d.Comments.Count - n0) & " text=" & Trim$(FindText(d, "tools").Paragraphs(1).Range.Text) & " track=" & d.TrackRevisions
+    TW_Banned = s
+End Function
+
+Public Function TW_Toggle() As String
+    SKW_Quiet = True
+    TW_Toggle = SKW_ToggleFieldCodes() & " / " & SKW_ToggleFieldCodes() & " / now=" & ActiveDocument.ActiveWindow.View.ShowFieldCodes
+End Function
+
+Public Function TW_StyleCount(ByVal nm As String) As String
+    TW_StyleCount = SKW_StyleRanges(ActiveDocument.Content, ActiveDocument.Styles(nm)).Count
+End Function
+
+Public Function TW_Remap() As String
+    SKW_Quiet = True
+    TW_Remap = Replace(SKW_RemapStyle("Fancy Body>Normal|No Such Style>Normal"), vbCr, " / ")
+End Function
+
+Public Function TW_SetNormalSize(ByVal sz As String) As String
+    ActiveDocument.Styles("Normal").Font.Size = CSng(sz)
+    TW_SetNormalSize = ActiveDocument.Styles("Normal").Font.Size
+End Function
+
+Public Function TW_NormalSize() As String
+    TW_NormalSize = ActiveDocument.Styles("Normal").Font.Size
+End Function
+
+Public Function TW_Import() As String
+    SKW_Quiet = True
+    TW_Import = Replace(SKW_ImportTeamStyles(""), vbCr, " / ")
 End Function

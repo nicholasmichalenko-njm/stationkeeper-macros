@@ -57,7 +57,7 @@ End Function
 
 Public Function SKW_StandardsSummary() As String
     Dim s As String, v As Variant
-    For Each v In Array("Allowed styles", "Table types", "Placeholders", "Banned phrases", "Fonts", "Acronyms", "Settings")
+    For Each v In Array("Allowed styles", "Table types", "Placeholders", "Banned phrases", "Fonts", "Acronyms", "Style map", "Settings")
         s = s & v & ": " & SKW_Rows(CStr(v)).Count & IIf(v = "Settings", "", ", ")
     Next
     SKW_StandardsSummary = s
@@ -88,7 +88,13 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("CaptionInFirstRow", "No", "Yes if your tables carry their caption in the first row instead of above or below."), _
         Array("KeepOnClear", "Bold, Italic, Superscript, Subscript", "Emphasis that is not hand formatting: not reported and kept when clearing. Use None to clear everything."), _
         Array("CheckTablesForDirectFormatting", "Yes", "No skips table text in the Direct Formatting Report."), _
-        Array("TableWidthPercent", "100", "Width of tables when no table types are listed."))
+        Array("TableWidthPercent", "100", "Width of tables when no table types are listed."), _
+        Array("TableCaptionPosition", "Above", "Where table captions go: Above or Below."), _
+        Array("FigureCaptionPosition", "Below", "Where figure captions go: Above or Below."), _
+        Array("TableLabel", "Table", "The caption label for tables (the SEQ name)."), _
+        Array("FigureLabel", "Figure", "The caption label for figures (the SEQ name)."), _
+        Array("MaxKeepWithNextChain", "8", "More paragraphs than this in a row set to Keep with next are reported."), _
+        Array("StyleSource", "", "Full path of the team template to bring styles in from. Blank: the document's attached template."))
     Sheet wb, 3, "Allowed styles", Array( _
         Array("Style", "Required", "Notes"), _
         Array("Normal", "", ""), Array("Heading 1", "Yes", ""), Array("Heading 2", "", ""), Array("Heading 3", "", ""), _
@@ -117,6 +123,7 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
     Sheet wb, 8, "Acronyms", Array(Array("Acronym", "Definition"), Array("RFP", "Request for Proposal"))
     Sheet wb, 9, "Ignore", Array(Array("Text", "Why"), Array("", ""))
     Sheet wb, 10, "Dictionaries", Array(Array("Path", "Notes"), Array("", "Full path to a team custom dictionary (.dic)"))
+    Sheet wb, 11, "Style map", Array(Array("From", "To", "Notes"), Array("", "", "Remap Style changes every use of From to To (for example an old style to the team style)"))
     wb.Worksheets(1).Activate
     wb.SaveAs p, 51
     If openAfter And Not SKW_IsQuiet() Then
@@ -216,6 +223,36 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Tables.ApplyTeamTableType", "Apply Team Table Type", "Tables", _
         "Sets the table at the cursor to a team table type: style, repeating header row, rows kept whole, width, cell styles and padding. One Ctrl+Z undoes it.", _
         "tables, format, table style, header row, fix", "Tables", "Table at the cursor", "Yes")
+    s = s & "," & T("SKW_Layout.SectionMap", "Section Map", "Layout", _
+        "Report of every section: first page, orientation, paper, margins, columns, how it starts, whether headers and footers follow the previous section, and page number restarts. Changes nothing.", _
+        "sections, landscape, margins, headers, footers, page numbers, link to previous", "Pages and sections, Headers and footers", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Review.BannedPhrasesReview", "Banned Phrases Review", "Before delivery", _
+        "Finds the team's banned phrases in the selection or the whole body. Ones with a replacement are changed as tracked changes; every finding gets a comment naming the rule. One Ctrl+Z undoes it.", _
+        "banned, phrases, plain language, words, wording, style guide, track", "Text, Comments and tracking", "Selection or whole document", "Yes")
+    s = s & "," & T("SKW_Captions.CaptionAudit", "Caption Audit", "Tables", _
+        "Report of tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side and repeated captions. Changes nothing.", _
+        "captions, figures, tables, numbering, seq", "Captions, Tables, Figures", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Styles.ImportTeamStyles", "Import Team Styles", "Styles", _
+        "Brings the team's style definitions in from the team template (or the attached template) and lists which styles changed. One Ctrl+Z undoes it.", _
+        "styles, import, update styles, template, organizer", "Styles", "Whole document", "Yes")
+    s = s & "," & T("SKW_Styles.RemapStyle", "Remap Style", "Styles", _
+        "Changes every use of one style to another, or applies every pair on the Style map sheet. One Ctrl+Z undoes it.", _
+        "styles, replace style, remap, convert, style map", "Styles", "Whole document", "Yes")
+    s = s & "," & T("SKW_Layout.KeepWithNextAudit", "Keep-With-Next Audit", "Layout", _
+        "Report of headings that do not keep with the next paragraph, captions above tables that do not keep with the table, and long runs of kept paragraphs. Changes nothing.", _
+        "keep with next, orphan headings, pagination, widow", "Pages and sections, Styles", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Layout.BreakHygiene", "Break Hygiene", "Layout", _
+        "Report of manual page and column breaks, runs of empty paragraphs used as spacing, line breaks ending paragraphs and body text set to start a new page. Changes nothing.", _
+        "page breaks, empty paragraphs, line breaks, spacing, pagination", "Pages and sections, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Lists.TypedListsFinder", "Typed Lists Finder", "Lists", _
+        "Report of paragraphs that start with a typed bullet or number instead of a real Word list. Changes nothing.", _
+        "lists, bullets, numbering, typed, manual numbers", "Lists", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Fields.ToggleFieldCodes", "Toggle Field Codes", "Fields", _
+        "Switches the window between field codes and their results (like Alt+F9). Changes only the view.", _
+        "field codes, alt+f9, show codes", "Fields", "Whole document", "No, it only changes the view")
+    s = s & "," & T("SKW_Layout.TOCCheck", "TOC Check", "Fields", _
+        "Report comparing the table of contents with the headings: headings missing, entries with no heading, page numbers out of date. Changes nothing.", _
+        "toc, contents, headings, page numbers", "Fields, Pages and sections", "Whole document", "No, it only reports")
     s = s & "]}"
     SKW_ToolList = s
 End Function

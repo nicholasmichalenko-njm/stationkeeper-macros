@@ -5,6 +5,8 @@ Attribute VB_Name = "SKW_Styles"
 '   NonAllowedStyleReport            report: styles in use that are not on the team list
 '   DirectFormattingReport           report: text formatted by hand instead of by style
 '   ClearDirectFormattingSelection   clears hand formatting in the selection, keeps emphasis
+'   ImportTeamStyles                 brings in the team's style definitions
+'   RemapStyle                       changes every use of one style to another
 ' =====================================================================
 Option Explicit
 
@@ -440,4 +442,153 @@ Fail:
     msg = Err.Description
     SKW_Finish
     SKW_ClearDirectFormattingSelection = "Clearing stopped: " & msg & ". Press Ctrl+Z to undo what was done."
+End Function
+
+' ---------------------------------------------------------------------
+' Import Team Styles and Remap Style
+' ---------------------------------------------------------------------
+
+' Brings the team's style definitions into this document from the team template (setting StyleSource, or the template the document is attached to), and lists which styles changed. One Ctrl+Z undoes it.
+Public Sub ImportTeamStyles()
+    If SKW_IsQuiet() Then
+        SKW_Status SKW_ImportTeamStyles("")
+        Exit Sub
+    End If
+    If MsgBox("Bring the team's style definitions into " & ActiveDocument.Name & "?" & vbCr & vbCr & _
+              "Styles with the same name are replaced by the team's version. One Ctrl+Z puts them back.", _
+              vbOKCancel + vbQuestion, SKW_APP) <> vbOK Then Exit Sub
+    SKW_Show SKW_ImportTeamStyles("")
+End Sub
+
+' Changes every paragraph (or text) in one style to another style, or applies every pair on the Style map sheet of the standards workbook. One Ctrl+Z undoes it.
+Public Sub RemapStyle()
+    Dim pairs As String, r As Object, n As Long, a As String, b As String, ans As VbMsgBoxResult
+    If SKW_IsQuiet() Or Documents.Count = 0 Then Exit Sub
+    For Each r In SKW_Rows("Style map")
+        If r.Exists("from") And r.Exists("to") Then
+            If Len(r("from")) > 0 And Len(r("to")) > 0 Then pairs = pairs & "|" & r("from") & ">" & r("to"): n = n + 1
+        End If
+    Next
+    If n > 0 Then
+        ans = MsgBox("The standards workbook maps " & n & " style(s) to others." & vbCr & vbCr & "Yes: apply all of them" & vbCr & _
+                     "No: change one style now", vbYesNoCancel + vbQuestion, "Remap Style")
+        If ans = vbCancel Then Exit Sub
+        If ans = vbYes Then SKW_Show SKW_RemapStyle(Mid$(pairs, 2)): Exit Sub
+    End If
+    a = InputBox("Change every use of which style?", "Remap Style", SKW_ParaStyleName(Selection.Range))
+    If Len(a) = 0 Then Exit Sub
+    b = InputBox("Change " & a & " to which style?", "Remap Style", "Normal")
+    If Len(b) = 0 Then Exit Sub
+    SKW_Show SKW_RemapStyle(a & ">" & b)
+End Sub
+
+Private Function StyleSig(ByVal st As Object) As String
+    On Error Resume Next
+    With st.Font
+        StyleSig = .Name & "|" & .Size & "|" & .Bold & "|" & .Italic & "|" & .Color
+    End With
+    If st.Type = wdStyleTypeParagraph Or st.Type = 4 Then
+        With st.ParagraphFormat
+            StyleSig = StyleSig & "|" & .SpaceBefore & "|" & .SpaceAfter & "|" & .LineSpacing & "|" & .LeftIndent & "|" & .Alignment & "|" & .KeepWithNext
+        End With
+    End If
+End Function
+
+Public Function SKW_ImportTeamStyles(ByVal source As String) As String
+    Dim d As Object, msg As String, before As Object, st As Object, changed As String, n As Long, added As Long
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_ImportTeamStyles = "Open a document first.": Exit Function
+    Set d = ActiveDocument
+    If Len(source) = 0 Then source = SKW_Setting("StyleSource", "")
+    If Len(source) = 0 Then
+        On Error Resume Next
+        source = d.AttachedTemplate.FullName
+        On Error GoTo 0
+        If LCase$(Mid$(source, InStrRev(source, "\") + 1)) = "normal.dotm" Then
+            SKW_ImportTeamStyles = "This document is attached to Normal.dotm. Put the team template's path in the StyleSource setting of the standards workbook."
+            Exit Function
+        End If
+    End If
+    If Len(Dir$(source)) = 0 Then SKW_ImportTeamStyles = "Team style source not found: " & source: Exit Function
+    If LCase$(source) = LCase$(d.FullName) Then SKW_ImportTeamStyles = "The document is its own style source; nothing to import.": Exit Function
+    msg = SKW_Begin("Import team styles", True)
+    If Len(msg) > 0 Then SKW_ImportTeamStyles = msg: Exit Function
+    Set before = CreateObject("Scripting.Dictionary")
+    For Each st In d.Styles
+        If st.InUse Then before(st.NameLocal) = StyleSig(st)
+    Next
+    On Error GoTo Fail
+    d.CopyStylesFromTemplate source
+    On Error GoTo 0
+    For Each st In d.Styles
+        If st.InUse Then
+            If before.Exists(st.NameLocal) Then
+                If before(st.NameLocal) <> StyleSig(st) Then
+                    n = n + 1
+                    If n <= 25 Then changed = changed & ", " & st.NameLocal
+                End If
+            Else
+                added = added + 1
+            End If
+        End If
+    Next
+    SKW_Finish
+    SKW_ImportTeamStyles = "Styles brought in from " & Mid$(source, InStrRev(source, "\") + 1) & "." & vbCr & _
+        n & " style(s) changed" & IIf(n > 0, ": " & Mid$(changed, 3) & IIf(n > 25, ", ...", ""), "") & "." & vbCr & _
+        added & " style(s) added." & vbCr & "Text formatted by hand keeps that formatting: run Direct Formatting Report next." & vbCr & "One Ctrl+Z undoes it."
+    Exit Function
+Fail:
+    msg = Err.Description
+    SKW_Finish
+    SKW_ImportTeamStyles = "Styles could not be brought in: " & msg
+End Function
+
+' pairs: "From>To|From>To"
+Public Function SKW_RemapStyle(ByVal pairs As String) As String
+    Dim d As Object, msg As String, pr As Variant, a As String, b As String, sa As Object, sb As Object
+    Dim story As Object, f As Object, n As Long, total As Long, out As String, skipped As String
+    Set SKW_LastReport = Nothing
+    msg = SKW_Begin("Remap style", True)
+    If Len(msg) > 0 Then SKW_RemapStyle = msg: Exit Function
+    Set d = ActiveDocument
+    On Error GoTo Fail
+    For Each pr In Split(pairs, "|")
+        If InStr(pr, ">") > 0 Then
+            a = Trim$(Split(pr, ">")(0)): b = Trim$(Split(pr, ">")(1))
+            Set sa = SKW_GetStyle(d, a): Set sb = SKW_GetStyle(d, b)
+            If sa Is Nothing Or sb Is Nothing Then
+                skipped = skipped & "; " & a & " to " & b & " (" & IIf(sa Is Nothing, a, b) & " is not in this document)"
+            Else
+                n = 0
+                For Each story In SKW_Stories(d)
+                    If story.StoryType <> wdCommentsStory Then
+                        n = n + SKW_StyleRanges(story, sa).Count
+                        Set f = story.Duplicate
+                        With f.Find
+                            .ClearFormatting
+                            .Replacement.ClearFormatting
+                            .Text = ""
+                            .Replacement.Text = ""
+                            .Format = True
+                            .Style = sa
+                            .Replacement.Style = sb
+                            .Forward = True
+                            .Wrap = wdFindStop
+                            .Execute Replace:=wdReplaceAll
+                        End With
+                    End If
+                Next
+                total = total + n
+                out = out & "; " & a & " to " & b & ": " & n & " place(s)"
+            End If
+        End If
+    Next
+    SKW_Finish
+    SKW_RemapStyle = "Remapped " & total & " place(s)" & IIf(Len(out) > 0, ": " & Mid$(out, 3), "") & "." & _
+        IIf(Len(skipped) > 0, vbCr & "Skipped: " & Mid$(skipped, 3) & ".", "") & vbCr & "One Ctrl+Z undoes it."
+    Exit Function
+Fail:
+    msg = Err.Description
+    SKW_Finish
+    SKW_RemapStyle = "Stopped: " & msg & ". Press Ctrl+Z to undo what was done."
 End Function
