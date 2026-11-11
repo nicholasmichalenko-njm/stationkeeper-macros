@@ -34,6 +34,7 @@ Invoke-WordJob -Root $Root -Job {
     # reads the dialog, ends this Word after 25 seconds, and the build fails with the message.
     $wd = Start-Job -ScriptBlock { param($r) Start-Sleep 25; & (Join-Path $r 'tools\watch.ps1') -Root $r -Kill } -ArgumentList $Root
     try {
+        $word.VBE.ActiveVBProject = $vbp   # compile the kit, not whichever project the editor last showed
         $word.VBE.CommandBars.FindControl(1, 578).Execute()
         Stop-Job $wd; Remove-Job $wd -Force
         Write-Host 'step: compiled'

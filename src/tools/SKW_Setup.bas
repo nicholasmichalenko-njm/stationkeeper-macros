@@ -99,7 +99,8 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("PageLimitTotal", "", "Page limit for the whole document. Blank: no limit."), _
         Array("BulletStyle", "List Bullet", "The team's bullet list style (Convert to Team List)."), _
         Array("NumberStyle", "List Number", "The team's numbered list style (Convert to Team List)."), _
-        Array("AcronymListUsedOnly", "Yes", "Insert Acronym List: Yes lists only acronyms used in the document; No lists every team meaning."))
+        Array("AcronymListUsedOnly", "Yes", "Insert Acronym List: Yes lists only acronyms used in the document; No lists every team meaning."), _
+        Array("DeckMinFontSize", "10", "Smallest text size allowed on slides (Deck Small Text)."))
     Sheet wb, 3, "Allowed styles", Array( _
         Array("Style", "Required", "Notes"), _
         Array("Normal", "", ""), Array("Heading 1", "Yes", ""), Array("Heading 2", "", ""), Array("Heading 3", "", ""), _
@@ -322,6 +323,36 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Utils.ResetParagraphToStyle", "Reset Paragraph to Style", "Styles", _
         "Puts the paragraph at the cursor or the selected paragraphs back to their style, removing all formatting set by hand. One Ctrl+Z undoes it.", _
         "reset, paragraph, style, ctrl+q, ctrl+space", "Styles", "Cursor position", "Yes")
+    s = s & "," & T("SKP_Deck.DeckTextLeftovers", "Deck Leftovers", "PowerPoint", _
+        "Report of speaker notes, comments, hidden slides and placeholder text in the deck open in PowerPoint. Changes nothing.", _
+        "powerpoint, deck, notes, comments, hidden slides, placeholders, delivery", "Comments and tracking, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckBannedPhrases", "Deck Banned Phrases", "PowerPoint", _
+        "Report of the team's banned phrases in the slides and notes of the open deck, with the replacement. Changes nothing.", _
+        "powerpoint, deck, banned, phrases, plain language", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckAcronymCheck", "Deck Acronym Check (text only)", "PowerPoint", _
+        "Report of acronyms in the open deck's slide text: uses, first slide, spelled out or not, team meaning. Pictures are not scanned. Changes nothing.", _
+        "powerpoint, deck, acronyms", "Acronyms, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckFontAudit", "Deck Font Audit", "PowerPoint", _
+        "Report of every font in the open deck, flagging ones not on the team's Fonts sheet. Changes nothing.", _
+        "powerpoint, deck, fonts", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckSmallText", "Deck Small Text", "PowerPoint", _
+        "Report of slide text smaller than the team minimum (DeckMinFontSize). Changes nothing.", _
+        "powerpoint, deck, font size, readability", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckAltTextAudit", "Deck Alt Text Audit", "PowerPoint", _
+        "Report of pictures, charts, SmartArt, groups and media in the open deck without alt text. Changes nothing.", _
+        "powerpoint, deck, alt text, accessibility, pictures", "Figures", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckOffSlideObjects", "Deck Off-Slide Objects", "PowerPoint", _
+        "Report of shapes partly or wholly off the slide in the open deck. Changes nothing.", _
+        "powerpoint, deck, off slide, shapes, layout", "Figures", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckTitlesCheck", "Deck Titles Check", "PowerPoint", _
+        "Report of slides without a title and slides that share one. Changes nothing.", _
+        "powerpoint, deck, titles, accessibility, outline", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckEmptyPlaceholders", "Deck Empty Placeholders", "PowerPoint", _
+        "Report of empty placeholders left on slides of the open deck. Changes nothing.", _
+        "powerpoint, deck, placeholders, click to add", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckDeliveryCopy", "Deck Delivery Copy", "PowerPoint", _
+        "Saves a copy of the open deck beside it with no speaker notes, comments, hidden slides or personal details. The open deck is not changed.", _
+        "powerpoint, deck, delivery, clean, notes, metadata", "Whole document", "Whole document", "No, it saves a clean copy")
     s = s & "]}"
     SKW_ToolList = s
 End Function

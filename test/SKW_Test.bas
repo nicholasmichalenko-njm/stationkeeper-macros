@@ -2,6 +2,8 @@ Attribute VB_Name = "SKW_Test"
 ' Test harness for Stationkeeper Tools. Imported into the sample template by test.ps1
 ' after the tools are installed. Every function returns text for test.ps1 to check.
 Option Explicit
+Private mPP As Object
+Private mPPMine As Boolean
 
 Private Function ReportText() As String
     If SKW_LastReport Is Nothing Then ReportText = "(no report)": Exit Function
@@ -73,7 +75,7 @@ Public Function TW_ToolCount() As String
     Dim m As Object, e As Object, n As Long, s As String
     Set m = SK_LoadModel()
     For Each e In m("entries")
-        If Left$(e("run"), 4) = "SKW_" Then
+        If e("run") Like "SK[WPX]_*" Then
             n = n + 1
             s = s & " " & e("run") & "[" & SK_EntryStatus(e) & "/" & e("category") & "/" & e("workson") & "/" & e("shown") & "]"
         End If
@@ -670,4 +672,75 @@ End Function
 
 Public Function TW_FontName(ByVal t As String) As String
     TW_FontName = FindText(ActiveDocument, t).Font.Name
+End Function
+
+' ---------------------------------------------------------------------
+' 0.8.0: PowerPoint. The test makes its own windowless deck and hands it to the
+' tools directly (SKP_TestDeck), so a person's open decks are never touched.
+' ---------------------------------------------------------------------
+
+Public Function TW_MakeDeck(ByVal path As String) As String
+    Dim p As Object, s As Object, tb As Object, w As Single
+    Set mPP = CreateObject("PowerPoint.Application")
+    mPPMine = (mPP.Presentations.Count = 0)
+    Set p = mPP.Presentations.Add(0)
+    ' 1: title and text, with notes
+    Set s = p.Slides.Add(1, 2)
+    s.Shapes(1).TextFrame.TextRange.Text = "Proposal overview"
+    s.Shapes(2).TextFrame.TextRange.Text = "We utilize the Request for Proposal (RFP) process. The RFP date is TBD."
+    s.NotesPage.Shapes.Placeholders(2).TextFrame.TextRange.Text = "Speaker note here."
+    ' 2: same title, empty body
+    Set s = p.Slides.Add(2, 2)
+    s.Shapes(1).TextFrame.TextRange.Text = "Proposal overview"
+    ' 3: blank: off-slide box, small Arial text, picture without alt text
+    Set s = p.Slides.Add(3, 12)
+    w = p.PageSetup.SlideWidth
+    Set tb = s.Shapes.AddTextbox(1, w + 20, 50, 100, 40)
+    tb.TextFrame.TextRange.Text = "Parked off the slide"
+    Set tb = s.Shapes.AddTextbox(1, 50, 50, 300, 40)
+    tb.TextFrame.TextRange.Text = "Tiny Arial footnote"
+    tb.TextFrame.TextRange.Font.Name = "Arial"
+    tb.TextFrame.TextRange.Font.Size = 8
+    s.Shapes.AddPicture TinyBmp(), 0, -1, 100, 150, 50, 50
+    ' 4: hidden slide with a title
+    Set s = p.Slides.Add(4, 11)
+    s.Shapes(1).TextFrame.TextRange.Text = "Hidden one"
+    s.SlideShowTransition.Hidden = -1
+    p.SaveAs path
+    Set SKP_TestDeck = p
+    TW_MakeDeck = "slides=" & p.Slides.Count & " mine=" & mPPMine
+End Function
+
+Public Function TW_Deck(ByVal fn As String) As String
+    Dim s As String
+    SKW_Quiet = True
+    s = Application.Run(fn) & " ## " & ReportText()
+    CloseReport
+    TW_Deck = s
+End Function
+
+Public Function TW_DeckCopy(ByVal target As String) As String
+    Dim s As String, c As Object, n As Long
+    s = Replace(SKP_DeckDeliveryCopy(target), vbCr, " / ")
+    Set c = mPP.Presentations.Open(target, -1, 0, 0)
+    n = c.Slides.Count
+    c.Close
+    TW_DeckCopy = s & " ## copySlides=" & n & " openSlides=" & SKP_TestDeck.Slides.Count
+End Function
+
+Public Function TW_CloseDeck() As String
+    On Error Resume Next
+    SKP_TestDeck.Close
+    Set SKP_TestDeck = Nothing
+    If mPPMine And mPP.Presentations.Count = 0 Then mPP.Quit
+    Set mPP = Nothing
+    TW_CloseDeck = "closed"
+End Function
+
+Public Function TW_NoDeck() As String
+    Dim keep As Object
+    Set keep = SKP_TestDeck
+    Set SKP_TestDeck = Nothing
+    TW_NoDeck = "quiet entry: " & IIf(GetSetting("Stationkeeper Tools", "Run", "quiet", "") = "1", "flag", "noflag")
+    Set SKP_TestDeck = keep
 End Function

@@ -299,7 +299,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(13 modules)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(14 modules)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -311,7 +311,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 43 tools arrive described, categorised and in the menu' (($tc -like '43 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 53 tools arrive described, categorised and in the menu' (($tc -like '53 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -519,6 +519,42 @@ try {
         Check 'reset paragraph to style: Arial and bold gone; one Ctrl+Z restores' (($r -match '1 paragraph\(s\) back to their style') -and ($r -notmatch 'font=Arial') -and ($r -match 'kept=0') -and ($f2 -eq 'Arial')) "$r ## undo font=$f2"
         $r = RunW $word 'SKW_Test.TW_Shortcuts'
         Check 'tool shortcuts set in the template' (($r -match 'Ctrl\+Alt\+Shift\+N: next finding') -and ($r -match 'N=.*GoToNextFinding')) $r
+        $doc.Close([ref]0)
+    }
+
+
+    # 13. 0.8.0: PowerPoint tools on a deck the test makes (handed to the tools directly).
+    [string]$deck = Join-Path $work 'Deck 0.8.pptx'
+    [string]$deckCopy = Join-Path $work 'Deck 0.8 - delivery.pptx'
+    Remove-Item $deck, $deckCopy -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        try {
+            $m = RunW $word 'SKW_Test.TW_MakeDeck' $deck
+            Check 'test deck made' ((Test-Path $deck) -and ($m -match 'slides=4')) $m
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTextLeftovers'
+            Check 'deck leftovers: notes, hidden slide, placeholder' ($r -like 'Notes 1, comments 0, hidden slides 1, placeholders [1-9]*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckBannedPhrases'
+            Check 'deck banned phrases: utilize on slide 1' (($r -match '^[1-9]\d* banned') -and ($r -match '\| 1 \| Slide \| utilize \| use \|')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckAcronymCheck'
+            Check 'deck acronyms: RFP spelled out on slide 1 and on the team list' (($r -match 'text only') -and ($r -match '\| RFP \| 2 \| 1 \| slide 1 \| Yes \| Request for Proposal \|')) ($r.Substring(0, [Math]::Min(500, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckFontAudit'
+            Check 'deck fonts: Arial not allowed' ($r -match 'Not allowed \| Arial') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckSmallText'
+            Check 'deck small text: the 8 pt footnote' (($r -like '1 piece(s) of text under 10 pt*') -and ($r -match 'Tiny Arial footnote')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckAltTextAudit'
+            Check 'deck alt text: the picture without it' ($r -like '1 graphic(s), 1 without alt text*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckOffSlideObjects'
+            Check 'deck off-slide objects: the parked box' (($r -like '1 shape(s) off the slide*') -and ($r -match 'Wholly off the slide')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTitlesCheck'
+            Check 'deck titles: one slide without, one sharing' ($r -like '1 slide(s) without a title, 1 sharing one*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckEmptyPlaceholders'
+            Check 'deck empty placeholders: the empty body' ($r -like '1 empty placeholder*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_DeckCopy' $deckCopy
+            Check 'deck delivery copy: hidden slide and notes gone, open deck unchanged' ((Test-Path $deckCopy) -and ($r -match '1 hidden slide') -and ($r -match 'notes on 1 slide') -and ($r -match 'copySlides=3 openSlides=4')) $r
+        }
+        finally { [void](RunW $word 'SKW_Test.TW_CloseDeck') }
         $doc.Close([ref]0)
     }
 
