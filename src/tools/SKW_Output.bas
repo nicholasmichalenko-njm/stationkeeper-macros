@@ -24,7 +24,7 @@ Public Sub PDFWithBookmarks()
             If .Show <> -1 Then Exit Sub
             p = .SelectedItems(1)
         End With
-        If LCase$(Right$(p, 4)) <> ".pdf" Then p = Left$(p, InStrRev(p & ".", ".") - 1) & ".pdf"
+        If LCase$(Right$(p, 4)) <> ".pdf" Then p = SKW_Stem(p) & ".pdf"
     End If
     SKW_Say SKW_PDFWithBookmarks(p)
 End Sub

@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Install"
 ' =====================================================================
-' Stationkeeper Macros kit installer 1.3.0
+' Stationkeeper Macros kit installer 1.4.0
 ' Lives only in "Stationkeeper Macros Kit.dotm". It copies the menu and
 ' the admin into a template you pick, with Word's Organizer. No VBA
 ' editor needed. Your own macros are not touched.
@@ -14,7 +14,7 @@ Attribute VB_Name = "SK_Install"
 Option Explicit
 
 Private Const KIT_ITEMS As String = "SK_Macros|frmSKMenu|frmSKAdmin"
-Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output|SKW_Utils|SKP_Deck|SKX_Book"
+Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output|SKW_Utils|SKP_Deck|SKP_Fix|frmSKPMedia|SKX_Book"
 
 Public Sub StationkeeperMacrosInstall()
     Dim p As String
@@ -138,13 +138,22 @@ Public Function SK_InstallInto(ByVal target As String, Optional ByVal backupDir 
         IIf(Len(bak) > 0, vbCr & vbCr & "Backup of the template before the change:" & vbCr & bak, "")
 End Function
 
+' "16 modules and 1 form"
+Private Function ItemCount(ByVal items As String) As String
+    Dim it As Variant, nM As Long, nF As Long
+    For Each it In Split(items, "|")
+        If LCase$(Left$(it, 3)) = "frm" Then nF = nF + 1 Else nM = nM + 1
+    Next
+    ItemCount = nM & " modules" & IIf(nF > 0, " and " & nF & " form" & IIf(nF > 1, "s", ""), "")
+End Function
+
 ' Copies the Stationkeeper Tools modules into the target. Replaces older copies of them.
 Public Function SK_InstallToolsInto(ByVal target As String, Optional ByVal backupDir As String = "") As String
     Dim r As String, bak As String
     r = SK_CopyItems(target, TOOL_ITEMS, "before tools", backupDir, bak)
     If Len(r) > 0 Then SK_InstallToolsInto = r: Exit Function
     SK_InstallToolsInto = "Stationkeeper Tools are in " & Mid$(target, InStrRev(target, "\") + 1) & " (" & _
-        (UBound(Split(TOOL_ITEMS, "|")) + 1) & " modules)." & vbCr & vbCr & _
+        ItemCount(TOOL_ITEMS) & ")." & vbCr & vbCr & _
         "Open that template: with Stationkeeper Macros installed, the tools appear in the menu already described " & _
         "(save once in the admin to keep them). Without it, run them from View > Macros." & vbCr & _
         "Then run MakeStandardsWorkbook or ChooseStandardsWorkbook to set your team's rules." & _

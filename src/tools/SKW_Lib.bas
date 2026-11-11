@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.2.0"
+Public Const SKW_VERSION As String = "1.4.0"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -143,6 +143,18 @@ Public Function SKW_Page(ByVal r As Object) As String
     Else
         SKW_Page = "Section " & r.Information(wdActiveEndSectionNumber)
     End If
+End Function
+
+' A file name or path without its extension ("Deck.pptx" -> "Deck"; "Deck" stays "Deck").
+Public Function SKW_Stem(ByVal nm As String) As String
+    Dim i As Long
+    i = InStrRev(nm, ".")
+    If i > 1 And i > InStrRev(nm, "\") + 1 Then SKW_Stem = Left$(nm, i - 1) Else SKW_Stem = nm
+End Function
+
+' The extension with its dot (".pptx"), or "".
+Public Function SKW_Ext(ByVal nm As String) As String
+    SKW_Ext = Mid$(nm, Len(SKW_Stem(nm)) + 1)
 End Function
 
 Public Function SKW_Excerpt(ByVal s As String, Optional ByVal n As Long = 90) As String

@@ -22,12 +22,15 @@ Invoke-WordJob -Root $Root -Job {
         [void]$vbp.VBComponents.Import([string]$t.FullName)
     }
     Write-Host 'step: modules imported'
-    foreach ($f in 'frmSKMenu', 'frmSKAdmin') {
+    $forms = @('frmSKMenu', 'frmSKAdmin') | ForEach-Object { Join-Path $Root "src\$_.code.vba" }
+    $forms += @(Get-ChildItem (Join-Path $Root 'src\tools') -Filter 'frm*.code.vba' | Sort-Object Name | ForEach-Object { $_.FullName })
+    foreach ($ff in $forms) {
+        $f = (Split-Path $ff -Leaf) -replace '\.code\.vba$', ''
         $c = $vbp.VBComponents.Add(3)
         $c.Name = $f
         $cm = $c.CodeModule
         if ($cm.CountOfLines -gt 0) { $cm.DeleteLines(1, $cm.CountOfLines) }
-        $cm.AddFromString((Get-Content (Join-Path $Root "src\$f.code.vba") -Raw))
+        $cm.AddFromString((Get-Content ([string]$ff) -Raw))
     }
     Write-Host 'step: forms added'
     # Compile. A compile error opens a dialog that would block forever, so a watchdog
@@ -71,6 +74,7 @@ Invoke-WordJob -Root $Root -Job {
     New-Item -ItemType Directory -Force $timp | Out-Null
     foreach ($c in @($vbp.VBComponents)) {
         if ($c.Name -like 'SK[WPX]_*') { $c.Export([string](Join-Path $timp "$($c.Name).bas")) }
+        if ($c.Name -like 'frmSK[WPX]*') { $c.Export([string](Join-Path $timp "$($c.Name).frm")) }
     }
     $doc.Close(0)
     Write-Output "Built $kit"

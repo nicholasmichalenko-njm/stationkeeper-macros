@@ -117,11 +117,11 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 63 tools in 1.3.0)
+## Stationkeeper Tools (0.4.0 and later; 72 tools in 1.4.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
-**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies fifteen modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies sixteen modules and one form (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKP_Fix`, `frmSKPMedia`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
@@ -181,6 +181,22 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 | Deck Empty Placeholders | Empty placeholders left on slides | No, report |
 | Deck Delivery Copy | "<name> - delivery.pptx" without notes, comments, hidden slides or personal details | No, saves a copy |
 
+**PowerPoint fixes (1.4.0).** The team template is the `DeckTemplate` setting (a .potx or .pptx on the Settings sheet). Without it, the master most slides use stands in. Fixes never touch the open deck: they save "<name> - <what>.pptx" next to it and open that, with a report of every change.
+
+| Tool | What it does | Changes the deck? |
+|---|---|---|
+| Deck Media List | A window listing every picture, icon, video, audio clip, chart, SmartArt and embedded or linked object, by slide, with its name and alt text. Filter by kind, "No alt text" or "Default names"; find; rename (names stay unique on a slide); suggest a name from the alt text; name every "Picture 3" from its alt text at once; go to it in PowerPoint | Names only, in the open deck (save it in PowerPoint) |
+| Deck Template Check | Every master and layout: the template's, pasted-in copies ("1_Title and Content"), foreign masters from other decks, unused ones, template layouts gone missing | No, report |
+| Deck Conform to Template | Moves each slide on a copy or foreign layout onto the template layout with the same name (or the same placeholders), then deletes the unused layouts and masters | No, saves a copy |
+| Deck Remove Unused Layouts | Deletes layouts no slide uses that are not in the template, and masters no slide uses. Template layouts stay | No, saves a copy |
+| Deck Font Fix | Text in fonts not on the Fonts sheet goes back to the theme's heading or body font (and its East Asian and complex script slots) | No, saves a copy |
+| Deck Overlap Check | Slide shapes sitting on the template's slide number, footer, date, title area, markings (CUI, Proprietary...) or master graphics such as a logo. High for number, footer and markings. Also saves a copy with each overlap outlined in red | No, report and a marked copy |
+| Deck Slide Number Check | Slides with no number, layouts with no number placeholder, numbers typed as text, numbers moved or restyled, numbering that does not start at 1 | No, report |
+| Deck Slide Number Fix | Puts the number placeholder back on masters and layouts, turns numbers on (off on title slides), removes typed numbers, puts each number where the layout has it in its font | No, saves a copy |
+| Deck Banned Phrases Fix | Replaces banned phrases that have a replacement (a capital at the start of a sentence is kept), and adds a comment on each changed slide listing what changed. Phrases with no replacement are flagged in the comment | No, saves a copy |
+
+Settings for the slide numbers: `DeckFirstSlideNumber` (1) and `DeckNumberTitleSlide` (No). Hidden slides count but need no number.
+
 **Excel (0.9.0).** These check the workbook open in Excel (the active one, or the only one open). They never start Excel or open a file on their own, and their reports open in Word. On very large sheets they read the first 20,000 text cells of each sheet.
 
 | Tool | What it does | Changes the workbook? |
@@ -228,7 +244,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 200 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 215 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -246,7 +262,7 @@ build.ps1, test.ps1
 
 ## Next
 
-- PowerPoint fixes: template layouts, fonts, overlaps, slide numbers, banned phrases, a media list.
+- PowerPoint, next: acronym first-use fixer, marking and footer check and fix, text overflow, reset slides to their layout, stretched or cropped pictures, colors not in the theme, titles that drifted, proofing language, links and embedded objects, table style.
 - Shared findings with the Stationkeeper app; both directions (a hand-filled setup workbook the app imports).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.

@@ -31,7 +31,7 @@ Public Sub DeckAcronymCheck()
     SKW_Show SKP_DeckAcronymCheck()
 End Sub
 
-' Lists every font used in the open deck and flags the ones not on the team's Fonts sheet. Changes nothing.
+' Lists every font in the open deck (slides, notes, layouts, masters, bullets and the East Asian and complex-script slots) and flags the ones not on the team's Fonts sheet. Changes nothing.
 Public Sub DeckFontAudit()
     If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
     SKW_Show SKP_DeckFontAudit()
@@ -301,51 +301,17 @@ Private Function IsRomanP(ByVal t As String) As Boolean
 End Function
 
 Public Function SKP_DeckFontAudit() As String
-    Dim p As Object, msg As String, rows As New Collection, sld As Object, sh As Object, tr As Object, rn As Object
-    Dim fonts As Object, allowed As New Collection, r As Object, k As Variant, e As Variant, nm As String, nBad As Long
+    Dim p As Object, msg As String, rows As Collection, allowed As Collection, nBad As Long
     msg = StartDeck("Deck fonts", p)
     If Len(msg) > 0 Then SKP_DeckFontAudit = msg: Exit Function
-    For Each r In SKW_Rows("Fonts")
-        If r.Exists("font") Then
-            If Len(r("font")) > 0 Then
-                If Not r.Exists("allowed") Then
-                    allowed.Add r("font")
-                ElseIf SKW_IsYes(r("allowed")) Or Len(r("allowed")) = 0 Then
-                    allowed.Add r("font")
-                End If
-            End If
-        End If
-    Next
-    Set fonts = CreateObject("Scripting.Dictionary")
-    For Each sld In p.Slides
-        For Each sh In SKP_Shapes(sld)
-            For Each tr In SKP_TextRanges(sh)
-                For Each rn In tr.Runs
-                    nm = rn.Font.Name
-                    If Len(nm) > 0 And Len(Trim$(rn.Text)) > 0 Then
-                        If fonts.Exists(nm) Then
-                            e = fonts(nm): e(0) = e(0) + 1: fonts(nm) = e
-                        Else
-                            fonts(nm) = Array(1, sld.SlideIndex, SKW_Excerpt(rn.Text, 50))
-                        End If
-                    End If
-                Next
-            Next
-        Next
-    Next
-    For Each k In fonts.Keys
-        e = fonts(k)
-        If allowed.Count > 0 And Not SKW_InList(allowed, CStr(k)) Then
-            nBad = nBad + 1
-            rows.Add SKW_Row("Not allowed", k, e(0), e(1), e(2))
-        Else
-            rows.Add SKW_Row(IIf(allowed.Count > 0, "Allowed", "Used"), k, e(0), e(1), e(2))
-        End If
-    Next
+    Set allowed = SKP_AllowedFonts()
+    Set rows = SKP_FontRows(p, allowed, nBad)
     SKW_Status ""
-    SKW_ReportFor "Deck Font Audit", fonts.Count & " font(s) used, " & nBad & " not on the team list" & IIf(allowed.Count = 0, " (no Fonts list, so none are flagged)", "") & _
-        ". Theme fonts are shown by their real names. Changes nothing.", Array("Rule", "Font", "Text runs", "First slide", "Text"), rows, DeckName(p)
-    SKP_DeckFontAudit = fonts.Count & " font(s) used, " & nBad & " not allowed."
+    SKW_ReportFor "Deck Font Audit", rows.Count & " font(s) found, " & nBad & " not on the team list" & IIf(allowed.Count = 0, " (no Fonts list, so none are flagged)", "") & _
+        ". Reads slides, speaker notes, layouts and masters, tables, groups and SmartArt, bullet fonts, and the East Asian and complex-script font slots " & _
+        "(listed only when not allowed). Theme fonts show by their real names. Deck Font Fix sets the ones not allowed back to the theme font. Changes nothing.", _
+        Array("Rule", "Font", "Text runs", "First place", "Text", "Slot"), rows, DeckName(p)
+    SKP_DeckFontAudit = rows.Count & " font(s) found, " & nBad & " not allowed."
 End Function
 
 Public Function SKP_DeckSmallText() As String
@@ -484,7 +450,7 @@ Public Function SKP_DeckDeliveryCopy(ByVal target As String) As String
     If p Is Nothing Then SKP_DeckDeliveryCopy = SKP_Why(): Exit Function
     If Len(p.Path) = 0 Then SKP_DeckDeliveryCopy = "Save the deck first, so the copy has a folder to go in.": Exit Function
     If LCase$(Left$(p.FullName, 4)) = "http" Then SKP_DeckDeliveryCopy = "The deck is opened from the web. Open it from the synced folder (or save a local copy) first.": Exit Function
-    If Len(target) = 0 Then target = p.Path & "\" & Left$(p.Name, InStrRev(p.Name & ".", ".") - 1) & " - delivery.pptx"
+    If Len(target) = 0 Then target = p.Path & "\" & SKW_Stem(p.Name) & " - delivery.pptx"
     On Error GoTo Fail
     SKW_Status "Making the delivery copy..."
     p.SaveCopyAs target

@@ -301,7 +301,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(15 modules)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(16 modules and 1 form)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -313,7 +313,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 63 tools arrive described, categorised and in the menu' (($tc -like '63 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 72 tools arrive described, categorised and in the menu' (($tc -like '72 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -796,6 +796,68 @@ try {
         Check 'ticked modules: new one copied in, same-named one left alone, backup made' (($ad -match 'Copied in from Source\.dotm: Extras\.') -and ($ad -match 'Module1: already here') -and ($ad -match 'Backup: ')) ''
         Check 'its macros join the catalog, described from its catalog, waiting for Save' (($ad -match 'IMPORTED 1: \[Alpha From Source\]') -and ($ad -match 'scan: Extras\.MacroAlpha Extras\.MacroBeta') -and ($ad -match 'pending [1-9]')) ''
         $d.Close([ref]0)
+    }
+
+
+    # 19. 1.4.0: PowerPoint fixers on a deck with a pasted-in master, a copy layout, a font not allowed, a covered logo and a typed number; the media list.
+    [string]$deck2 = Join-Path $work 'Deck 1.4.pptx'
+    [string]$tpl2 = Join-Path $work 'Team Template 1.4.potx'
+    [string]$fx = Join-Path $work 'Deck 1.4 fixes'
+    Remove-Item $deck2, $tpl2 -Force -ErrorAction SilentlyContinue
+    Remove-Item $fx -Recurse -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $work -Filter 'Deck 1.4 - fixed *.pptx' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    [void](New-Item $fx -ItemType Directory -Force)
+    function Short([string]$t, [int]$n = 400) { $t.Substring(0, [Math]::Min($n, $t.Length)) }
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        try {
+            $m = RunW $word 'SKW_Test.TW_MakeDeck2' "$deck2|$tpl2"
+            Check 'deck 1.4 made: five slides, a second master' ((Test-Path $deck2) -and (Test-Path $tpl2) -and ($m -match 'slides=5 designs=2') -and ($m -match 'media5=Linked picture')) $m
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTemplateCheck'
+            Check 'template check: the pasted-in master and the copy layout, against the team template' (($r -like '2 master(s), 1 foreign; 1 copy layout(s)*') -and ($r -match 'Team Template 1\.4\.potx') -and ($r -match 'Copy of ')) (Short $r)
+            $p = Join-Path $fx 'conform.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckConformToTemplate|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect' $p
+            Check 'conform: both odd slides moved onto template layouts; the foreign master and the copy layout gone' (($r -like '2 slide(s) moved, 0 left.*') -and ($r -match '1 unused master\(s\) deleted') -and ($i -match '^designs=1 ') -and ($i -notmatch '\[1_')) "$(Short $r 200) ## $(Short $i 300)"
+            $p = Join-Path $fx 'unused.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckRemoveUnusedLayouts|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect' $p
+            Check 'remove unused layouts: the foreign master''s spare layouts go; used ones and both masters stay' (($r -match '^[1-9]\d* unused layout\(s\) and 0 unused master') -and ($i -match '^designs=2 ') -and ($i -match '\[1_')) "$(Short $r 200) ## $(Short $i 300)"
+            $r = RunW $word 'SKW_Test.TW_Fix' 'SKP_DeckRemoveUnusedLayouts|'
+            $nm = RunW $word 'SKW_Test.TW_Names'
+            Check 'a fix with no target saves "<deck> - fixed <date>.pptx" beside the deck; names lose only their extension' (($r -match 'Fixed copy: .*\\Deck 1\.4 - fixed \d{4}-\d\d-\d\d \d{4}\.pptx') -and ($nm -eq 'Deck 1.4|.xlsx|C:\a.b\Deck|.hidden|')) "$(Short $r 200) ## $nm"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckFontAudit'
+            Check 'font audit: Comic Sans MS not allowed' ($r -match 'Not allowed \| Comic Sans MS') (Short $r)
+            $p = Join-Path $fx 'fonts.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckFontFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect' $p
+            Check 'font fix: the copy''s text is back on the theme font' (($r -match '^[1-9]\d* text run\(s\) set back') -and ($i -match 'fonts2=') -and ($i -notmatch 'fonts2=[^|]*Comic Sans')) "$(Short $r 200) ## $(Short $i 300)"
+            $r = RunW $word 'SKW_Test.TW_Fix' 'SKP_DeckOverlapCheck|-'
+            Check 'overlap check: the wide band covers the master logo and the slide number place' (($r -match 'Wide band \| Team Logo \(master graphic\)') -and ($r -match 'Wide band \| Slide number \(layout\) \| High') -and ($r -match '^[1-9]\d* overlap\(s\), [1-9]\d* high\.') -and ($r -notmatch 'Marked copy')) (Short $r 600)
+            $p = Join-Path $fx 'overlaps.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckOverlapCheck|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect' $p
+            Check 'overlap check: a marked copy outlines each one' (($r -match 'Marked copy: ') -and ($i -match 'marks=[1-9]')) "$(Short $r 200) ## $(Short $i 300)"
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckSlideNumberCheck'
+            Check 'slide number check: four slides without, the typed 2 found' (($r -like '4 slide(s) without a number, 0 layout(s) without the placeholder, 1 typed*') -and ($r -match 'Number typed as text')) (Short $r)
+            $p = Join-Path $fx 'numbers.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckSlideNumberFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect' $p
+            Check 'slide number fix: numbers on slides 2-5, none on the title slide, the typed one gone' (($r -match '4 on, 0 off, 1 typed removed') -and ($i -match ' 1:[^:]*:num=0') -and ($i -match ' 2:[^:]*:num=1') -and ($i -match ' 3:[^:]*:num=1') -and ($i -match ' 4:[^:]*:num=1') -and ($i -match ' 5:[^:]*:num=1') -and ($i -match 'typed2=0')) "$(Short $r 200) ## $(Short $i 400)"
+            $p = Join-Path $fx 'banned.pptx'
+            $r = RunW $word 'SKW_Test.TW_Fix' "SKP_DeckBannedPhrasesFix|$p"
+            $i = RunW $word 'SKW_Test.TW_Inspect' $p
+            Check 'banned phrases fix: utilize becomes use, capitals kept, a comment says so' (($r -match '^[1-9]\d* replaced') -and ($i -match 'text2=We use proven tools\. Use them well\.') -and ($i -match 'comment2=[^|]*Replaced "utilize" with "use"')) "$(Short $r 200) ## $(Short $i 500)"
+            $i = RunW $word 'SKW_Test.TW_InspectOpen'
+            Check 'the open deck is never changed by the fixers' (($i -match '^designs=2 ') -and ($i -match 'typed2=1') -and ($i -match 'Comic Sans') -and ($i -match 'marks=0')) (Short $i 400)
+            $md = RunW $word 'SKW_Test.TW_Media'
+            Write-Output "MEDIA: $md"
+            Check 'media list: the two pictures and the linked one, by slide; two without alt text' (($md -match '^list: 3: \[2/[^/]+/Picture/Rocket on the pad\] \[2/[^/]+/Picture/\(none\)\] \[5/[^/]+/Linked picture/\(none\)\]') -and ($md -match 'noalt: 2:')) (Short $md 500)
+            Check 'media list: names from alt text, a rename, and no duplicate names on a slide' (($md -match 'nameall: 1 renamed') -and ($md -match 'rename: [^|]*\| now Second photo') -and ($md -match 'dup: Slide 2 already has a shape named Second photo') -and ($md -match '\[S2 Picture - Rocket on the pad\]') -and ($md -match '\[Second photo\]')) ''
+        }
+        finally { [void](RunW $word 'SKW_Test.TW_CloseDeck') }
+        $doc.Close([ref]0)
     }
 
 }

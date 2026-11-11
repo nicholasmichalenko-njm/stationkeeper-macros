@@ -12,14 +12,14 @@ Option Explicit
 Public Sub MakeStandardsWorkbook()
     Dim p As String, sug As String
     If SKW_IsQuiet() Then Exit Sub   ' needs a person to choose where
-    sug = ThisDocument.Path & "\" & Left$(ThisDocument.Name, InStrRev(ThisDocument.Name & ".", ".") - 1) & " standards.xlsx"
+    sug = ThisDocument.Path & "\" & SKW_Stem(ThisDocument.Name) & " standards.xlsx"
     With Application.FileDialog(2)
         .Title = "Where should the standards workbook go?"
         .InitialFileName = sug
         If .Show <> -1 Then Exit Sub
         p = .SelectedItems(1)
     End With
-    If LCase$(Right$(p, 5)) <> ".xlsx" Then p = Left$(p, InStrRev(p & ".", ".") - 1) & ".xlsx"
+    If LCase$(Right$(p, 5)) <> ".xlsx" Then p = SKW_Stem(p) & ".xlsx"
     If Len(Dir$(p)) > 0 Then
         If MsgBox(Mid$(p, InStrRev(p, "\") + 1) & " already exists. Replace it?", vbYesNo + vbQuestion, SKW_APP) <> vbYes Then Exit Sub
     End If
@@ -100,7 +100,10 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("BulletStyle", "List Bullet", "The team's bullet list style (Convert to Team List)."), _
         Array("NumberStyle", "List Number", "The team's numbered list style (Convert to Team List)."), _
         Array("AcronymListUsedOnly", "Yes", "Insert Acronym List: Yes lists only acronyms used in the document; No lists every team meaning."), _
-        Array("DeckMinFontSize", "10", "Smallest text size allowed on slides (Deck Small Text)."))
+        Array("DeckMinFontSize", "10", "Smallest text size allowed on slides (Deck Small Text)."), _
+        Array("DeckTemplate", "", "Full path of the team's PowerPoint template (.potx) that decks are checked and conformed against. Blank: the master most slides use."), _
+        Array("DeckFirstSlideNumber", "1", "The number the first slide carries (Deck Slide Number Check and Fix)."), _
+        Array("DeckNumberTitleSlide", "No", "Yes: title slides show a number too. No: they do not."))
     Sheet wb, 3, "Allowed styles", Array( _
         Array("Style", "Required", "Notes"), _
         Array("Normal", "", ""), Array("Heading 1", "Yes", ""), Array("Heading 2", "", ""), Array("Heading 3", "", ""), _
@@ -333,7 +336,7 @@ Public Function SKW_ToolList() As String
         "Report of acronyms in the open deck's slide text: uses, first slide, spelled out or not, team meaning. Pictures are not scanned. Changes nothing.", _
         "powerpoint, deck, acronyms", "Acronyms, Text", "Whole document", "No, it only reports")
     s = s & "," & T("SKP_Deck.DeckFontAudit", "Deck Font Audit", "PowerPoint", _
-        "Report of every font in the open deck, flagging ones not on the team's Fonts sheet. Changes nothing.", _
+        "Report of every font in the open deck (slides, notes, layouts, masters, bullets, East Asian and complex-script slots), flagging ones not on the team's Fonts sheet. Changes nothing.", _
         "powerpoint, deck, fonts", "Text", "Whole document", "No, it only reports")
     s = s & "," & T("SKP_Deck.DeckSmallText", "Deck Small Text", "PowerPoint", _
         "Report of slide text smaller than the team minimum (DeckMinFontSize). Changes nothing.", _
@@ -353,6 +356,33 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKP_Deck.DeckDeliveryCopy", "Deck Delivery Copy", "PowerPoint", _
         "Saves a copy of the open deck beside it with no speaker notes, comments, hidden slides or personal details. The open deck is not changed.", _
         "powerpoint, deck, delivery, clean, notes, metadata", "Whole document", "Whole document", "No, it saves a clean copy")
+    s = s & "," & T("SKP_Fix.DeckMediaList", "Deck Media List", "PowerPoint", _
+        "Lists every picture, video, audio, chart, SmartArt, icon and embedded or linked object in the open deck by slide. Rename them (the Selection Pane shows the names), name them from their alt text, and jump to them.", _
+        "powerpoint, deck, media, pictures, video, audio, rename, selection pane, images", "Figures", "Whole document", "Only shape names, when you rename")
+    s = s & "," & T("SKP_Fix.DeckTemplateCheck", "Deck Template Check", "PowerPoint", _
+        "Report comparing the deck's masters and layouts with the team template (DeckTemplate): foreign masters, pasted-in 1_ copies, unused layouts, template layouts gone missing. Changes nothing.", _
+        "powerpoint, deck, master, layouts, template, bloat, pasted slides", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Fix.DeckConformToTemplate", "Deck Conform to Template", "PowerPoint", _
+        "On a copy: moves slides off foreign and 1_ layouts onto the matching template layout, then deletes unused foreign layouts and masters. The open deck is not changed.", _
+        "powerpoint, deck, master, layouts, template, conform, fix, bloat", "Whole document", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Fix.DeckRemoveUnusedLayouts", "Deck Remove Unused Layouts", "PowerPoint", _
+        "On a copy: deletes layouts and masters no slide uses that are not part of the template. Template layouts stay. The open deck is not changed.", _
+        "powerpoint, deck, layouts, masters, unused, file size, bloat", "Whole document", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Fix.DeckFontFix", "Deck Font Fix", "PowerPoint", _
+        "On a copy: text in fonts not on the team's Fonts sheet goes back to the theme's heading or body font. The open deck is not changed.", _
+        "powerpoint, deck, fonts, theme, fix", "Text", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Fix.DeckOverlapCheck", "Deck Overlap Check", "PowerPoint", _
+        "Report of slide content covering template elements (slide number, footer, date, marking banner, logos, title area), plus a copy with each overlap outlined in red. The open deck is not changed.", _
+        "powerpoint, deck, overlap, covers, logo, footer, marking, banner", "Figures", "Whole document", "No, it reports and marks a copy")
+    s = s & "," & T("SKP_Fix.DeckSlideNumberCheck", "Deck Slide Number Check", "PowerPoint", _
+        "Report of slides without a number, layouts missing the number placeholder, typed numbers, numbers moved or restyled, and the starting number. Changes nothing.", _
+        "powerpoint, deck, slide numbers, page numbers, footer", "Page numbers", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Fix.DeckSlideNumberFix", "Deck Slide Number Fix", "PowerPoint", _
+        "On a copy: puts the number placeholder back on masters and layouts, turns numbers on (off on title slides unless the team numbers them), removes typed numbers, resets position and font. The open deck is not changed.", _
+        "powerpoint, deck, slide numbers, page numbers, fix", "Page numbers", "Whole document", "No, it fixes a copy")
+    s = s & "," & T("SKP_Fix.DeckBannedPhrasesFix", "Deck Banned Phrases Fix", "PowerPoint", _
+        "On a copy: replaces the team's banned phrases that have a replacement and leaves a slide comment for each change; flags the rest to reword. The open deck is not changed.", _
+        "powerpoint, deck, banned phrases, plain language, replace, comments", "Text", "Whole document", "No, it fixes a copy")
     s = s & "," & T("SKX_Book.BookFormulaErrors", "Book Formula Errors", "Excel", _
         "Report of cells showing an error (#REF!, #N/A, #DIV/0! and the rest) in the workbook open in Excel. Changes nothing.", _
         "excel, workbook, errors, ref, formulas", "Whole document", "Whole document", "No, it only reports")
@@ -402,7 +432,8 @@ Private Function SkKind(ByVal run As String) As String
         "ApplyTeamTableType|BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
         "AcronymQuickCheck|LoadTeamDictionaries|FontNotAllowed|PageLimitCounter|RemoveUnusedCustomStyles|" & _
         "ConvertToTeamList|InsertAcronymList|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
-        "DeckSmallText|BookLeftovers|BookBannedPhrases|BookAcronymCheck|BookFontAudit|"
+        "DeckSmallText|DeckTemplateCheck|DeckConformToTemplate|DeckRemoveUnusedLayouts|DeckFontFix|DeckSlideNumberCheck|DeckSlideNumberFix|DeckBannedPhrasesFix|" & _
+        "BookLeftovers|BookBannedPhrases|BookAcronymCheck|BookFontAudit|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else

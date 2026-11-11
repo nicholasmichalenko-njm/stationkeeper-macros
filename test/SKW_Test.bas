@@ -863,3 +863,155 @@ Public Function TW_RenameFolder(ByVal arg As String) As String
     SKW_ForgetEffort
     TW_RenameFolder = "renamed"
 End Function
+
+' ---------------------------------------------------------------------
+' 1.4.0: PowerPoint batch 2. A deck with a pasted-in foreign master, a
+' "1_" copy layout, a banned phrase, a font not allowed, a typed slide
+' number, a slide covering the logo and the number, and pictures.
+' arg = "<deck path>|<template path>"
+' ---------------------------------------------------------------------
+Public Function TW_MakeDeck2(ByVal arg As String) As String
+    Dim a As Variant, t As Object, p As Object, s As Object, d2 As Object, lay As Object, sh As Object, num As Object, w As Single, h As Single
+    Dim extra As String
+    a = Split(arg, "|")
+    Set mPP = CreateObject("PowerPoint.Application")
+    mPPMine = (mPP.Presentations.Count = 0)
+    ' The team template: a plain deck saved as .potx.
+    Set t = mPP.Presentations.Add(0)
+    t.Slides.Add 1, 1
+    t.SaveAs CStr(a(1)), 26
+    t.Close
+    Set p = mPP.Presentations.Add(0)
+    w = p.PageSetup.SlideWidth: h = p.PageSetup.SlideHeight
+    ' 1: title slide
+    Set s = p.Slides.Add(1, 1)
+    s.Shapes(1).TextFrame.TextRange.Text = "Proposal kickoff"
+    ' 2: title and content: banned phrase twice, a font not allowed, a typed number, two pictures
+    Set s = p.Slides.AddSlide(2, p.Designs(1).SlideMaster.CustomLayouts(2))
+    s.Shapes(1).TextFrame.TextRange.Text = "Approach"
+    s.Shapes(2).TextFrame.TextRange.Text = "We utilize proven tools. Utilize them well."
+    s.Shapes(2).TextFrame.TextRange.Paragraphs(1).Font.Name = "Comic Sans MS"
+    Set sh = s.Shapes.AddTextbox(1, w - 60, h - 40, 40, 24)
+    sh.TextFrame.TextRange.Text = "2"
+    Set sh = s.Shapes.AddPicture(TinyBmp(), 0, -1, 40, 300, 60, 60)
+    sh.AlternativeText = "Rocket on the pad"
+    s.Shapes.AddPicture TinyBmp(), 0, -1, 120, 300, 60, 60
+    ' 3: a slide pasted in with its own master (Keep Source Formatting)
+    Set d2 = p.Designs.Add("Foreign Theme")
+    Set s = p.Slides.AddSlide(3, d2.SlideMaster.CustomLayouts(2))
+    s.Shapes(1).TextFrame.TextRange.Text = "Foreign slide"
+    ' 4: a slide on a "1_" copy of a template layout
+    Set lay = p.Designs(1).SlideMaster.CustomLayouts(2).Duplicate
+    Set s = p.Slides.AddSlide(4, lay)
+    s.Shapes(1).TextFrame.TextRange.Text = "Copied layout slide"
+    ' 5: title only, with a box over the master's logo and the slide number place
+    Set sh = p.Designs(1).SlideMaster.Shapes.AddShape(1, 10, h - 50, 80, 40)
+    sh.Name = "Team Logo"
+    Set s = p.Slides.Add(5, 11)
+    s.Shapes(1).TextFrame.TextRange.Text = "Covered"
+    Set num = Nothing
+    For Each sh In s.CustomLayout.Shapes
+        If sh.Type = 14 Then
+            If sh.PlaceholderFormat.Type = 13 Then Set num = sh
+        End If
+    Next
+    Set sh = s.Shapes.AddShape(1, 0, h - 60, w, 60)
+    sh.Name = "Wide band"
+    ' A linked picture (kept in the file too).
+    extra = "none"
+    On Error Resume Next
+    s.Shapes.AddPicture TinyBmp(), -1, -1, 600, 200, 60, 60
+    If Err.Number = 0 Then extra = "Linked picture"
+    On Error GoTo 0
+    p.SaveAs CStr(a(0))
+    Set SKP_TestDeck = p
+    SKP_TestTemplate = CStr(a(1))
+    TW_MakeDeck2 = "slides=" & p.Slides.Count & " designs=" & p.Designs.Count & " numberOnLayout=" & (Not num Is Nothing) & " media5=" & extra
+End Function
+
+' Runs a fixer with a target path. arg = "<function>|<target>"
+Public Function TW_Fix(ByVal arg As String) As String
+    Dim a As Variant, s As String
+    a = Split(arg, "|")
+    SKW_Quiet = True
+    s = Replace(Application.Run(CStr(a(0)), CStr(a(1))), vbCr, " / ") & " ## " & ReportText()
+    CloseReport
+    TW_Fix = s
+End Function
+
+' What a saved copy holds: masters, layouts in use, each slide's layout, number, comments; fonts and text on slide 2.
+Public Function TW_Inspect(ByVal path As String) As String
+    Dim c As Object
+    Set c = mPP.Presentations.Open(path, -1, 0, 0)
+    TW_Inspect = InspectDeck(c)
+    c.Close
+End Function
+
+' The same, for the open test deck (left open).
+Public Function TW_InspectOpen() As String
+    TW_InspectOpen = InspectDeck(SKP_TestDeck)
+End Function
+
+Private Function InspectDeck(ByVal c As Object) As String
+    Dim s As String, sld As Object, sh As Object, f As Object, rn As Object, hasNum As Boolean, nMark As Long, d As Object, lay As Object, n As Long
+    s = "designs=" & c.Designs.Count & " layouts:"
+    For Each d In c.Designs
+        For Each lay In d.SlideMaster.CustomLayouts
+            n = n + 1
+            If Left$(lay.Name, 2) = "1_" Then s = s & " [" & lay.Name & "]"
+        Next
+    Next
+    s = s & " total=" & n & " | slides:"
+    Set f = CreateObject("Scripting.Dictionary")
+    For Each sld In c.Slides
+        hasNum = False
+        For Each sh In sld.Shapes
+            If sh.Type = 14 Then
+                If sh.PlaceholderFormat.Type = 13 Then hasNum = True
+            End If
+            If Left$(sh.Name, 11) = "SK overlap " Then nMark = nMark + 1
+        Next
+        s = s & " " & sld.SlideIndex & ":" & sld.CustomLayout.Name & ":num=" & IIf(hasNum, 1, 0) & ":com=" & sld.Comments.Count
+        If sld.SlideIndex = 2 Then
+            For Each rn In sld.Shapes(2).TextFrame.TextRange.Runs
+                f(rn.Font.Name) = True
+            Next
+        End If
+    Next
+    s = s & " | marks=" & nMark & " | fonts2=" & Join(f.Keys, ",") & " | text2=" & Replace(c.Slides(2).Shapes(2).TextFrame.TextRange.Text, vbCr, " / ")
+    s = s & " | typed2=" & TypedTwo(c.Slides(2))
+    If c.Slides(2).Comments.Count > 0 Then s = s & " | comment2=" & c.Slides(2).Comments(1).Text
+    InspectDeck = s
+End Function
+
+Private Function TypedTwo(ByVal sld As Object) As Long
+    Dim sh As Object
+    For Each sh In sld.Shapes
+        If sh.Type = 17 Then
+            If Trim$(sh.TextFrame.TextRange.Text) = "2" Then TypedTwo = TypedTwo + 1
+        End If
+    Next
+End Function
+
+' The media list form on the test deck: the list, a rename, naming from alt text, and the deck's names after.
+Public Function TW_Media() As String
+    Dim s As String, sh As Object
+    SKW_Quiet = True
+    Load frmSKPMedia
+    s = "list: " & frmSKPMedia.TestList("All media")
+    s = s & " || noalt: " & frmSKPMedia.TestList("No alt text")
+    s = s & " || nameall: " & frmSKPMedia.TestNameAll()
+    s = s & " || rename: " & frmSKPMedia.TestRename(1, "Second photo")
+    s = s & " || dup: " & frmSKPMedia.TestRename(0, "Second photo")
+    Unload frmSKPMedia
+    s = s & " || deck2:"
+    For Each sh In SKP_TestDeck.Slides(2).Shapes
+        s = s & " [" & sh.Name & "]"
+    Next
+    TW_Media = s
+End Function
+
+' File names without and with their extension.
+Public Function TW_Names() As String
+    TW_Names = SKW_Stem("Deck 1.4.pptx") & "|" & SKW_Ext("Book.xlsx") & "|" & SKW_Stem("C:\a.b\Deck") & "|" & SKW_Stem(".hidden") & "|" & SKW_Ext("Deck")
+End Function

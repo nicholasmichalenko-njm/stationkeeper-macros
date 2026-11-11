@@ -421,8 +421,8 @@ Public Function SKX_BookDeliveryCopy(ByVal target As String) As String
     If wb Is Nothing Then SKX_BookDeliveryCopy = mWhy: Exit Function
     If Len(wb.Path) = 0 Then SKX_BookDeliveryCopy = "Save the workbook first, so the copy has a folder to go in.": Exit Function
     If LCase$(Left$(wb.FullName, 4)) = "http" Then SKX_BookDeliveryCopy = "The workbook is opened from the web. Open it from the synced folder (or save a local copy) first.": Exit Function
-    ext = Mid$(wb.Name, InStrRev(wb.Name & ".", "."))
-    If Len(target) = 0 Then target = wb.Path & "\" & Left$(wb.Name, InStrRev(wb.Name & ".", ".") - 1) & " - delivery" & ext
+    ext = SKW_Ext(wb.Name)
+    If Len(target) = 0 Then target = wb.Path & "\" & SKW_Stem(wb.Name) & " - delivery" & ext
     Set xl = wb.Application
     alerts = xl.DisplayAlerts
     On Error GoTo Fail
