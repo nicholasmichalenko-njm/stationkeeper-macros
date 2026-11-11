@@ -11,8 +11,8 @@ It works with whatever macros are already in the template: one module or many. I
 
 | File | What it is |
 |---|---|
-| `Stationkeeper Macros Kit.dotm` | The kit, plus an installer that copies the menu and the admin into any template |
-| `Import files/` | The same three pieces as files (`SK_Macros.bas`, `frmSKMenu.frm/.frx`, `frmSKAdmin.frm/.frx`) for importing in the VBA editor |
+| `Stationkeeper Macros Kit.dotm` | The kit, plus installers that copy the menu and admin, and the Stationkeeper Tools, into any template |
+| `Import files/` | The same three pieces as files (`SK_Macros.bas`, `frmSKMenu.frm/.frx`, `frmSKAdmin.frm/.frx`) for importing in the VBA editor, and `Stationkeeper Tools/` with the tool modules |
 | `Read me first.txt` | Short version of this page |
 
 ## Add it to a template
@@ -81,6 +81,33 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
+## Stationkeeper Tools (0.4.0 and later)
+
+Checking and fixing tools for Word documents, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
+
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies six modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+
+**Team rules live in one Excel workbook.** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
+
+| Tool | What it does | Changes the document? |
+|---|---|---|
+| Safe Update All Fields | Updates every field in every part (body, headers, footers, notes, text boxes), then contents and figure tables. Fields that pull in outside files (LINK, INCLUDETEXT, INCLUDEPICTURE) are kept as they are. Track changes is paused for the update and put back. | Yes, one Ctrl+Z |
+| Find Broken References | Cross-references to bookmarks that are gone, fields showing Error!, internal links that go nowhere, included files that are missing | No, report |
+| Field Code Report | Every field: type, code, result, where, page, locked | No, report |
+| Pre-Delivery Leftovers | Comments, tracked changes, hidden text, highlighting, placeholders (TBD, XXX, [insert...), author and company saved in the file | No, report |
+| Style Inspector | The paragraph and character style at the cursor and anything formatted by hand on top; several paragraphs make a report | No |
+| Non-Allowed Style Report | Styles in use that are not on the team list, required styles that are missing. Without a list: custom styles | No, report |
+| Direct Formatting Report | Paragraphs whose font or spacing was set by hand. Bold, italic, superscript and subscript count as emphasis (setting `KeepOnClear`). In tables only font and size are checked, since table styles set the rest | No, report |
+| Clear Direct Formatting (Selection) | Clears hand formatting in the selection; keeps emphasis and list numbering | Yes, one Ctrl+Z |
+| Table Standards Audit | Each table against the team table types: style, repeating header row, rows breaking across pages, width, floating or nested tables, cell styles, a caption above or below | No, report |
+| Apply Team Table Type | Sets the table at the cursor to a team type: style, header row, rows kept whole, width, cell styles, padding | Yes, one Ctrl+Z |
+
+How they behave:
+- **Reports** open as a new Word document with one table (Rule, Finding, Where, Page, Text) and the standards used at the top. They change nothing in your document, not even its Undo list.
+- **Fixes** are one step on Undo, named "Stationkeeper: ...".
+- **Co-authored files:** on a SharePoint or OneDrive file with AutoSave on, the fixes do not run (to protect co-authors' edits); the reports still do.
+- **Test every macro** in the admin runs the report tools quietly and closes their reports; the setup tools wait for a person.
+
 ## "Trust access to the VBA project object model"
 
 Word blocks a template from reading its own code unless this setting is on (File > Options > Trust Center > Trust Center Settings > Macro Settings). It is off by default.
@@ -105,22 +132,25 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 58 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 81 checks on a sample template; changes no settings
 ```
 
-`test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path. See `TESTING.md` for the checks run by hand.
+`test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
 
 ## Layout
 
 ```
 src/            SK_Macros.bas (engine + entry macros), SK_Install.bas (kit only),
                 frmSKMenu.code.vba, frmSKAdmin.code.vba (forms build their controls in code)
+src/tools/      SKW_*.bas: Stationkeeper Tools (SKW_Lib is the shared plumbing)
 test/           sample macros and the self-test module
 tools/          wordjob.ps1 (runs one hidden Word and always closes it), watch.ps1 (reads stuck dialogs)
 build.ps1, test.ps1
 ```
 
 ## Next
+
+- Stationkeeper Tools, ten at a time, a release for each: captions, banned phrases, pagination and lists (0.5.0); acronym quick check, typography, dictionaries, fonts, PDF (0.6.0); utilities (0.7.0); PowerPoint (0.8.0); Excel (0.9.0).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

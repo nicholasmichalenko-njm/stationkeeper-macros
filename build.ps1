@@ -18,6 +18,9 @@ Invoke-WordJob -Root $Root -Job {
     $vbp.Name = 'StationkeeperMacrosKit'
     [void]$vbp.VBComponents.Import((Join-Path $Root 'src\SK_Macros.bas'))
     [void]$vbp.VBComponents.Import((Join-Path $Root 'src\SK_Install.bas'))
+    foreach ($t in Get-ChildItem (Join-Path $Root 'src\tools') -Filter 'SKW_*.bas' | Sort-Object Name) {
+        [void]$vbp.VBComponents.Import([string]$t.FullName)
+    }
     Write-Host 'step: modules imported'
     foreach ($f in 'frmSKMenu', 'frmSKAdmin') {
         $c = $vbp.VBComponents.Add(3)
@@ -45,10 +48,15 @@ Invoke-WordJob -Root $Root -Job {
     Write-Host 'step: saving'
     $doc.SaveAs2($kit, 15)
     Write-Host 'step: saved'
-    Get-ChildItem $imp | Remove-Item -Force
+    Get-ChildItem $imp | Remove-Item -Recurse -Force
     $vbp.VBComponents.Item('SK_Macros').Export((Join-Path $imp 'SK_Macros.bas'))
     $vbp.VBComponents.Item('frmSKMenu').Export((Join-Path $imp 'frmSKMenu.frm'))
     $vbp.VBComponents.Item('frmSKAdmin').Export((Join-Path $imp 'frmSKAdmin.frm'))
+    [string]$timp = Join-Path $imp 'Stationkeeper Tools'
+    New-Item -ItemType Directory -Force $timp | Out-Null
+    foreach ($c in @($vbp.VBComponents)) {
+        if ($c.Name -like 'SKW_*') { $c.Export([string](Join-Path $timp "$($c.Name).bas")) }
+    }
     $doc.Close(0)
     Write-Output "Built $kit"
     Get-ChildItem $build -Recurse -File | ForEach-Object { "  {0}  {1:N0} bytes" -f $_.FullName.Substring($Root.Length + 1), $_.Length }

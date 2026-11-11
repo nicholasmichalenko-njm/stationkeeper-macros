@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.3.0
+' Stationkeeper Macros 0.4.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.3.0"
+Public Const SK_VERSION As String = "0.4.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 
 Public SK_LastScanMethod As String
@@ -408,6 +408,7 @@ NextEntry:
             entries.Add e
         End If
     Next
+    SK_PrefillTools entries
     For Each e In entries
         If Len(e("category")) > 0 Then SK_AddUnique cats, e("category")
     Next
@@ -426,6 +427,38 @@ NextEntry:
     End If
     Set SK_LoadModel = m
 End Function
+
+' Stationkeeper Tools describe themselves (SKW_Setup.SKW_ToolList). A tool new to the
+' catalog arrives with its title, category and description, and in the menu.
+' Without VBA project access, tools that answer are added as found.
+Private Sub SK_PrefillTools(ByVal entries As Collection)
+    Dim js As String, rows As Collection, r As Object, e As Object, hit As Object, f As Variant
+    On Error Resume Next
+    js = Application.Run("SKW_Setup.SKW_ToolList")
+    If Err.Number <> 0 Or Len(js) = 0 Then Exit Sub
+    Set rows = SK_RowsFromJsonText(js)
+    If Err.Number <> 0 Or rows Is Nothing Then Exit Sub
+    On Error GoTo 0
+    For Each r In rows
+        Set hit = Nothing
+        For Each e In entries
+            If LCase$(e("run")) = LCase$(r("run")) Then Set hit = e: Exit For
+        Next
+        If hit Is Nothing And Not SK_ScanAvailable Then
+            Set hit = SK_NewEntry(r("run"))
+            hit("found") = True
+            entries.Add hit
+        End If
+        If Not hit Is Nothing Then
+            If hit("isNew") Then
+                For Each f In Array("title", "category", "description", "keywords", "affects", "workson", "changes")
+                    If r.Exists(f) Then hit(f) = r(f)
+                Next
+                If r.Exists("shown") Then hit("shown") = SK_ShownFromText(r("shown"))
+            End If
+        End If
+    Next
+End Sub
 
 Private Function SK_ModuleCountOfEntries(ByVal entries As Collection) As Long
     Dim mods As Object, e As Object
@@ -917,9 +950,12 @@ End Function
 
 ' JSON: an array of objects, or an object with a "macros" array.
 Private Function SK_RowsFromJson(ByVal path As String) As Collection
-    Dim s As String, pos As Long, v As Variant, arr As Object, item As Variant, d As Object, k As Variant, key As String
+    Set SK_RowsFromJson = SK_RowsFromJsonText(SK_ReadUtf8(path))
+End Function
+
+Public Function SK_RowsFromJsonText(ByVal s As String) As Collection
+    Dim pos As Long, v As Variant, arr As Object, item As Variant, d As Object, k As Variant, key As String
     Dim res As New Collection
-    s = SK_ReadUtf8(path)
     pos = 1
     SK_JsonAssign v, s, pos
     If Not IsObject(v) Then Err.Raise vbObjectError + 6, SK_APP, "The JSON file needs a list of macros."
@@ -948,7 +984,7 @@ Private Function SK_RowsFromJson(ByVal path As String) As Collection
             End If
         End If
     Next
-    Set SK_RowsFromJson = res
+    Set SK_RowsFromJsonText = res
 End Function
 
 Private Sub SK_JsonSkip(ByVal s As String, pos As Long)
@@ -1296,7 +1332,11 @@ End Function
 ' Returns "Passed ...", "Failed ..." or "Skipped ...".
 Public Function SK_TestMacro(ByVal run As String, ByVal worksOn As String) As String
     Dim prev As Object, scratch As Object, t As Single, why As String, src As String, rec As Boolean
+    Dim before As New Collection, dd As Object, extra As New Collection, x As Variant, known As Boolean
     On Error Resume Next
+    For Each dd In Documents
+        before.Add dd.FullName
+    Next
     Set prev = ActiveDocument
     Err.Clear
     On Error GoTo MakeFail
@@ -1317,6 +1357,7 @@ Public Function SK_TestMacro(ByVal run As String, ByVal worksOn As String) As St
     End If
 
     SaveSetting SK_APP, SK_UserKey(), "mark|" & run, "test|" & Format$(Now, "yyyy-mm-dd hh:nn")
+    SaveSetting "Stationkeeper Tools", "Run", "quiet", "1"   ' tools skip their messages and dialogs
     t = Timer
     On Error GoTo RunFail
     Application.Run run
@@ -1335,7 +1376,18 @@ MakeFail:
     Resume Tidy
 Tidy:
     On Error Resume Next
-    If Not scratch Is Nothing Then scratch.Close SaveChanges:=0
+    SaveSetting "Stationkeeper Tools", "Run", "quiet", ""
+    ' Close the scratch document and any document the macro opened (a report, say).
+    For Each dd In Documents
+        known = False
+        For Each x In before
+            If x = dd.FullName Then known = True: Exit For
+        Next
+        If Not known Then extra.Add dd
+    Next
+    For Each dd In extra
+        dd.Close SaveChanges:=0
+    Next
     If Not prev Is Nothing Then prev.Activate
 End Function
 

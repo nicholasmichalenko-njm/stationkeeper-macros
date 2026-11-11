@@ -1,8 +1,8 @@
 # Testing
 
-## Automated: `test.ps1` (58 checks, 2026-11-10, Word 16.0.17932, Windows)
+## Automated: `test.ps1` (81 checks, 2026-11-10, Word 16.0.17932, Windows)
 
-Runs every step in its own hidden Word and always closes it. Changes no Word or Windows settings.
+Runs every step in its own hidden Word and always closes it. Changes no Word or Windows settings. A guard looks for a dialog every 15 seconds; a dialog still open at the next look is written into the results and that Word is ended, so a VBA error never stalls the run.
 
 | Area | Checks |
 |---|---|
@@ -19,6 +19,13 @@ Runs every step in its own hidden Word and always closes it. Changes no Word or 
 | Test runs | Passes on a scratch document and closes it; a missing macro fails; a run that never finished is recorded as Failed; Test all runs 12 safe macros and skips the file-changing one |
 | Undo | One Ctrl+Z undoes a two-edit macro run from the menu |
 | Needs | Table at the cursor and Selection checked before running |
+| Stationkeeper Tools: install | Six SKW_ modules copied with the Organizer; the 12 tools arrive in the catalog described, categorised, with the right "Works on", and in the menu; menu search finds them; the template's own catalog is untouched |
+| Standards workbook | Made in Excel with 25 allowed styles, 2 table types, 10 placeholders and the settings, then read back; reports name it |
+| Defect document | Built in VBA with direct font, size and spacing, a custom style, a good and a broken REF, an INCLUDETEXT to a missing file, a link to a missing bookmark, a comment, a tracked insertion, hidden text, a highlight, two placeholders, a captioned good table, a long wide table with no caption, a floating table, a TOC and a PAGE field |
+| Reports | Broken references (3, good REF not listed); field code report by type; leftovers (comment, tracked change, hidden, highlight, 2 placeholders); style inspector (font and size by hand); non-allowed styles with and without a workbook; direct formatting (bold and subscript treated as emphasis); table audit (good table clean, 6 findings on the bad one, floating table). Running every report leaves the document's Undo list exactly as it was |
+| Fixes | Clear direct formatting: back to the style, bold kept, one Ctrl+Z restores; apply table type: style, repeating header, rows whole, 100% width, then one Ctrl+Z (pressed from outside the macro, as a person would) restores it; safe update: the included file is not touched, the broken REF now shows its error, track changes put back |
+| Co-authoring | With AutoSave on a cloud file (test switch), fixes are refused and reports still run |
+| Tools in the menu engine | A report tool runs through the menu's run (one Undo record open) and makes its report; Test every macro passes all 22 safe macros, skips the two that need a selection or table, closes every report and clears the quiet flag |
 | No VBA access | Catalog trusted (nothing marked missing); menu lists, searches and runs; admin opens; .bas files read (one module or many) with their comments; the opening message explains the two ways forward |
 
 The no-access checks use a test switch (`SK_ForceNoAccess`). Word started by automation can always read VBA projects whatever the Trust Center says, so a script cannot reproduce the real setting.
@@ -33,5 +40,12 @@ On a PC where "Trust access to the VBA project object model" is **off** (Word's 
 4. New document from the template. Alt+Shift+M (after setting it on the Settings tab) or View > Macros > `StationkeeperMacros`. Search, run one macro, press Ctrl+Z once. Run a table macro with the cursor outside a table: the menu says what to do.
 6. In the admin: Test this macro on one that fails on purpose (for example 1/0). Click End in Word's dialog, reopen the admin: it shows Failed.
 5. Turn the setting **on**, open the admin again: every macro is listed live, comments are read.
+
+Stationkeeper Tools by hand:
+
+1. Run `StationkeeperToolsInstall` from the kit on a copy of a real template, then `MakeStandardsWorkbook`. Fill in a few of your styles and one table type; save.
+2. On a real proposal: Pre-Delivery Leftovers, Find Broken References, Table Standards Audit. Check a few findings against the page numbers.
+3. Select some hand-formatted text, Clear Direct Formatting (Selection), press Ctrl+Z once.
+4. Put the cursor in a table, Apply Team Table Type with two types in the workbook: it asks which.
 
 Also look at: the forms at 100% and 150% display scaling, and a macro that shows its own form while the menu stays open.

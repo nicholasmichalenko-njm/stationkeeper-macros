@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 0.3.0
+STATIONKEEPER MACROS 0.4.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -43,6 +43,14 @@ IF THE ADMIN SAYS WORD IS NOT LETTING IT LOOK INSIDE THE TEMPLATE
    Or: export your module(s) from the VBA editor (right-click > Export File) and use
    Bulk tools tab > Read macros from .bas files.
 
+STATIONKEEPER TOOLS (checks and fixes for Word documents)
+   - Open the kit, View > Macros > StationkeeperToolsInstall > Run, pick the template.
+   - Open the template: the tools are in the menu already described. Save once in the admin.
+   - Run MakeStandardsWorkbook (or ChooseStandardsWorkbook for a shared one) to set
+     your team's allowed styles, table types and placeholders in Excel.
+   - Reports open as a new document and change nothing. Fixes are one Ctrl+Z.
+   - On SharePoint/OneDrive files with AutoSave on, fixes wait; reports run.
+
 TO TAKE IT OUT
-   Open the kit, run StationkeeperMacrosRemove, pick the template.
+   Open the kit, run StationkeeperMacrosRemove (or StationkeeperToolsRemove), pick the template.
    Your macros and the descriptions stay.
