@@ -37,9 +37,23 @@ Invoke-WordJob -Root $Root -Job {
         $word.VBE.ActiveVBProject = $vbp   # compile the kit, not whichever project the editor last showed
         $word.VBE.CommandBars.FindControl(1, 578).Execute()
         Stop-Job $wd; Remove-Job $wd -Force
+        # With Word hidden, a compile error shows no dialog: the command just stays available.
+        # Debug > Compile is greyed out only after a clean compile, so that is the check.
+        if ($word.VBE.CommandBars.FindControl(1, 578).Enabled) {
+            $where = ''
+            try {
+                $pane = $word.VBE.ActiveCodePane
+                $sl = 0; $sc = 0; $el = 0; $ec = 0
+                $pane.GetSelection([ref]$sl, [ref]$sc, [ref]$el, [ref]$ec)
+                $where = "$($pane.CodeModule.Parent.Name), line ${sl}: $($pane.CodeModule.Lines($sl, 1).Trim())"
+            } catch { $where = '(the editor did not say where)' }
+            Write-Host "COMPILE FAILED: $where"
+            throw "The VBA code does not compile: $where"
+        }
         Write-Host 'step: compiled'
     }
     catch {
+        if ($_.Exception.Message -like 'The VBA code does not compile:*') { throw }
         Write-Host 'COMPILE FAILED:'
         Receive-Job $wd -Wait | ForEach-Object { Write-Host "  $_" }
         throw 'The VBA code does not compile. See the dialog text above.'
