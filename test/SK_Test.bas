@@ -396,3 +396,30 @@ Public Function T_SkLinkFiles() As String
     T_SkLinkFiles = d("state") & " | cached=" & d("cached") & " | parts=" & d("parts") & " | rules file=" & SK_EffortFile("rules") & _
         " | " & d("note")
 End Function
+
+' 1.1.0: sync warnings with stand-in file attributes ("" reads the real ones).
+Public Function T_SkWarn(ByVal attrs As String) As String
+    Dim d As Object
+    SK_TestAttrs = attrs
+    Set d = SK_LinkInfo()
+    SK_TestAttrs = ""
+    T_SkWarn = d("state") & " | warn=" & d("warn")
+End Function
+
+Public Function T_SkConflictNames() As String
+    Dim v As Variant, s As String
+    For Each v In Array("rules-DESKTOP1.json", "manifest (1).json", "effort-PC.dic", "effort-LAPTOP 7.dotx", "rules.json", _
+                        "rules.json.tmp", "effort.dotx", "notes-x.json", "manifest.json")
+        s = s & v & "=" & SK_IsConflictCopy(CStr(v)) & ";"
+    Next
+    T_SkConflictNames = s
+End Function
+
+' The strip's offer for a document in a folder. arg = "<document folder>|1" to click Use this folder.
+Public Function T_SkSuggest(ByVal arg As String) As String
+    Dim a As Variant
+    a = Split(arg, "|")
+    Load frmSKMenu
+    T_SkSuggest = frmSKMenu.TestSuggest(CStr(a(0)), a(1) = "1")
+    Unload frmSKMenu
+End Function

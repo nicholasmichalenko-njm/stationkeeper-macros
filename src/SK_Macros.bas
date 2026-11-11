@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 1.0.0
+' Stationkeeper Macros 1.1.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.0.0"
+Public Const SK_VERSION As String = "1.1.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -25,6 +25,13 @@ Public SK_LastModuleCount As Long
 Public SK_ScanAvailable As Boolean
 Public SK_Quiet As Boolean
 Public SK_ForceNoAccess As Boolean   ' test switch: behave as if Word blocks the VBA project
+Public SK_TestAttrs As String         ' test switch: file attributes by path ending ("manifest.json=400000;...")
+
+#If VBA7 Then
+Private Declare PtrSafe Function GetFileAttributesW Lib "kernel32" (ByVal lpFileName As LongPtr) As Long
+#Else
+Private Declare Function GetFileAttributesW Lib "kernel32" (ByVal lpFileName As Long) As Long
+#End If
 
 ' ---------------------------------------------------------------------
 ' Entry macros
@@ -1428,7 +1435,7 @@ End Function
 
 ' Reads the link fresh. Keys: folder, dataDir, state, note, effort, revision, published, by, ageHours, parts.
 ' States: Not linked, Folder missing, No data yet, Unreadable, Needs a newer kit, Incomplete, Current, Aging, Stale.
-Public Function SK_LinkInfo() As Object
+Private Function SK_LinkRead() As Object
     Dim d As Object, fso As Object, f As String, dd As String, man As Variant, p As Variant, rules As Variant
     Dim present As String, bad As String, fp As String, pub As Date, warnH As Double, staleH As Double
     Dim fr As Object, eff As Object, ok As Boolean
@@ -1438,7 +1445,7 @@ Public Function SK_LinkInfo() As Object
     Next
     d("ageHours") = 0
     d("cached") = False
-    Set SK_LinkInfo = d
+    Set SK_LinkRead = d
     f = SK_LinkFolder()
     d("folder") = f
     If Len(f) = 0 Then
@@ -1535,6 +1542,121 @@ Unreadable:
     d("state") = "Unreadable"
     d("note") = "The folder has a manifest.json that is not Stationkeeper's, or cannot be read right now. Try again, or pick the effort's folder."
     SK_UseCache d
+End Function
+
+' Reads the link and adds what OneDrive or SharePoint sync could get wrong (1.1.0):
+' files that are online-only or a folder not kept on this device, and conflict copies.
+Public Function SK_LinkInfo() As Object
+    Dim d As Object, w As String
+    Set d = SK_LinkRead()
+    d("warn") = ""
+    If Len(d("dataDir")) > 0 And d("state") <> "Folder missing" Then
+        w = SK_SyncWarnings(d("folder"), d("dataDir"))
+        If Len(w) > 0 Then
+            d("warn") = w
+            d("note") = d("note") & " " & w
+        End If
+    End If
+    Set SK_LinkInfo = d
+End Function
+
+' File attributes, with a test switch (SK_TestAttrs: "path ending=hex;...").
+Public Function SK_FileAttr(ByVal p As String) As Long
+    Dim e As Variant, kv As Variant
+    If Len(SK_TestAttrs) > 0 Then
+        For Each e In Split(SK_TestAttrs, ";")
+            kv = Split(e, "=")
+            If UBound(kv) = 1 Then
+                If LCase$(p) Like "*" & LCase$(Trim$(kv(0))) Then SK_FileAttr = CLng("&H" & Trim$(kv(1))): Exit Function
+            End If
+        Next
+        Exit Function
+    End If
+    SK_FileAttr = GetFileAttributesW(StrPtr(p))
+    If SK_FileAttr = -1 Then SK_FileAttr = 0
+End Function
+
+Public Function SK_SyncWarnings(ByVal f As String, ByVal dd As String) As String
+    Const PINNED As Long = &H80000, UNPINNED As Long = &H100000, RECALL As Long = &H400000, OFFLINE As Long = &H1000
+    Dim fso As Object, fl As Object, a As Long, cloud As Boolean, online As String, nOnline As Long, w As String
+    Dim conf As String, sd As Variant, fldr As String
+    On Error Resume Next
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    ' Online-only files and the folder's keep-on-device setting.
+    a = SK_FileAttr(f)
+    cloud = ((a And (PINNED Or UNPINNED)) <> 0)
+    For Each sd In Array("", "\rules", "\templates", "\dictionaries")
+        fldr = dd & sd
+        If fso.FolderExists(fldr) Then
+            For Each fl In fso.GetFolder(fldr).Files
+                a = SK_FileAttr(fl.Path)
+                If (a And (PINNED Or UNPINNED Or RECALL)) <> 0 Then cloud = True
+                If (a And (RECALL Or OFFLINE)) <> 0 Then
+                    nOnline = nOnline + 1
+                    If nOnline <= 3 Then online = online & IIf(Len(online) > 0, ", ", "") & fl.Name
+                End If
+                ' OneDrive keeps a clashing save as "name-PCNAME.ext" or "name (1).ext".
+                If SK_IsConflictCopy(fl.Name) Then conf = conf & IIf(Len(conf) > 0, ", ", "") & fl.Name
+            Next
+        End If
+    Next
+    If nOnline > 0 Then
+        w = nOnline & " file(s) are online-only (" & online & "). Offline they cannot open, so the tools would use the last complete copy. " & _
+            "Right-click the effort folder > Always keep on this device."
+    ElseIf cloud And (SK_FileAttr(f) And PINNED) = 0 Then
+        w = "The effort folder is synced but not kept on this device. Right-click it > Always keep on this device, so it works offline."
+    End If
+    If Len(conf) > 0 Then
+        w = w & IIf(Len(w) > 0, " ", "") & "OneDrive kept conflicting copies (" & conf & "): two PCs saved this effort at once. " & _
+            "Stationkeeper's files are the ones used; check the effort in Stationkeeper, then delete the copies."
+    End If
+    SK_SyncWarnings = w
+End Function
+
+Public Function SK_IsConflictCopy(ByVal nm As String) As Boolean
+    Dim stem As Variant, ext As String, base As String
+    nm = LCase$(nm)
+    If InStrRev(nm, ".") = 0 Then Exit Function
+    ext = Mid$(nm, InStrRev(nm, "."))
+    base = Left$(nm, Len(nm) - Len(ext))
+    For Each stem In Array("manifest", "rules", "effort")
+        If base <> stem And (base Like stem & "-?*" Or base Like stem & " (*)") Then
+            Select Case ext
+                Case ".json", ".dotx", ".dic": SK_IsConflictCopy = True: Exit Function
+            End Select
+        End If
+    Next
+End Function
+
+' The effort folder this document sits in (it or a folder above holds Stationkeeper Data\manifest.json),
+' when that is not the folder the menu reads. msg says what to offer.
+Public Function SK_SuggestLink(ByVal docPath As String, ByVal info As Object, ByRef msg As String) As String
+    Dim fso As Object, f As String, i As Long, nm As String, man As Variant
+    msg = ""
+    If Len(docPath) = 0 Or LCase$(Left$(docPath, 4)) = "http" Then Exit Function
+    On Error GoTo Done
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    f = docPath
+    For i = 1 To 8
+        If Len(f) = 0 Then Exit For
+        If LCase$(Mid$(f, InStrRev(f, "\") + 1)) <> "stationkeeper data" Then
+            If fso.FileExists(f & "\Stationkeeper Data\manifest.json") Then Exit For
+        End If
+        f = fso.GetParentFolderName(f)
+    Next
+    If Len(f) = 0 Or i > 8 Then Exit Function
+    If Not fso.FileExists(f & "\Stationkeeper Data\manifest.json") Then Exit Function
+    If LCase$(SK_DataDir(f)) = LCase$(info("dataDir")) Then Exit Function
+    Set man = SK_JsonParse(SK_ReadUtf8(f & "\Stationkeeper Data\manifest.json"))
+    If IsObject(man("effort")) Then nm = SK_JGet(man("effort"), "name")
+    If Len(nm) = 0 Then nm = Mid$(f, InStrRev(f, "\") + 1)
+    If info("state") = "Not linked" Then
+        msg = "This document is in the effort folder for " & nm & ". Link it?"
+    Else
+        msg = "This document is in " & nm & ", but the menu reads " & IIf(Len(info("effort")) > 0, info("effort"), Mid$(info("folder"), InStrRev(info("folder"), "\") + 1)) & ". Switch?"
+    End If
+    SK_SuggestLink = f
+Done:
 End Function
 
 ' When the folder cannot be used right now, the tools' last complete copy stands in.

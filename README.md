@@ -74,6 +74,11 @@ The strip under the list shows where the Stationkeeper data comes from, with **L
   - The effort's template becomes StyleSource (Import Team Styles), and its dictionary becomes the Dictionaries list (Load Team Dictionaries).
   - Every report says where its rules came from: "Rules: effort <name> rev <n>, then <workbook>".
 - **A local copy keeps working when the folder can't.** Each complete new revision is copied to this person's profile (`%LOCALAPPDATA%\Stationkeeper Tools\Effort cache`), one effort only. While Stationkeeper is mid-save, OneDrive is mid-sync, or the folder is out of reach, the tools use the last complete copy and say so on the report. Unlink, or linking another folder, removes the copy.
+- **SharePoint and OneDrive checks (1.1.0).** The strip warns when:
+  - the effort folder is synced but not set to **Always keep on this device**, so it would not work offline;
+  - a file in `Stationkeeper Data` is online-only right now (it names the file);
+  - OneDrive kept conflicting copies (`rules-PCNAME.json`, `manifest (1).json`) because two PCs saved the effort at once. The real files are still the ones used.
+- **The link comes to you (1.1.0).** When the document you opened the menu from sits inside an effort folder (that folder or one above it holds `Stationkeeper Data`) and the menu reads another effort or none, the strip offers it: "This document is in Effort B, but the menu reads Effort A. Switch?" with **Use this folder**. Nothing changes until you click it.
 - **Your own macros that need effort data** can call `SK_EffortFile("rules")` (or `"template"`, `"dictionary"`): it returns the file to read now (the live file, else the last complete copy), or "" when there is none.
 
 ## The primary list: update many macros at once
@@ -220,7 +225,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 177 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 187 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -238,7 +243,6 @@ build.ps1, test.ps1
 
 ## Next
 
-- 1.1.0, SharePoint hardening: check the effort folder is kept on the device, spot OneDrive conflict copies, and suggest the link from the document's own folder.
 - 1.2.0, shared findings; 1.3.0, both directions (a hand-filled setup workbook the app imports).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.

@@ -706,6 +706,49 @@ try {
         $doc.Close([ref]0)
     }
 
+    # 17. 1.1.0: SharePoint and OneDrive: keep on this device, conflict copies, the link offered from the document's folder.
+    [string]$effC = Join-Path $work 'Effort C'
+    [string]$effA = Join-Path $work 'Effort A'
+    Remove-Item $effC -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        try {
+            [void](TR1 $word 'T_SkPublish' "$effC|2|2|C Caption")
+            [void](New-Item (Join-Path $effC 'Volume I') -ItemType Directory -Force)
+            [void](TR1 $word 'T_SkMakeData' "$effA|current")
+            [void](TR1 $word 'T_SkLink' '')
+            $sg = TR1 $word 'T_SkSuggest' "$effC\Volume I|0"
+            Check 'not linked, document inside an effort folder: offers to link it' ($sg -eq 'suggest=This document is in the effort folder for Effort B. Link it? [Use this folder]') $sg
+            [void](TR1 $word 'T_SkLink' $effA)
+            $sg = TR1 $word 'T_SkSuggest' "$effC\Volume I|0"
+            Check 'linked to another effort: offers to switch' ($sg -eq 'suggest=This document is in Effort B, but the menu reads Effort A. Switch? [Use this folder]') $sg
+            $sg = TR1 $word 'T_SkSuggest' "$effC\Volume I|1"
+            $lf = TR $word 'T_SkLinkFiles'
+            Check 'Use this folder links the document''s effort, and the offer goes away' (($sg -match 'after: Stationkeeper data: Current  \|  [^|]*\\Effort C /') -and ($sg -match 'suggest now=none') -and ($lf -like 'Current*')) "$sg ;; $lf"
+            $sg = TR1 $word 'T_SkSuggest' "$work|0"
+            $sg2 = TR1 $word 'T_SkSuggest' "https://example.sharepoint.com/sites/p/Shared Documents|0"
+            Check 'no offer for a document outside any effort folder or opened from the web' (($sg -eq 'suggest=none') -and ($sg2 -eq 'suggest=none')) "$sg ;; $sg2"
+
+            $w = TR1 $word 'T_SkWarn' ''
+            Check 'a plain local folder: no sync warning' ($w -eq 'Current | warn=') $w
+            $w = TR1 $word 'T_SkWarn' 'effort c=100000'
+            Check 'synced, not kept on this device: says how to fix it' ($w -match 'warn=The effort folder is synced but not kept on this device\. Right-click it > Always keep on this device') $w
+            $w = TR1 $word 'T_SkWarn' 'effort c=80000'
+            Check 'kept on this device: no warning' ($w -eq 'Current | warn=') $w
+            $w = TR1 $word 'T_SkWarn' 'effort c=80000;rules.json=400000'
+            Check 'an online-only file is named' ($w -match 'warn=1 file\(s\) are online-only \(rules\.json\)\. Offline they cannot open') $w
+            [IO.File]::WriteAllText((Join-Path $effC 'Stationkeeper Data\rules\rules-OTHERPC.json'), '{}')
+            $w = TR1 $word 'T_SkWarn' ''
+            Remove-Item (Join-Path $effC 'Stationkeeper Data\rules\rules-OTHERPC.json') -Force
+            Check 'a OneDrive conflict copy is named; the real files still used' (($w -like 'Current | warn=OneDrive kept conflicting copies (rules-OTHERPC.json)*')) $w
+            $cn = TR $word 'T_SkConflictNames'
+            Check 'conflict-copy names: name-PC and name (1), not the real files or .tmp' ($cn -eq 'rules-DESKTOP1.json=True;manifest (1).json=True;effort-PC.dic=True;effort-LAPTOP 7.dotx=True;rules.json=False;rules.json.tmp=False;effort.dotx=False;notes-x.json=False;manifest.json=False;') $cn
+        }
+        finally { [void](TR1 $word 'T_SkLink' '') }
+        $d.Close([ref]0)
+    }
+
 }
 catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)

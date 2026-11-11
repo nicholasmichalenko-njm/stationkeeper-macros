@@ -18,6 +18,8 @@ Private WithEvents cboShow As MSForms.ComboBox
 Private WithEvents btnLink As MSForms.CommandButton
 Private WithEvents btnRefresh As MSForms.CommandButton
 Private WithEvents btnUnlink As MSForms.CommandButton
+Private WithEvents btnSuggest As MSForms.CommandButton
+Private lblSuggest As MSForms.Label
 Private WithEvents btnAskRun As MSForms.CommandButton
 Private WithEvents btnAskLink As MSForms.CommandButton
 Private WithEvents btnAskCancel As MSForms.CommandButton
@@ -42,6 +44,8 @@ Private mInfo As Object          ' the Stationkeeper link, read fresh (SK_LinkIn
 Private mAskRun As String        ' the macro waiting on the question panel
 Private mAskKind As String       ' "ask" or "needs"
 Private mNeedsOk As Object       ' "Works on" answers met right now, per refresh
+Private mDocPath As String       ' the folder of the document the menu was opened from
+Private mSuggest As String       ' an effort folder to offer (the document's own), or ""
 
 Private Function AddCtl(ByVal progId As String, ByVal nm As String, ByVal l As Single, ByVal t As Single, _
                         ByVal w As Single, ByVal h As Single) As Object
@@ -81,7 +85,7 @@ Private Sub UserForm_Initialize()
     Set mModel = SK_LoadModel()
     Me.Caption = mModel("look")("menuTitle") & "   |   " & ThisDocument.Name
     Me.Width = 672
-    Me.Height = 484
+    Me.Height = 512
     Me.BackColor = &HFFFFFF
 
     AddLabel "lblSearch", "Search", 10, 8, 60, 14
@@ -148,7 +152,7 @@ Private Sub UserForm_Initialize()
     chkKeep.BackStyle = fmBackStyleTransparent
 
     ' The link strip: where the Stationkeeper data comes from.
-    Set lblLink = AddLabel("lblLink", "", 10, 374, 428, 30)
+    Set lblLink = AddLabel("lblLink", "", 10, 374, 428, 42)
     lblLink.WordWrap = True
     Set btnLink = AddCtl("Forms.CommandButton.1", "btnLink", 444, 376, 82, 22)
     Set btnRefresh = AddCtl("Forms.CommandButton.1", "btnRefresh", 530, 376, 58, 22)
@@ -156,9 +160,14 @@ Private Sub UserForm_Initialize()
     Set btnUnlink = AddCtl("Forms.CommandButton.1", "btnUnlink", 592, 376, 58, 22)
     btnUnlink.Caption = "Unlink"
 
-    Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 418, 450, 14)
+    Set lblSuggest = AddLabel("lblSuggest", "", 10, 422, 428, 16)
+    lblSuggest.ForeColor = &H8B4513
+    Set btnSuggest = AddCtl("Forms.CommandButton.1", "btnSuggest", 444, 418, 206, 22)
+    btnSuggest.Caption = "Use this folder"
+
+    Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 448, 450, 14)
     lblStatus.ForeColor = &H808080
-    Set btnClose = AddCtl("Forms.CommandButton.1", "btnClose", 570, 412, 80, 24)
+    Set btnClose = AddCtl("Forms.CommandButton.1", "btnClose", 570, 442, 80, 24)
     btnClose.Caption = "Close"
     btnClose.Cancel = True
 
@@ -233,6 +242,9 @@ Private Sub UserForm_Initialize()
     For i = 0 To cboShow.ListCount - 1
         If LCase$(cboShow.List(i)) = LCase$(v) Then cboShow.ListIndex = i
     Next
+    On Error Resume Next
+    If Documents.Count > 0 Then mDocPath = ActiveDocument.Path
+    On Error GoTo 0
     Set mInfo = SK_LinkInfo()
     ShowLink
 
@@ -571,6 +583,20 @@ Private Sub ShowLink()
     End Select
     btnLink.Caption = IIf(st = "Not linked", "Link a folder...", "Change...")
     btnUnlink.Enabled = (st <> "Not linked")
+    If Len(mInfo("warn")) > 0 And (st = "Current" Or st = "Aging" Or st = "Stale") Then lblLink.ForeColor = &H1A6FB8
+    ' Offer the effort folder this document sits in, when the menu reads another one (or none).
+    Dim msg As String
+    mSuggest = SK_SuggestLink(mDocPath, mInfo, msg)
+    lblSuggest.Caption = msg
+    lblSuggest.Visible = (Len(mSuggest) > 0)
+    btnSuggest.Visible = (Len(mSuggest) > 0)
+End Sub
+
+Private Sub btnSuggest_Click()
+    If Len(mSuggest) = 0 Then Exit Sub
+    SK_SetLinkFolder mSuggest
+    ReadLink
+    lblStatus.Caption = "Linked: " & mInfo("folder")
 End Sub
 
 Private Sub ReadLink()
@@ -746,6 +772,18 @@ Public Function TestGate(ByVal run As String) As String
         IIf(btnAskRun.Visible, btnAskRun.Caption & ", ", "") & btnAskLink.Caption & ", " & btnAskCancel.Caption & _
         IIf(chkAskNever.Visible, " | " & chkAskNever.Caption, "")
     HideAsk
+End Function
+
+' Tests: what the strip offers for a document in docFolder, then (use=True) clicks Use this folder.
+Public Function TestSuggest(ByVal docFolder As String, ByVal useIt As Boolean) As String
+    mDocPath = docFolder
+    Set mInfo = SK_LinkInfo()
+    ShowLink
+    TestSuggest = "suggest=" & IIf(btnSuggest.Visible, lblSuggest.Caption & " [" & btnSuggest.Caption & "]", "none")
+    If useIt And btnSuggest.Visible Then
+        btnSuggest_Click
+        TestSuggest = TestSuggest & " || after: " & Replace(lblLink.Caption, vbCrLf, " / ") & " | suggest now=" & IIf(btnSuggest.Visible, "shown", "none")
+    End If
 End Function
 
 Public Function TestLink() As String
