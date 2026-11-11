@@ -15,6 +15,7 @@ Private WithEvents btnPin As MSForms.CommandButton
 Private WithEvents btnClose As MSForms.CommandButton
 Private WithEvents chkKeep As MSForms.CheckBox
 Private WithEvents cboShow As MSForms.ComboBox
+Private WithEvents cboCat As MSForms.ComboBox
 Private WithEvents btnLink As MSForms.CommandButton
 Private WithEvents btnRefresh As MSForms.CommandButton
 Private WithEvents btnUnlink As MSForms.CommandButton
@@ -89,31 +90,36 @@ Private Sub UserForm_Initialize()
     Me.BackColor = &HFFFFFF
 
     AddLabel "lblSearch", "Search", 10, 8, 60, 14
-    Set lblCount = AddLabel("lblCount", "", 100, 8, 150, 14)
+    Set lblCount = AddLabel("lblCount", "", 50, 8, 120, 14)
     lblCount.TextAlign = fmTextAlignRight
     lblCount.ForeColor = &H808080
-    Set txtSearch = AddCtl("Forms.TextBox.1", "txtSearch", 10, 22, 240, 20)
+    Set txtSearch = AddCtl("Forms.TextBox.1", "txtSearch", 10, 22, 160, 20)
     txtSearch.Font.Size = 10
 
-    AddLabel "lblShow", "Show", 258, 8, 100, 14
-    Set cboShow = AddCtl("Forms.ComboBox.1", "cboShow", 258, 22, 116, 20)
+    AddLabel "lblShow", "Show", 176, 8, 100, 14
+    Set cboShow = AddCtl("Forms.ComboBox.1", "cboShow", 176, 22, 100, 20)
     cboShow.Style = fmStyleDropDownList
     cboShow.AddItem "All macros"
-    cboShow.AddItem "My macros"
-    cboShow.AddItem "Stationkeeper tools"
+    cboShow.AddItem "Stationkeeper"
+    cboShow.AddItem "Other"
     cboShow.AddItem "Needs effort data"
     cboShow.AddItem "Ready to run now"
+    cboShow.ControlTipText = "Stationkeeper: made for Stationkeeper. Other: not made for Stationkeeper."
 
-    AddLabel "lblSort", "Sort by", 382, 8, 80, 14
-    Set cboSort = AddCtl("Forms.ComboBox.1", "cboSort", 382, 22, 84, 20)
+    AddLabel "lblCat", "Category", 282, 8, 100, 14
+    Set cboCat = AddCtl("Forms.ComboBox.1", "cboCat", 282, 22, 110, 20)
+    cboCat.Style = fmStyleDropDownList
+
+    AddLabel "lblSort", "Sort by", 398, 8, 70, 14
+    Set cboSort = AddCtl("Forms.ComboBox.1", "cboSort", 398, 22, 72, 20)
     cboSort.Style = fmStyleDropDownList
     cboSort.AddItem "Category"
     cboSort.AddItem "A to Z"
     cboSort.AddItem "Most used"
     cboSort.AddItem "Recent"
 
-    AddLabel "lblAff", "What it affects", 474, 8, 160, 14
-    Set cboAffects = AddCtl("Forms.ComboBox.1", "cboAffects", 474, 22, 176, 20)
+    AddLabel "lblAff", "What it affects", 476, 8, 160, 14
+    Set cboAffects = AddCtl("Forms.ComboBox.1", "cboAffects", 476, 22, 174, 20)
     cboAffects.Style = fmStyleDropDownList
 
     Set lstMacros = AddCtl("Forms.ListBox.1", "lstMacros", 10, 50, 300, 298)
@@ -238,6 +244,8 @@ Private Sub UserForm_Initialize()
     Next
     chkKeep.Value = (SK_GetPref("keepOpen", mModel("look")("keepOpen")) = "1")
     v = SK_GetPref("show", "All macros")
+    If v = "My macros" Then v = "Other"                    ' names before 1.3.0
+    If v = "Stationkeeper tools" Then v = "Stationkeeper"
     cboShow.ListIndex = 0
     For i = 0 To cboShow.ListCount - 1
         If LCase$(cboShow.List(i)) = LCase$(v) Then cboShow.ListIndex = i
@@ -247,6 +255,7 @@ Private Sub UserForm_Initialize()
     On Error GoTo 0
     Set mInfo = SK_LinkInfo()
     ShowLink
+    FillCats
 
     mBusy = False
     RefreshList
@@ -340,7 +349,7 @@ Private Sub RefreshList()
 
     For i = 1 To n
         Set e = mItems(i)
-        If (Len(aff) = 0 Or HasAffect(e, aff)) And ShowPasses(e, flt) Then
+        If (Len(aff) = 0 Or HasAffect(e, aff)) And ShowPasses(e, flt) And CatPasses(e) Then
             s = 0: w = ""
             If Len(q) > 0 Then s = ScoreEntry(e, q, w)
             If Len(q) = 0 Or s > 0 Then
@@ -552,15 +561,54 @@ End Sub
 ' Stationkeeper: the filter, the link strip, the question panel
 ' ---------------------------------------------------------------------
 Private Function IsSkTool(ByVal e As Object) As Boolean
-    IsSkTool = (SK_ModulePart(e("run")) Like "SK[WPX]_*")
+    IsSkTool = (SK_ModulePart(e("run")) Like "SK[WPX]_*") Or (LCase$(SK_ModulePart(e("run"))) = "sk_install") Or (LCase$(SK_ModulePart(e("run"))) = "sk_macros")
 End Function
+
+' The Category list: the admin's categories in order, then any others macros use, then (No category).
+Private Sub FillCats()
+    Dim v As Variant, e As Object, seen As Object, blank As Boolean, keep As String, i As Long
+    keep = SK_GetPref("category", "All categories")
+    cboCat.Clear
+    cboCat.AddItem "All categories"
+    Set seen = CreateObject("Scripting.Dictionary")
+    For Each v In mModel("cats")
+        If Not seen.Exists(LCase$(v)) Then cboCat.AddItem v: seen(LCase$(v)) = True
+    Next
+    For Each e In mItems
+        If Len(Trim$(e("category"))) = 0 Then
+            blank = True
+        ElseIf Not seen.Exists(LCase$(e("category"))) Then
+            cboCat.AddItem e("category"): seen(LCase$(e("category"))) = True
+        End If
+    Next
+    If blank Then cboCat.AddItem "(No category)"
+    cboCat.ListIndex = 0
+    For i = 0 To cboCat.ListCount - 1
+        If LCase$(cboCat.List(i)) = LCase$(keep) Then cboCat.ListIndex = i
+    Next
+End Sub
+
+Private Function CatPasses(ByVal e As Object) As Boolean
+    If cboCat.ListIndex <= 0 Then CatPasses = True: Exit Function
+    If cboCat.Text = "(No category)" Then
+        CatPasses = (Len(Trim$(e("category"))) = 0)
+    Else
+        CatPasses = (LCase$(e("category")) = LCase$(cboCat.Text))
+    End If
+End Function
+
+Private Sub cboCat_Change()
+    If mBusy Then Exit Sub
+    SK_SetPref "category", cboCat.Text
+    RefreshList
+End Sub
 
 Private Function ShowPasses(ByVal e As Object, ByVal flt As String) As Boolean
     Dim k As String, why As String, w As String
     k = SK_SkKind(e("stationkeeper"))
     Select Case flt
-        Case "My macros": ShowPasses = (k = "none" And Not IsSkTool(e))
-        Case "Stationkeeper tools": ShowPasses = (k <> "none" Or IsSkTool(e))
+        Case "Other": ShowPasses = (k = "none" And Not IsSkTool(e))
+        Case "Stationkeeper": ShowPasses = (k <> "none" Or IsSkTool(e))
         Case "Needs effort data": ShowPasses = (k = "needs")
         Case "Ready to run now"
             w = LCase$(e("workson"))
@@ -754,6 +802,24 @@ Public Function TestShow(ByVal flt As String) As String
         s = s & " [" & lstMacros.List(i, 0) & IIf(Len(b) > 0, " " & b, "") & "]"
     Next
     TestShow = s
+End Function
+
+' The list under a Show choice and a Category choice; the category choices first.
+Public Function TestCat(ByVal flt As String, ByVal cat As String) As String
+    Dim s As String, i As Long
+    For i = 0 To cboCat.ListCount - 1
+        s = s & cboCat.List(i) & "|"
+    Next
+    txtSearch.Text = ""
+    cboShow.Text = flt
+    cboCat.Text = cat
+    s = s & " -> " & lstMacros.ListCount & ":"
+    For i = 0 To lstMacros.ListCount - 1
+        s = s & " [" & lstMacros.List(i, 0) & "]"
+    Next
+    cboCat.ListIndex = 0
+    cboShow.ListIndex = 0
+    TestCat = s
 End Function
 
 ' What Run does for a macro, without running it: the panel it shows, or "run".

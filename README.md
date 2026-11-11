@@ -25,18 +25,21 @@ It works with whatever macros are already in the template: one module or many. I
 3. View > Macros > `StationkeeperMacrosInstall` > Run. Pick your template (it must be closed, or open and saved).
 4. The kit adds three items to the template: module `SK_Macros` and forms `frmSKMenu` and `frmSKAdmin`. Running it again updates them. `StationkeeperMacrosRemove` takes them back out.
 
+The kit's own menu (open the kit, then `StationkeeperMacros`) lists the four installers and **Add Macros From Template**, described, under the category **Install and add**.
+
 **Way 2, VBA editor:** open the template, Alt+F11, File > Import File, and import the three files from `Import files/`. Keep each `.frx` beside its `.frm`. Save the template.
 
 ## First time in a template (the admin)
 
 1. Open the template itself (File > Open the .dotm).
 2. View > Macros > `StationkeeperMacrosAdmin` > Run.
-3. On **Macros**, the list has three columns: the macro, **In menu** (Shown, Hidden, Not set, or Macro gone) and **Description** (Written or Missing). Use **Show** to list only the ones still missing a description or not yet in the menu. Pick each macro and fill in Title, Description, Category, Keywords, **What this macro affects** and **Does this change the document?** Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
+3. On **Macros**, the list has three columns: the macro, **In menu** (Shown, Hidden, Not set, or Macro gone) and **Description** (Written or Missing). **Show** narrows the list: **All visible** (everything not hidden), **Stationkeeper** (made for Stationkeeper), **Hidden**, **Description missing**, and **Other** (not made for Stationkeeper). **Category** narrows it further to one of your categories, so **Stationkeeper** plus a category shows just those tools. Tests and the code health check are on **Bulk tools**. Pick each macro and fill in Title, Description, Category, Keywords, **What this macro affects** and **Does this change the document?** Tick **Show in the menu** for the ones people should see. **Use code comment** copies the comment above the macro into the description.
 4. **Bulk tools** work on the whole list at once: **Fill blank descriptions from code comments**, **Show every described macro in the menu**, **Remove macros that are gone**, export and import for Excel, and **Read macros from .bas files**. Each button has a sentence beside it saying what it does.
 5. Faster for many macros: keep a **primary list** (see below).
 6. **Categories** sets your own categories and their order.
-7. **Settings** sets the menu title, the default sort, two ways to open the menu (**Alt+Shift+M** and a button on the **Add-ins** tab), and **where backups go**.
-8. Tick **Ready to save**, then **Save to template**. The first time, the admin asks where backups should go (a folder beside the template is suggested). You can change it on **Settings**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
+7. **Add from a template** copies whole modules of macros in from another template (Word's Organizer): **Pick a template...** lists its modules with their kind, how many macros, which macros, and whether a module of that name is already here. Tick modules and **Copy the ticked modules in**. A module already here is left alone unless you tick **Replace**; the kit's own modules are never copied. A dated backup of this template comes first, the new macros join the list described from the other template's catalog when it has one, and **Save** keeps them. The same tab opens from `AddMacrosFromTemplate` (View > Macros).
+8. **Settings** sets the menu title, the default sort, two ways to open the menu (**Alt+Shift+M** and a button on the **Add-ins** tab), and **where backups go**.
+9. Tick **Ready to save**, then **Save to template**. The first time, the admin asks where backups should go (a folder beside the template is suggested). You can change it on **Settings**. Save stays off until there is a change and the box is ticked. Each save makes a dated backup of the template first, adds a line to **History**, and clears the tick.
 
 ## Using the menu
 
@@ -58,7 +61,7 @@ The menu is a general macro menu. Each macro is one of three kinds (the admin's 
 | Built for Stationkeeper | ◇ SK | Runs on its own. If no effort folder is linked, it asks first: "This is built for Stationkeeper but is still functional. Would you like to run it?" with **Run it**, **Link a folder...**, **Cancel** and **Don't ask again**. |
 | Needs Stationkeeper data | ◆ SK | Runs only when the linked effort has the data it needs (the effort rules, template or dictionary). If not, it says "This macro is used with the Stationkeeper application. Please point to the Stationkeeper data folder for your effort.", names the files it needs and where Stationkeeper writes them, says what is wrong right now, and offers **Point to the folder...**. |
 
-**Show** filters the list: All macros, My macros, Stationkeeper tools, Needs effort data, and Ready to run now (what can run right now, given the selection and the link).
+**Show** filters the list: All macros, Stationkeeper (made for Stationkeeper), Other (not made for Stationkeeper), Needs effort data, and Ready to run now (what can run right now, given the selection and the link). **Category** narrows it to one of your categories (the admin's order first), so you can see, for example, just the Stationkeeper tools in Tables.
 
 ### The Stationkeeper link
 
@@ -114,7 +117,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 61 tools in 0.9.0)
+## Stationkeeper Tools (0.4.0 and later; 63 tools in 1.3.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -225,7 +228,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 187 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 200 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -243,7 +246,8 @@ build.ps1, test.ps1
 
 ## Next
 
-- 1.2.0, shared findings; 1.3.0, both directions (a hand-filled setup workbook the app imports).
+- PowerPoint fixes: template layouts, fonts, overlaps, slide numbers, banned phrases, a media list.
+- Shared findings with the Stationkeeper app; both directions (a hand-filled setup workbook the app imports).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

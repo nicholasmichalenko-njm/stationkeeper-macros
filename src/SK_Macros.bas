@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 1.2.0
+' Stationkeeper Macros 1.3.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.2.0"
+Public Const SK_VERSION As String = "1.3.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -25,6 +25,7 @@ Public SK_LastModuleCount As Long
 Public SK_ScanAvailable As Boolean
 Public SK_Quiet As Boolean
 Public SK_ForceNoAccess As Boolean   ' test switch: behave as if Word blocks the VBA project
+Public SK_AdminStartPage As Long     ' the admin opens on this tab (Add Macros From Template sets 4)
 Public SK_TestAttrs As String         ' test switch: file attributes by path ending ("manifest.json=400000;...")
 
 #If VBA7 Then
@@ -46,11 +47,250 @@ End Sub
 
 Public Sub StationkeeperMacrosAdmin()
     On Error GoTo Fail
+    Load frmSKAdmin
+    If SK_AdminStartPage > 0 Then frmSKAdmin.ShowPage SK_AdminStartPage
     frmSKAdmin.Show vbModal
     Exit Sub
 Fail:
     MsgBox "The admin could not open." & vbCr & Err.Description, vbExclamation, SK_APP
 End Sub
+
+' ---------------------------------------------------------------------
+' Kit macros that show in the kit's own menu (1.3.0): the installers and
+' Add Macros From Template. Other templates run Add Macros From Template
+' from View > Macros or the admin's Add from a template tab.
+' ---------------------------------------------------------------------
+Public Function SK_KitList() As String
+    Dim s As String
+    If Not SK_HasInstaller() Then SK_KitList = "[]": Exit Function
+    s = "[" & SK_KitRow("SK_Macros.AddMacrosFromTemplate", "Add Macros From Template", _
+        "Copies whole modules of macros from another template into this one, with Word's Organizer. Pick the template, tick the modules, copy. " & _
+        "Their descriptions come along when that template has a catalog. Opens the admin on its Add from a template tab.", _
+        "add macros; import module; copy module; organizer; other template; install", "Yes")
+    If SK_HasInstaller() Then
+        s = s & "," & SK_KitRow("SK_Install.StationkeeperMacrosInstall", "Install the Menu and Admin in a Template", _
+            "Adds (or updates) the Stationkeeper Macros menu and admin in a template you pick. Your own macros and the catalog stay. A dated backup comes first.", _
+            "install; menu; admin; kit; update kit", "Yes")
+        s = s & "," & SK_KitRow("SK_Install.StationkeeperMacrosRemove", "Remove the Menu and Admin from a Template", _
+            "Takes the menu and admin back out of a template you pick. Your macros and the catalog of descriptions stay. A dated backup comes first.", _
+            "remove; uninstall; menu; admin; kit", "Yes")
+        s = s & "," & SK_KitRow("SK_Install.StationkeeperToolsInstall", "Install Stationkeeper Tools in a Template", _
+            "Adds (or updates) the Stationkeeper Tools modules in a template you pick. They arrive described in its menu. A dated backup comes first.", _
+            "install; tools; stationkeeper tools; update tools", "Yes")
+        s = s & "," & SK_KitRow("SK_Install.StationkeeperToolsRemove", "Remove Stationkeeper Tools from a Template", _
+            "Takes the Stationkeeper Tools modules back out of a template you pick. Your own macros, the menu and the catalog stay.", _
+            "remove; uninstall; tools", "Yes")
+    End If
+    SK_KitList = s & "]"
+End Function
+
+Private Function SK_KitRow(ByVal run As String, ByVal title As String, ByVal desc As String, ByVal kw As String, ByVal shown As String) As String
+    SK_KitRow = "{""Macro"": """ & run & """, ""Title"": """ & title & """, ""Category"": ""Install and add"", " & _
+        """Description"": """ & Replace(desc, """", "\""") & """, ""Keywords"": """ & kw & """, ""Affects"": ""Template"", " & _
+        """Works on"": ""Template"", ""Changes"": ""No"", ""Show in menu"": """ & shown & """, ""Stationkeeper"": ""Not related""}"
+End Function
+
+' True in the kit, where SK_Install lives (by its code when Word lets us look, else by its file name).
+Public Function SK_HasInstaller() As Boolean
+    Dim c As Object
+    On Error Resume Next
+    If Not SK_ForceNoAccess Then
+        Set c = ThisDocument.VBProject.VBComponents("SK_Install")
+        If Err.Number = 0 Then SK_HasInstaller = Not c Is Nothing: Exit Function
+        Err.Clear
+        If ThisDocument.VBProject.VBComponents.Count > 0 And Err.Number = 0 Then Exit Function   ' we can look, and it is not here
+        Err.Clear
+    End If
+    SK_HasInstaller = (LCase$(ThisDocument.Name) Like "stationkeeper macros kit*")
+End Function
+
+Private Function SK_IsKitMacro(ByVal modName As String, ByVal nm As String) As Boolean
+    Select Case LCase$(modName) & "." & LCase$(nm)
+        Case "sk_macros.addmacrosfromtemplate", "sk_install.stationkeepermacrosinstall", "sk_install.stationkeepermacrosremove", _
+             "sk_install.stationkeepertoolsinstall", "sk_install.stationkeepertoolsremove"
+            SK_IsKitMacro = True
+    End Select
+End Function
+
+' Opens the admin on its Add from a template tab.
+Public Sub AddMacrosFromTemplate()
+    SK_AdminStartPage = 4
+    StationkeeperMacrosAdmin
+    SK_AdminStartPage = 0
+End Sub
+
+' ---------------------------------------------------------------------
+' Add from another template (1.3.0): read its modules, copy them in.
+' ---------------------------------------------------------------------
+' Opens a template read-only (Auto macros off), lists its modules, reads its catalog.
+' Each item: name, kind (Module, Class, Form), macros (count), runs, here (Yes/No/?), skip (why, or "").
+Public Function SK_ReadTemplateModules(ByVal path As String, ByRef catXml As String, ByRef how As String) As Collection
+    Dim res As New Collection, d As Object, opened As Boolean, comp As Object, it As Object, found As New Collection
+    Dim p As Object, mine As Object, okHere As Boolean, nm As String, dd As Object, k As Variant, mods As Object
+    catXml = "": how = ""
+    If LCase$(path) = LCase$(ThisDocument.FullName) Then how = "That is this template.": Set SK_ReadTemplateModules = res: Exit Function
+    ' Modules already here (when Word lets the admin look).
+    Set mine = CreateObject("Scripting.Dictionary")
+    On Error Resume Next
+    For Each comp In ThisDocument.VBProject.VBComponents
+        mine(LCase$(comp.Name)) = True
+    Next
+    okHere = (Err.Number = 0) And Not SK_ForceNoAccess
+    Err.Clear
+    On Error GoTo Fail
+    For Each d In Documents
+        If LCase$(d.FullName) = LCase$(path) Then Exit For
+    Next
+    If d Is Nothing Then
+        WordBasic.DisableAutoMacros 1
+        Set d = Documents.Open(FileName:=path, ReadOnly:=True, AddToRecentFiles:=False, Visible:=False)
+        WordBasic.DisableAutoMacros 0
+        opened = True
+    End If
+    For Each p In d.CustomXMLParts
+        If p.NamespaceURI = SK_NS Then catXml = p.XML: Exit For
+    Next
+    On Error Resume Next
+    Set comp = Nothing
+    For Each comp In d.VBProject.VBComponents
+        If Err.Number <> 0 Then Exit For
+        If comp.Type = 1 Or comp.Type = 2 Or comp.Type = 3 Then
+            Set it = CreateObject("Scripting.Dictionary")
+            it("name") = comp.Name
+            it("kind") = Choose(comp.Type, "Module", "Class", "Form")
+            Set found = New Collection
+            If comp.Type = 1 And comp.CodeModule.CountOfLines > 0 Then SK_ScanLines comp.Name, Split(comp.CodeModule.Lines(1, comp.CodeModule.CountOfLines), vbCrLf), found
+            it("macros") = found.Count
+            it("runs") = ""
+            For Each dd In found
+                it("runs") = it("runs") & IIf(Len(it("runs")) > 0, ", ", "") & dd("name")
+            Next
+            it("here") = IIf(okHere, IIf(mine.Exists(LCase$(comp.Name)), "Yes", "No"), "?")
+            it("skip") = IIf(SK_IsKitName(comp.Name), "Part of the kit: install or update it with the kit's installer", "")
+            res.Add it
+        End If
+    Next
+    If Err.Number = 0 And res.Count > 0 Then
+        how = "its code"
+    Else
+        ' Word will not show the code: the catalog still names each macro's module.
+        Err.Clear
+        how = "its catalog (Word does not allow looking inside its code on this PC)"
+        Set mods = CreateObject("Scripting.Dictionary")
+        For Each dd In SK_EntriesFromXml(catXml)
+            nm = SK_ModulePart(dd("run"))
+            If Len(nm) > 0 Then mods(nm) = mods(nm) & IIf(Len(mods(nm)) > 0, ", ", "") & SK_NamePart(dd("run"))
+        Next
+        For Each k In mods.Keys
+            Set it = CreateObject("Scripting.Dictionary")
+            it("name") = k: it("kind") = "Module": it("runs") = mods(k)
+            it("macros") = UBound(Split(mods(k), ", ")) + 1
+            it("here") = IIf(okHere, IIf(mine.Exists(LCase$(k)), "Yes", "No"), "?")
+            it("skip") = IIf(SK_IsKitName(CStr(k)), "Part of the kit: install or update it with the kit's installer", "")
+            res.Add it
+        Next
+        If res.Count = 0 Then how = "nothing: Word does not allow looking inside its code on this PC, and it has no catalog"
+    End If
+    On Error GoTo 0
+    If opened Then d.Close SaveChanges:=0
+    Set SK_ReadTemplateModules = res
+    Exit Function
+Fail:
+    how = "nothing: " & Err.Description
+    WordBasic.DisableAutoMacros 0
+    On Error Resume Next
+    If opened Then d.Close SaveChanges:=0
+    Set SK_ReadTemplateModules = res
+End Function
+
+' Catalog entries in a catalog's XML text.
+Public Function SK_EntriesFromXml(ByVal xml As String) As Collection
+    Dim res As New Collection, dom As Object, nd As Object
+    Set SK_EntriesFromXml = res
+    If Len(xml) = 0 Then Exit Function
+    Set dom = CreateObject("MSXML2.DOMDocument.6.0")
+    dom.async = False
+    dom.setProperty "SelectionNamespaces", "xmlns:s='" & SK_NS & "'"
+    If Not dom.LoadXML(xml) Then Exit Function
+    For Each nd In dom.SelectNodes("/s:macros/s:macro")
+        res.Add SK_EntryFromNode(nd)
+    Next
+End Function
+
+' Copies modules from src into this template with Word's Organizer. A dated backup of this template comes first.
+' A module already here is left alone unless replaceSame; kit modules are never touched. Nothing is saved:
+' the admin's Save keeps the change. copied lists the modules copied in.
+Public Function SK_CopyModulesIn(ByVal src As String, ByVal names As Collection, ByVal replaceSame As Boolean, _
+                                 ByRef copied As Collection) As String
+    Dim nm As Variant, msg As String, bdir As String, dst As String, done As String, skipped As String, there As Boolean, comp As Object
+    Set copied = New Collection
+    bdir = SK_BackupDir()
+    If Len(bdir) > 0 Then
+        On Error Resume Next
+        dst = bdir & "\" & SK_BaseName() & " - before adding modules " & Format$(Now, "yyyy-mm-dd hhnnss") & SK_Ext()
+        CreateObject("Scripting.FileSystemObject").CopyFile ThisDocument.FullName, dst, True
+        If Err.Number <> 0 Then msg = "No backup made (" & Err.Description & ")." & vbCr: dst = ""
+        Err.Clear
+        On Error GoTo 0
+    Else
+        msg = "No backup made: no backup folder is chosen (Settings tab)." & vbCr
+    End If
+    For Each nm In names
+        If SK_IsKitName(CStr(nm)) Then
+            skipped = skipped & vbCr & "  " & nm & ": part of the kit"
+        Else
+            there = False
+            On Error Resume Next
+            Set comp = Nothing
+            Set comp = ThisDocument.VBProject.VBComponents(CStr(nm))
+            there = Not comp Is Nothing
+            Err.Clear
+            If there And Not replaceSame Then
+                skipped = skipped & vbCr & "  " & nm & ": already here (tick Replace to update it)"
+            Else
+                If there Then Application.OrganizerDelete Source:=ThisDocument.FullName, Name:=CStr(nm), Object:=3
+                If Err.Number = 0 Then Application.OrganizerCopy Source:=src, Destination:=ThisDocument.FullName, Name:=CStr(nm), Object:=3
+                If Err.Number = 0 Then
+                    copied.Add CStr(nm)
+                    done = done & IIf(Len(done) > 0, ", ", "") & nm & IIf(there, " (replaced)", "")
+                Else
+                    skipped = skipped & vbCr & "  " & nm & ": " & Err.Description
+                    Err.Clear
+                End If
+            End If
+            On Error GoTo 0
+        End If
+    Next
+    msg = msg & IIf(copied.Count > 0, "Copied in from " & Mid$(src, InStrRev(src, "\") + 1) & ": " & done & ".", "Nothing copied in.")
+    If Len(skipped) > 0 Then msg = msg & vbCr & "Left alone:" & skipped
+    If Len(dst) > 0 Then msg = msg & vbCr & "Backup: " & dst
+    SK_CopyModulesIn = msg
+End Function
+
+' After a copy: the new macros join the catalog, with the source catalog's details when it has them.
+Public Function SK_TakeEntries(ByVal m As Object, ByVal catXml As String, ByVal copied As Collection) As Long
+    Dim src As Object, e As Object, f As Variant, mods As Object, nm As Variant, n As Long
+    Set mods = CreateObject("Scripting.Dictionary")
+    For Each nm In copied
+        mods(LCase$(nm)) = True
+    Next
+    SK_MergeFound m, SK_Scan()
+    For Each src In SK_EntriesFromXml(catXml)
+        If mods.Exists(LCase$(SK_ModulePart(src("run")))) Then
+            Set e = SK_FindEntry(m, src("run"))
+            If Not e Is Nothing Then
+                If Len(Trim$(e("description"))) = 0 Then
+                    For Each f In Array("title", "category", "description", "keywords", "affects", "workson", "changes", "stationkeeper", "shown")
+                        e(f) = src(f)
+                    Next
+                    If Len(e("category")) > 0 Then SK_AddUnique m("cats"), e("category")
+                    n = n + 1
+                End If
+            End If
+        End If
+    Next
+    SK_TakeEntries = n
+End Function
 
 ' ---------------------------------------------------------------------
 ' Finding the macros in this template
@@ -87,6 +327,10 @@ Public Function SK_Scan() As Collection
                     If cm.CountOfLines > 0 Then
                         SK_ScanLines comp.Name, Split(cm.Lines(1, cm.CountOfLines), vbCrLf), res
                     End If
+                ElseIf (LCase$(comp.Name) = "sk_install" Or LCase$(comp.Name) = "sk_macros") And SK_HasInstaller() Then
+                    ' The kit's own macros that belong in the menu (installers, Add Macros From Template).
+                    Set cm = comp.CodeModule
+                    If cm.CountOfLines > 0 Then SK_ScanLines comp.Name, Split(cm.Lines(1, cm.CountOfLines), vbCrLf), res, True
                 End If
             End If
         Next
@@ -130,7 +374,8 @@ Public Function SK_ReadBasFiles(ByVal paths As Collection) As Collection
 End Function
 
 ' The parser shared by the live scan and .bas files. lines is a 0-based array.
-Private Sub SK_ScanLines(ByVal modName As String, ByVal lines As Variant, ByVal res As Collection)
+Private Sub SK_ScanLines(ByVal modName As String, ByVal lines As Variant, ByVal res As Collection, _
+                         Optional ByVal kitOnly As Boolean = False)
     Dim i As Long, total As Long, startLine As Long, ln As String, nm As String, d As Object, t As String
     total = UBound(lines)
     For i = 0 To total
@@ -146,7 +391,12 @@ Private Sub SK_ScanLines(ByVal modName As String, ByVal lines As Variant, ByVal 
             i = i + 1
             ln = Left$(RTrim$(ln), Len(RTrim$(ln)) - 1) & " " & Trim$(lines(i))
         Loop
-        nm = SK_MacroNameFromLine(ln)
+        If kitOnly Then
+            nm = SK_MacroNameFromLine(ln, True)
+            If Not SK_IsKitMacro(modName, nm) Then nm = ""
+        Else
+            nm = SK_MacroNameFromLine(ln)
+        End If
         If Len(nm) > 0 Then
             Set d = CreateObject("Scripting.Dictionary")
             d("run") = modName & "." & nm
@@ -159,7 +409,7 @@ Private Sub SK_ScanLines(ByVal modName As String, ByVal lines As Variant, ByVal 
     Loop
 End Sub
 
-Private Function SK_MacroNameFromLine(ByVal ln As String) As String
+Private Function SK_MacroNameFromLine(ByVal ln As String, Optional ByVal anyName As Boolean = False) As String
     Dim s As String, low As String, nm As String
     Dim p As Long, q As Long
     s = Trim$(ln)
@@ -183,7 +433,7 @@ Private Function SK_MacroNameFromLine(ByVal ln As String) As String
         Case "autoexec", "autonew", "autoopen", "autoclose", "autoexit"
             Exit Function
     End Select
-    If SK_IsKitName(nm) Then Exit Function
+    If SK_IsKitName(nm) And Not anyName Then Exit Function
     SK_MacroNameFromLine = nm
 End Function
 
@@ -442,10 +692,18 @@ End Function
 ' catalog arrives with its title, category and description, and in the menu.
 ' Without VBA project access, tools that answer are added as found.
 Private Sub SK_PrefillTools(ByVal entries As Collection)
-    Dim js As String, rows As Collection, r As Object, e As Object, hit As Object, f As Variant
+    SK_PrefillFrom entries, SK_KitList()
+    Dim js As String
     On Error Resume Next
     js = Application.Run("SKW_Setup.SKW_ToolList")
     If Err.Number <> 0 Or Len(js) = 0 Then Exit Sub
+    On Error GoTo 0
+    SK_PrefillFrom entries, js
+End Sub
+
+Private Sub SK_PrefillFrom(ByVal entries As Collection, ByVal js As String)
+    Dim rows As Collection, r As Object, e As Object, hit As Object, f As Variant
+    On Error Resume Next
     Set rows = SK_RowsFromJsonText(js)
     If Err.Number <> 0 Or rows Is Nothing Then Exit Sub
     On Error GoTo 0

@@ -328,7 +328,7 @@ Public Function T_SkMenu() As String
     Dim s As String, k As Variant
     Load frmSKMenu
     s = "LINK " & frmSKMenu.TestLink()
-    For Each k In Array("Needs effort data", "Stationkeeper tools", "My macros", "Ready to run now")
+    For Each k In Array("Needs effort data", "Stationkeeper", "Other", "Ready to run now")
         s = s & " || " & UCase$(k) & " " & frmSKMenu.TestShow(CStr(k))
     Next
     s = s & " || GATE built: " & frmSKMenu.TestGate("Module1.ShowHiddenText")
@@ -431,4 +431,69 @@ Public Function T_SkSuggest(ByVal arg As String) As String
     Load frmSKMenu
     T_SkSuggest = frmSKMenu.TestSuggest(CStr(a(0)), a(1) = "1")
     Unload frmSKMenu
+End Function
+
+' ---------------------------------------------------------------------
+' 1.3.0: kit macros in the kit's menu, Add from a template, the filters
+' ---------------------------------------------------------------------
+Public Function T_KitEntries() As String
+    Dim m As Object, e As Object, s As String
+    Set m = SK_LoadModel()
+    s = "installer=" & SK_HasInstaller() & " |"
+    For Each e In m("entries")
+        Select Case LCase$(SK_ModulePart(e("run")))
+            Case "sk_install", "sk_macros"
+                s = s & " " & e("run") & "[" & e("title") & "/" & e("category") & "/" & e("shown") & "/" & e("found") & "]"
+        End Select
+    Next
+    T_KitEntries = s
+End Function
+
+' arg = "<Show>|<Category>"
+Public Function T_MenuCat(ByVal arg As String) As String
+    Dim a As Variant
+    a = Split(arg, "|")
+    Load frmSKMenu
+    T_MenuCat = frmSKMenu.TestCat(CStr(a(0)), CStr(a(1)))
+    Unload frmSKMenu
+End Function
+
+Public Function T_HideForTest(ByVal key As String) As String
+    Dim m As Object, e As Object
+    Set m = SK_LoadModel()
+    Set e = SK_FindEntry(m, key)
+    If e Is Nothing Then T_HideForTest = "missing": Exit Function
+    e("shown") = "0"
+    T_HideForTest = Split(SK_SaveModel(m, "self-test: hide " & key), vbCr)(0)
+End Function
+
+Public Function T_AdminFilters() As String
+    Dim s As String
+    SK_Quiet = True
+    Load frmSKAdmin
+    s = "choices: " & frmSKAdmin.TestFilterChoices()
+    s = s & " || ALL " & frmSKAdmin.TestShowFilter("All visible", "")
+    s = s & " || SK " & frmSKAdmin.TestShowFilter("Stationkeeper", "")
+    s = s & " || OTHER " & frmSKAdmin.TestShowFilter("Other", "")
+    s = s & " || HIDDEN " & frmSKAdmin.TestShowFilter("Hidden", "")
+    s = s & " || NODESC " & frmSKAdmin.TestShowFilter("Description missing", "")
+    s = s & " || SKFIELDS " & frmSKAdmin.TestShowFilter("Stationkeeper", "Fields")
+    Unload frmSKAdmin
+    T_AdminFilters = s
+End Function
+
+' arg = "<template path>|<modules to tick, A;B>|<1 to replace>"
+Public Function T_AddFrom(ByVal arg As String) As String
+    Dim a As Variant, s As String, d As Object
+    a = Split(arg, "|")
+    SK_Quiet = True
+    Load frmSKAdmin
+    s = frmSKAdmin.TestAddFrom(CStr(a(0)), Replace(CStr(a(1)), ";", "|"), a(2) = "1")
+    s = s & " || IMPORTED " & frmSKAdmin.TestShowFilter("All visible", "Imported")
+    Unload frmSKAdmin
+    s = s & " || scan:"
+    For Each d In SK_Scan()
+        If LCase$(d("module")) = "extras" Or LCase$(d("name")) = "fromsource" Then s = s & " " & d("run")
+    Next
+    T_AddFrom = s
 End Function

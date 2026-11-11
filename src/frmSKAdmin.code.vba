@@ -13,6 +13,16 @@ Private lblHeader As MSForms.Label
 ' Macros page
 Private WithEvents txtFind As MSForms.TextBox
 Private WithEvents cboFilter As MSForms.ComboBox
+Private WithEvents cboCatFilter As MSForms.ComboBox
+Private WithEvents btnAddPick As MSForms.CommandButton
+Private WithEvents btnAddCopy As MSForms.CommandButton
+Private lstAddMods As MSForms.ListBox
+Private chkAddReplace As MSForms.CheckBox
+Private lblAddFrom As MSForms.Label
+Private lblAddResult As MSForms.Label
+Private mAddSrc As String         ' the template picked on the Add from a template tab
+Private mAddCat As String         ' its catalog (XML), for the descriptions
+Private mAddMods As Collection    ' its modules, as listed
 Private WithEvents lstEntries As MSForms.ListBox
 Private lblMacro As MSForms.Label
 Private WithEvents txtTitle As MSForms.TextBox
@@ -143,19 +153,24 @@ Private Sub UserForm_Initialize()
     mp.Pages(1).Caption = "Categories"
     mp.Pages.Add "pSettings", "Settings"
     mp.Pages.Add "pBulk", "Bulk tools"
+    mp.Pages.Add "pAdd", "Add from a template"
     mp.Pages.Add "pHistory", "History"
 
     ' ----- Macros -----
     Set pg = mp.Pages(0)
     Lbl pg, "lblFind", "Find", 8, 6, 60, 14
-    Set txtFind = AddTo(pg, "Forms.TextBox.1", "txtFind", 8, 20, 228, 20)
-    Lbl pg, "lblFilter", "Show", 244, 6, 60, 14
-    Set cboFilter = AddTo(pg, "Forms.ComboBox.1", "cboFilter", 244, 20, 118, 20)
+    Set txtFind = AddTo(pg, "Forms.TextBox.1", "txtFind", 8, 20, 136, 20)
+    Lbl pg, "lblFilter", "Show", 150, 6, 60, 14
+    Set cboFilter = AddTo(pg, "Forms.ComboBox.1", "cboFilter", 150, 20, 106, 20)
     cboFilter.Style = fmStyleDropDownList
-    For Each v In Array("All", "Description missing", "Shown in menu", "Not shown in menu", "Hidden", "Macro gone", _
-                        "Test failed", "Not tested", "Health notes")
+    For Each v In Array("All visible", "Stationkeeper", "Hidden", "Description missing", "Other")
         cboFilter.AddItem v
     Next
+    cboFilter.ControlTipText = "All visible: everything not hidden. Stationkeeper: made for Stationkeeper. " & _
+        "Other: not made for Stationkeeper. Bulk tools has the tests and the health check."
+    Lbl pg, "lblCatFilter", "Category", 262, 6, 100, 14
+    Set cboCatFilter = AddTo(pg, "Forms.ComboBox.1", "cboCatFilter", 262, 20, 100, 20)
+    cboCatFilter.Style = fmStyleDropDownList
     ' Column headings (a ListBox filled in code cannot show its own).
     Dim hd As MSForms.Label
     Set hd = Lbl(pg, "hdMacro", "Macro", 12, 46, 148, 12): hd.Font.Bold = True
@@ -292,8 +307,34 @@ Private Sub UserForm_Initialize()
     Set btnTestDoc = Btn(pg, "btnTestDoc", "Choose a test document", 8, 324, 260, 22)
     Set lblTestDoc = Lbl(pg, "lblB9", "", 278, 326, 480, 40)
 
-    ' ----- History -----
+    ' ----- Add from a template: copy whole modules in with Word's Organizer -----
     Set pg = mp.Pages(4)
+    Lbl pg, "lblAddInfo", "Copies whole modules of macros from another template into this one, with Word's Organizer. " & _
+        "Their descriptions come along when that template has a catalog. A dated backup of this template comes first; " & _
+        "the admin's Save keeps the change.", 8, 6, 750, 28
+    Set btnAddPick = Btn(pg, "btnAddPick", "Pick a template...", 8, 38, 160, 24)
+    Set lblAddFrom = Lbl(pg, "lblAddFrom", "No template picked yet.", 176, 42, 580, 14)
+    Dim hd2 As MSForms.Label
+    Set hd2 = Lbl(pg, "hdAMod", "Module", 12, 70, 140, 12): hd2.Font.Bold = True
+    Set hd2 = Lbl(pg, "hdAKind", "Kind", 162, 70, 50, 12): hd2.Font.Bold = True
+    Set hd2 = Lbl(pg, "hdAN", "Macros", 214, 70, 50, 12): hd2.Font.Bold = True
+    Set hd2 = Lbl(pg, "hdAHere", "Already here", 266, 70, 70, 12): hd2.Font.Bold = True
+    Set hd2 = Lbl(pg, "hdAMac", "Macros in it", 340, 70, 200, 12): hd2.Font.Bold = True
+    Set lstAddMods = AddTo(pg, "Forms.ListBox.1", "lstAddMods", 8, 84, 750, 250)
+    lstAddMods.ColumnCount = 5
+    lstAddMods.ColumnWidths = "150 pt;52 pt;52 pt;74 pt;400 pt"
+    lstAddMods.MultiSelect = fmMultiSelectMulti
+    lstAddMods.ListStyle = fmListStyleOption
+    lstAddMods.IntegralHeight = False
+    Set chkAddReplace = Chk(pg, "chkAddReplace", "Replace a module that is already here (its code is overwritten by the picked template's)", _
+        8, 340, 600, 18)
+    Set btnAddCopy = Btn(pg, "btnAddCopy", "Copy the ticked modules in", 8, 362, 200, 24)
+    btnAddCopy.Enabled = False
+    Set lblAddResult = Lbl(pg, "lblAddResult", "", 216, 362, 540, 54)
+    lblAddResult.WordWrap = True
+
+    ' ----- History -----
+    Set pg = mp.Pages(5)
     Set txtHistory = AddTo(pg, "Forms.TextBox.1", "txtHistory", 8, 8, 750, 400)
     txtHistory.MultiLine = True
     txtHistory.WordWrap = True
@@ -322,6 +363,7 @@ Private Sub UserForm_Initialize()
     Next
     AddExtraAffects
     cboFilter.ListIndex = 0
+    FillCatFilter
     If mModel("scanAvailable") Then mModel("health") = SK_Health(mModel) Else mModel("health") = ""
     UpdateBackupLabel
     UpdateTestDocLabel
@@ -373,16 +415,19 @@ Private Sub FillList(Optional ByVal keepRun As String = "")
         Set e = mModel("entries")(i)
         st = SK_EntryStatus(e)
         Select Case f
-            Case "Description missing": okRow = (e("found") And Len(Trim$(e("description"))) = 0)
-            Case "Shown in menu": okRow = (e("found") And e("shown") = "1")
-            Case "Not shown in menu": okRow = (e("found") And e("shown") <> "1")
+            Case "Stationkeeper": okRow = (e("shown") <> "0" And IsForStationkeeper(e))
             Case "Hidden": okRow = (e("shown") = "0")
-            Case "Macro gone": okRow = (Not e("found"))
-            Case "Test failed": okRow = (SK_TestState(e("run")) = "Failed")
-            Case "Not tested": okRow = (e("found") And SK_TestState(e("run")) = "Not tested")
-            Case "Health notes": okRow = (Len(e("issues")) > 0)
-            Case Else: okRow = True
+            Case "Description missing": okRow = (e("found") And Len(Trim$(e("description"))) = 0)
+            Case "Other": okRow = (e("shown") <> "0" And Not IsForStationkeeper(e))
+            Case Else: okRow = (e("shown") <> "0")         ' All visible
         End Select
+        If okRow And cboCatFilter.ListIndex > 0 Then
+            If cboCatFilter.Text = "(No category)" Then
+                okRow = (Len(Trim$(e("category"))) = 0)
+            Else
+                okRow = (LCase$(e("category")) = LCase$(cboCatFilter.Text))
+            End If
+        End If
         If okRow And Len(q) > 0 Then
             okRow = (InStr(LCase$(e("title") & " " & e("run") & " " & e("category") & " " & e("description") & _
                      " " & e("keywords")), q) > 0)
@@ -524,6 +569,7 @@ Private Sub FillCategoryCombo()
     Next
     cboCategory.Text = keep
     mLoading = wasLoading
+    If Not cboCatFilter Is Nothing Then FillCatFilter
 End Sub
 
 Private Sub FillHistory()
@@ -637,6 +683,157 @@ End Sub
 Private Sub cboFilter_Change()
     If Not mLoading Then FillList
 End Sub
+
+Private Sub cboCatFilter_Change()
+    If Not mLoading Then FillList
+End Sub
+
+' Made for Stationkeeper: marked built for or needing Stationkeeper, or one of the Stationkeeper Tools or kit modules.
+Private Function IsForStationkeeper(ByVal e As Object) As Boolean
+    IsForStationkeeper = (SK_SkKind(e("stationkeeper")) <> "none") Or (SK_ModulePart(e("run")) Like "SK[WPX]_*") _
+        Or (LCase$(SK_ModulePart(e("run"))) = "sk_install") Or (LCase$(SK_ModulePart(e("run"))) = "sk_macros")
+End Function
+
+' The Category filter: every category, in the menu's order, then categories only macros use, then (No category).
+Private Sub FillCatFilter()
+    Dim v As Variant, keep As String, wasLoading As Boolean, e As Object, seen As Object, blank As Boolean
+    wasLoading = mLoading
+    mLoading = True
+    keep = cboCatFilter.Text
+    cboCatFilter.Clear
+    cboCatFilter.AddItem "All categories"
+    Set seen = CreateObject("Scripting.Dictionary")
+    For Each v In mModel("cats")
+        If Not seen.Exists(LCase$(v)) Then cboCatFilter.AddItem v: seen(LCase$(v)) = True
+    Next
+    For Each e In mModel("entries")
+        If Len(Trim$(e("category"))) = 0 Then
+            blank = True
+        ElseIf Not seen.Exists(LCase$(e("category"))) Then
+            cboCatFilter.AddItem e("category"): seen(LCase$(e("category"))) = True
+        End If
+    Next
+    If blank Then cboCatFilter.AddItem "(No category)"
+    cboCatFilter.ListIndex = 0
+    For v = 0 To cboCatFilter.ListCount - 1
+        If cboCatFilter.List(v) = keep Then cboCatFilter.ListIndex = v
+    Next
+    mLoading = wasLoading
+End Sub
+
+' ---------------------------------------------------------------------
+' Add from a template
+' ---------------------------------------------------------------------
+Public Sub ShowPage(ByVal i As Long)
+    If i >= 0 And i < mp.Pages.Count Then mp.Value = i
+End Sub
+
+Private Sub btnAddPick_Click()
+    Dim p As String
+    With Application.FileDialog(3)
+        .Title = "Pick the template that has the macros"
+        .Filters.Clear
+        .Filters.Add "Macro-enabled templates and documents", "*.dotm;*.docm"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Sub
+        p = .SelectedItems(1)
+    End With
+    ReadAddSource p
+End Sub
+
+Private Sub ReadAddSource(ByVal p As String)
+    Dim it As Object, how As String, i As Long
+    Set mAddMods = SK_ReadTemplateModules(p, mAddCat, how)
+    mAddSrc = p
+    lblAddFrom.Caption = Mid$(p, InStrRev(p, "\") + 1) & ": " & mAddMods.Count & " module(s), read from " & how & "."
+    lstAddMods.Clear
+    For Each it In mAddMods
+        lstAddMods.AddItem it("name")
+        i = lstAddMods.ListCount - 1
+        lstAddMods.List(i, 1) = it("kind")
+        lstAddMods.List(i, 2) = it("macros")
+        lstAddMods.List(i, 3) = IIf(Len(it("skip")) > 0, "Kit: skipped", it("here"))
+        lstAddMods.List(i, 4) = it("runs")
+    Next
+    btnAddCopy.Enabled = (mAddMods.Count > 0)
+    lblAddResult.Caption = IIf(mAddMods.Count > 0, "Tick the modules to copy in, then Copy.", "")
+End Sub
+
+Private Sub btnAddCopy_Click()
+    Dim names As New Collection, i As Long, copied As Collection, msg As String, n As Long
+    For i = 0 To lstAddMods.ListCount - 1
+        If lstAddMods.Selected(i) Then names.Add lstAddMods.List(i, 0)
+    Next
+    If names.Count = 0 Then lblAddResult.Caption = "Tick at least one module.": Exit Sub
+    If Not EnsureBackupDir() And Not SK_Quiet Then
+        If MsgBox("No backup folder is chosen. Copy without a backup?", vbYesNo + vbExclamation, SK_APP) <> vbYes Then Exit Sub
+    End If
+    msg = SK_CopyModulesIn(mAddSrc, names, chkAddReplace.Value, copied)
+    If copied.Count > 0 Then
+        n = SK_TakeEntries(mModel, mAddCat, copied)
+        mModel("foundCount") = mModel("entries").Count
+        Mark "Added module(s) " & JoinCol(copied) & " from " & Mid$(mAddSrc, InStrRev(mAddSrc, "\") + 1) & _
+            IIf(n > 0, " (" & n & " described from its catalog)", "")
+        FillCats
+        FillCategoryCombo
+        FillCatFilter
+        FillList KeepRunNow()
+        UpdateHeader
+        msg = msg & vbCr & IIf(n > 0, n & " macro(s) arrived described from its catalog. ", "") & _
+            "The modules are in this template now; tick Ready to save and save to keep them with their catalog entries."
+    End If
+    lblAddResult.Caption = msg
+    If Not SK_Quiet Then MsgBox msg, vbInformation, SK_APP
+    ReadAddSource mAddSrc
+    lblAddResult.Caption = msg
+End Sub
+
+Private Function JoinCol(ByVal c As Collection) As String
+    Dim v As Variant
+    For Each v In c
+        JoinCol = JoinCol & IIf(Len(JoinCol) > 0, ", ", "") & v
+    Next
+End Function
+
+' Tests: pick a template, tick modules by name ("A|B"), copy. Returns the list read and the result.
+Public Function TestAddFrom(ByVal path As String, ByVal ticks As String, ByVal replaceSame As Boolean) As String
+    Dim i As Long, s As String
+    ReadAddSource path
+    s = lblAddFrom.Caption & " ## list:"
+    For i = 0 To lstAddMods.ListCount - 1
+        s = s & " [" & lstAddMods.List(i, 0) & "/" & lstAddMods.List(i, 1) & "/" & lstAddMods.List(i, 2) & "/" & lstAddMods.List(i, 3) & "]"
+        lstAddMods.Selected(i) = (InStr("|" & LCase$(ticks) & "|", "|" & LCase$(lstAddMods.List(i, 0)) & "|") > 0)
+    Next
+    chkAddReplace.Value = replaceSame
+    If Len(ticks) > 0 Then btnAddCopy_Click
+    TestAddFrom = s & " ## result: " & Replace(lblAddResult.Caption, vbCr, " / ") & " ## pending " & mPending.Count
+End Function
+
+' Tests: the rows under a Show choice and a Category choice.
+Public Function TestShowFilter(ByVal flt As String, ByVal cat As String) As String
+    Dim i As Long, s As String
+    cboFilter.Text = flt
+    If Len(cat) > 0 Then cboCatFilter.Text = cat Else cboCatFilter.ListIndex = 0
+    s = lstEntries.ListCount & ":"
+    For i = 0 To lstEntries.ListCount - 1
+        s = s & " [" & lstEntries.List(i, 0) & "]"
+    Next
+    cboFilter.ListIndex = 0
+    cboCatFilter.ListIndex = 0
+    TestShowFilter = s
+End Function
+
+Public Function TestFilterChoices() As String
+    Dim i As Long, s As String
+    For i = 0 To cboFilter.ListCount - 1
+        s = s & cboFilter.List(i) & "|"
+    Next
+    s = s & " cats:"
+    For i = 0 To cboCatFilter.ListCount - 1
+        s = s & cboCatFilter.List(i) & "|"
+    Next
+    TestFilterChoices = s
+End Function
 
 Private Sub lstEntries_Click()
     If Not mLoading Then PickCurrent

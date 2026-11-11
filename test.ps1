@@ -130,7 +130,7 @@ try {
         $adm = TR $word 'T_Admin'
         Check 'admin loads and edits' (($adm -match '^8 rows') -and ($adm -match 'pending')) $adm
         Check 'admin list has In menu and Description columns' (($adm -match 'Clear Direct Formatting \| Not set \| Missing') -and ($adm -match '\| Shown \| Written')) ''
-        Check 'admin tabs and labels' (($adm -match 'Macros\|Categories\|Settings\|Bulk tools\|History\|') -and ($adm -match 'A=What this macro affects') -and ($adm -match 'Ch=Does this change the document\?') -and ($adm -match 'also box=none')) ''
+        Check 'admin tabs and labels' (($adm -match 'Macros\|Categories\|Settings\|Bulk tools\|Add from a template\|History\|') -and ($adm -match 'A=What this macro affects') -and ($adm -match 'Ch=Does this change the document\?') -and ($adm -match 'also box=none')) ''
         Check 'Save disabled with nothing to save' ($adm -match 'gate0: pending=0 unticked=False ticked=False') ''
         Check 'Save needs Ready to save ticked' ($adm -match 'gate1: pending=\d+ unticked=False ticked=True') ''
         $csv = TR $word 'T_Csv'
@@ -613,8 +613,8 @@ try {
             Write-Output "MENU0: $mn"
             Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
             Check 'filter Needs effort data: the two, with the filled badge' ($mn -match 'NEEDS EFFORT DATA 2: \[[^\]]+ SK\+\] \[[^\]]+ SK\+\] \|\|') ''
-            Check 'filter Stationkeeper tools: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER TOOLS \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER TOOLS \d+:[^|]*\[Toggle Field Codes\]') -and ($mn -notmatch 'STATIONKEEPER TOOLS [^|]*Fit Tables To Margins')) ''
-            Check 'filter My macros: own macros only' (($mn -match 'MY MACROS \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'MY MACROS [^|]*(SK-|SK\+|Style Inspector)')) ''
+            Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Toggle Field Codes\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
+            Check 'filter Other: own macros only' (($mn -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'OTHER \d+:[^|]*(SK-|SK\+|Style Inspector)')) ''
             Check 'filter Ready to run now: needs-data macros left out when not linked' (($mn -match 'READY TO RUN NOW \d+:') -and ($mn -notmatch 'READY TO RUN NOW [^|]*SK\+')) ''
             Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link a folder\.\.\., Cancel \| Don''t ask again') ''
             Check 'needs data, not linked: says what and where, offers the picker' ($mn -match 'GATE needs: needs \| Needs Stationkeeper data \| This macro is used with the Stationkeeper application\. Please point to the Stationkeeper data folder for your effort\.[^|]*It needs the effort rules\.[^|]*Stationkeeper Data\\rules\\rules\.json[^|]*Right now: Not linked\.[^|]*\| buttons: Point to the folder\.\.\., Cancel \|\|') ''
@@ -748,6 +748,53 @@ try {
             Check 'conflict-copy names: name-PC and name (1), not the real files or .tmp' ($cn -eq 'rules-DESKTOP1.json=True;manifest (1).json=True;effort-PC.dic=True;effort-LAPTOP 7.dotx=True;rules.json=False;rules.json.tmp=False;effort.dotx=False;notes-x.json=False;manifest.json=False;') $cn
         }
         finally { [void](TR1 $word 'T_SkLink' '') }
+        $d.Close([ref]0)
+    }
+
+    # 18. 1.3.0: the kit's menu lists its installers; Add from a template; the admin's Show and Category filters; the menu's Category.
+    [string]$kitCopy = Join-Path $work 'Kit copy.dotm'
+    [string]$srcT = Join-Path $work 'Source.dotm'
+    Copy-Item $kit $kitCopy -Force
+    Remove-Item $srcT -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $k = OpenDoc $word $kitCopy
+        [void]$k.VBProject.VBComponents.Import([string](Join-Path $Root 'test\SK_Test.bas'))
+        $ke = TR $word 'T_KitEntries'
+        Check 'the kit''s menu lists its installers and Add Macros From Template, described' (($ke -match 'installer=True') -and ($ke -match 'SK_Install\.StationkeeperMacrosInstall\[Install the Menu and Admin in a Template/Install and add/1/True\]') -and ($ke -match 'SK_Install\.StationkeeperToolsRemove\[Remove Stationkeeper Tools from a Template/Install and add/1/True\]') -and ($ke -match 'SK_Macros\.AddMacrosFromTemplate\[Add Macros From Template/Install and add/1/True\]')) $ke
+        $mc = TR1 $word 'T_MenuCat' 'Stationkeeper|Install and add'
+        Check 'kit menu: Stationkeeper + Install and add shows the five' (($mc -match '-> 5:') -and ($mc -match '\[Install Stationkeeper Tools in a Template\]')) $mc
+        $k.Close([ref]0)
+        # A source template: a module of its own with a catalog entry, and one named like the sample's Module1.
+        $s = $word.Documents.Add()
+        $m = $s.VBProject.VBComponents.Add(1); $m.Name = 'Extras'
+        $m.CodeModule.AddFromString("Option Explicit`r`n' Says alpha.`r`nPublic Sub MacroAlpha()`r`n    Debug.Print ""alpha""`r`nEnd Sub`r`n`r`nPublic Sub MacroBeta()`r`n    Debug.Print ""beta""`r`nEnd Sub`r`n")
+        $m2 = $s.VBProject.VBComponents.Add(1); $m2.Name = 'Module1'
+        $m2.CodeModule.AddFromString("Public Sub FromSource()`r`nEnd Sub`r`n")
+        [void]$s.CustomXMLParts.Add('<macros xmlns="urn:stationkeeper:macros:1" menuTitle="Source"><categories><category order="1">Imported</category></categories><macro run="Extras.MacroAlpha" shown="1"><title>Alpha From Source</title><category>Imported</category><description>From the source catalog.</description><stationkeeper>Not related</stationkeeper></macro></macros>')
+        $fmt = 15; $p = $srcT; $s.SaveAs2([ref]$p, [ref]$fmt)
+        $s.Close([ref]0)
+        Check 'source template made' (Test-Path $srcT) $srcT
+    }
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        $ke = TR $word 'T_KitEntries'
+        Check 'other templates: no installer entries in the menu' ($ke -eq 'installer=False |') $ke
+        $h = TR1 $word 'T_HideForTest' 'RepeatHeaderRows'
+        $af = TR $word 'T_AdminFilters'
+        Write-Output "FILTERS: $($af.Substring(0, [Math]::Min(1500, $af.Length)))"
+        Check 'admin Show has the five choices; Category lists the categories' (($af -match 'choices: All visible\|Stationkeeper\|Hidden\|Description missing\|Other\| cats:All categories\|') -and ($af -match 'cats:All categories\|[^|]*\|?.*\|Fields\|')) $af.Substring(0, 300)
+        Check 'Hidden lists the hidden macro; All visible leaves it out' (($af -match 'HIDDEN \d+:[^|]*\[Repeat Header Rows\]') -and ($af -notmatch 'ALL \d+:[^|]*\[Repeat Header Rows\]')) $h
+        Check 'Stationkeeper lists the tools, not own macros; Other the reverse' (($af -match 'SK \d+:[^|]*\[Style Inspector\]') -and ($af -notmatch 'SK \d+:[^|]*\[Fit Tables To Margins\]') -and ($af -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($af -notmatch 'OTHER \d+:[^|]*\[Style Inspector\]')) ''
+        Check 'Stationkeeper + category Fields: just the field tools' (($af -match 'SKFIELDS \d+:[^|]*\[Field Code Report\]') -and ($af -notmatch 'SKFIELDS \d+:[^|]*\[Style Inspector\]')) ''
+        $mc = TR1 $word 'T_MenuCat' 'All macros|Fields'
+        Check 'menu Category: the categories, then only that category''s macros' (($mc -like 'All categories|*') -and ($mc -match '\[Field Code Report\]') -and ($mc -notmatch '\[Style Inspector\]')) $mc
+        $ad = TR1 $word 'T_AddFrom' "$srcT|Extras;Module1|0"
+        Write-Output "ADDFROM: $ad"
+        Check 'Add from a template lists its modules, kind, macros and what is already here' (($ad -match 'Source\.dotm: 2 module\(s\), read from its code\.') -and ($ad -match '\[Extras/Module/2/No\]') -and ($ad -match '\[Module1/Module/1/Yes\]')) $ad
+        Check 'ticked modules: new one copied in, same-named one left alone, backup made' (($ad -match 'Copied in from Source\.dotm: Extras\.') -and ($ad -match 'Module1: already here') -and ($ad -match 'Backup: ')) ''
+        Check 'its macros join the catalog, described from its catalog, waiting for Save' (($ad -match 'IMPORTED 1: \[Alpha From Source\]') -and ($ad -match 'scan: Extras\.MacroAlpha Extras\.MacroBeta') -and ($ad -match 'pending [1-9]')) ''
         $d.Close([ref]0)
     }
 

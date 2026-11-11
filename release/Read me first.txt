@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.2.0
+STATIONKEEPER MACROS 1.3.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -35,7 +35,8 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
      or View > Macros > StationkeeperMacros.
    - Type to search. Up/Down move, Enter runs, Esc closes.
    - One Ctrl+Z undoes a whole macro.
-   - Show: All macros, My macros, Stationkeeper tools, Needs effort data, Ready to run now.
+   - Show: All macros, Stationkeeper, Other, Needs effort data, Ready to run now.
+     Category: one of your categories.
      An outlined diamond SK means built for Stationkeeper (runs on its own); a filled
      diamond SK means it needs Stationkeeper data.
    - The strip under the list shows the linked Stationkeeper effort folder.
