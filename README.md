@@ -68,7 +68,13 @@ The strip under the list shows where the Stationkeeper data comes from, with **L
 - **Read fresh every time.** The menu reads the folder each time it opens, before each run, and on **Refresh**. A save in Stationkeeper, or a colleague's save once OneDrive has synced it, shows up on the next run, with no reopening.
 - **What the strip says:** Not linked; Folder missing; No data yet; Incomplete (Stationkeeper is mid-save or OneDrive is mid-sync, so try again in a minute); Current; Aging (not saved in Stationkeeper for 24 hours); Stale (72 hours). Each effort sets its own warning times.
 - **Read only.** The macros never write to the effort folder; Stationkeeper is the only writer. The file layout is in the effort data contract (project doc `stationkeeper-effort-data-contract-v1.md`).
-- **In 0.10.0 the link decides what can run;** the tools still read their rules from the standards workbook. From 1.0.0, the tools that are built for Stationkeeper read the linked effort's rules first.
+- **The tools read the effort's rules first (1.0.0).** Once linked, the tools that are built for Stationkeeper use the effort's rules, then the standards workbook for anything the effort does not set, then their own defaults:
+  - A list the effort sets (banned phrases, placeholders, allowed styles, table types, fonts, acronyms and the rest) replaces that sheet of the workbook, even when the effort's list is empty.
+  - Settings come over one at a time; a setting the effort leaves out (or sets to null) comes from the workbook.
+  - The effort's template becomes StyleSource (Import Team Styles), and its dictionary becomes the Dictionaries list (Load Team Dictionaries).
+  - Every report says where its rules came from: "Rules: effort <name> rev <n>, then <workbook>".
+- **A local copy keeps working when the folder can't.** Each complete new revision is copied to this person's profile (`%LOCALAPPDATA%\Stationkeeper Tools\Effort cache`), one effort only. While Stationkeeper is mid-save, OneDrive is mid-sync, or the folder is out of reach, the tools use the last complete copy and say so on the report. Unlink, or linking another folder, removes the copy.
+- **Your own macros that need effort data** can call `SK_EffortFile("rules")` (or `"template"`, `"dictionary"`): it returns the file to read now (the live file, else the last complete copy), or "" when there is none.
 
 ## The primary list: update many macros at once
 
@@ -109,7 +115,7 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 
 **Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies fifteen modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
-**Team rules live in one Excel workbook.** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
+**Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
 | Tool | What it does | Changes the document? |
 |---|---|---|
@@ -206,6 +212,7 @@ A `Public Sub` (or plain `Sub`) with no arguments, in a standard module. These a
 - **Backups, a readable copy of the catalog, and Excel exports:** the folder each person chooses the first time they save or export (kept in their Windows profile, for every template).
 - **Each person's pins, counts and preferences:** their Windows profile (`HKCU\Software\VB and VBA Program Settings\Stationkeeper Macros`).
 - **The Stationkeeper link** (the effort folder): their Windows profile (`...\Stationkeeper Tools\Link`), one per person per PC.
+- **The local copy of the linked effort's data:** `%LOCALAPPDATA%\Stationkeeper Tools\Effort cache`, on that PC only, one effort, removed on Unlink.
 
 ## Build and test (developers)
 
@@ -213,7 +220,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 163 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 177 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -231,7 +238,8 @@ build.ps1, test.ps1
 
 ## Next
 
-- 1.0.0, the effort data link: tools built for Stationkeeper read the linked effort's rules first (then the standards workbook, then defaults), from a per-person local copy refreshed on each new revision. Needs the Stationkeeper app to publish (App 1).
+- 1.1.0, SharePoint hardening: check the effort folder is kept on the device, spot OneDrive conflict copies, and suggest the link from the document's own folder.
+- 1.2.0, shared findings; 1.3.0, both directions (a hand-filled setup workbook the app imports).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

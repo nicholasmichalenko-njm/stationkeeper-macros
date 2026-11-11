@@ -350,3 +350,49 @@ Public Function T_SkTestOne(ByVal run As String) As String
     Set e = SK_FindEntry(SK_LoadModel(), run)
     T_SkTestOne = SK_TestMacro(e("run"), e("workson"), e("stationkeeper"))
 End Function
+
+' 1.0.0: a stand-in for Stationkeeper's publish with rules, template and dictionary.
+' arg = "<effort folder>|<revision>|<revision written into rules.json>|<CaptionStyle>"
+Public Function T_SkPublish(ByVal arg As String) As String
+    Dim a As Variant, f As String, dd As String, fso As Object, rules As String, man As String, utc As String, p As Variant
+    Dim parts As String, nowUtc As Date
+    a = Split(arg, "|")
+    f = a(0)
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    dd = f & "\Stationkeeper Data"
+    For Each p In Array(f, dd, dd & "\rules", dd & "\templates", dd & "\dictionaries")
+        If Not fso.FolderExists(p) Then fso.CreateFolder p
+    Next
+    rules = "{""schema_version"": ""1.0"", ""manifest_revision"": " & a(2) & ", " & _
+        """settings"": {""CaptionStyle"": """ & a(3) & """, ""TableLabel"": null, ""CaptionInFirstRow"": true}, " & _
+        """banned_phrases"": [{""phrase"": ""leverage"", ""replacement"": ""use"", ""rule_id"": ""EF-1"", ""reason"": ""Effort rule"", ""match_case"": false, ""whole_word"": true}], " & _
+        """placeholders"": []}"
+    SK_WriteUtf8 dd & "\rules\rules.json", rules
+    SK_WriteUtf8 dd & "\templates\effort.dotx", "stand-in template, revision " & a(1)
+    SK_WriteUtf8 dd & "\dictionaries\effort.dic", "Effortword" & vbCrLf & "Stationkeeper"
+    For Each p In Array(Array("rules", "rules/rules.json", "json"), Array("template", "templates/effort.dotx", "dotx"), _
+                        Array("dictionary", "dictionaries/effort.dic", "dic-utf16"))
+        parts = parts & IIf(Len(parts) > 0, ", ", "") & "{""key"": """ & p(0) & """, ""path"": """ & p(1) & """, ""format"": """ & p(2) & _
+            """, ""part_revision"": " & a(1) & ", ""bytes"": " & FileLen(dd & "\" & Replace(p(1), "/", "\")) & "}"
+    Next
+    nowUtc = Now + (Now - SK_FromUtcText(Format$(Now, "yyyy-mm-dd\Thh:nn:ss\Z")))
+    utc = Format$(nowUtc, "yyyy-mm-dd\Thh:nn:ss\Z")
+    man = "{""contract"": ""stationkeeper.effort-data"", ""schema_version"": ""1.0"", ""min_reader_version"": ""1.0"", " & _
+        """effort"": {""id"": ""E-2"", ""name"": ""Effort B"", ""cui"": true}, ""revision"": " & a(1) & ", ""published_utc"": """ & utc & _
+        """, ""published_by"": ""tester"", ""freshness"": {""warn_after_hours"": 24, ""stale_after_hours"": 72}, ""parts"": [" & parts & "]}"
+    SK_WriteUtf8 dd & "\manifest.json", man
+    T_SkPublish = "published rev " & a(1)
+End Function
+
+Public Function T_SkClearCache() As String
+    SK_ClearCache
+    T_SkClearCache = "cleared"
+End Function
+
+' The link as the menu sees it, plus the file a team macro would read for each part.
+Public Function T_SkLinkFiles() As String
+    Dim d As Object
+    Set d = SK_LinkInfo()
+    T_SkLinkFiles = d("state") & " | cached=" & d("cached") & " | parts=" & d("parts") & " | rules file=" & SK_EffortFile("rules") & _
+        " | " & d("note")
+End Function

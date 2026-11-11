@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.10.0
+' Stationkeeper Macros 1.0.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.10.0"
+Public Const SK_VERSION As String = "1.0.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -1292,6 +1292,7 @@ Public Function SK_LinkFolder() As String
 End Function
 
 Public Function SK_SetLinkFolder(ByVal f As String) As Boolean
+    If LCase$(f) <> LCase$(SK_LinkFolder()) Then SK_ClearCache   ' the local copy belongs to one effort
     If Len(f) = 0 Then
         On Error Resume Next
         DeleteSetting SK_LINK_APP, "Link", "folder"
@@ -1300,6 +1301,57 @@ Public Function SK_SetLinkFolder(ByVal f As String) As Boolean
         SaveSetting SK_LINK_APP, "Link", "folder", f
     End If
     SK_SetLinkFolder = True
+End Function
+
+' The tools' local copy of the linked effort's data (this person's profile, one effort only).
+Public Function SK_CacheDir() As String
+    SK_CacheDir = Environ$("LOCALAPPDATA") & "\Stationkeeper Tools\Effort cache"
+End Function
+
+Public Sub SK_ClearCache()
+    On Error Resume Next
+    With CreateObject("Scripting.FileSystemObject")
+        If .FolderExists(SK_CacheDir()) Then .DeleteFolder SK_CacheDir(), True
+    End With
+End Sub
+
+' The revision folder of the tools' last complete copy for this Stationkeeper Data folder, or "".
+Private Function SK_CacheRoot(ByVal dd As String) As String
+    Dim c As String, fso As Object, cur As String
+    On Error GoTo Done
+    c = SK_CacheDir()
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FileExists(c & "\source.txt") Or Not fso.FileExists(c & "\current.txt") Then Exit Function
+    If LCase$(Trim$(Replace(Replace(SK_ReadUtf8(c & "\source.txt"), vbCr, ""), vbLf, ""))) <> LCase$(dd) Then Exit Function
+    cur = Trim$(Replace(Replace(SK_ReadUtf8(c & "\current.txt"), vbCr, ""), vbLf, ""))
+    If Len(cur) > 0 And fso.FileExists(c & "\" & cur & "\manifest.json") Then SK_CacheRoot = c & "\" & cur
+Done:
+End Function
+
+' That copy as "revision|parts", or "".
+Private Function SK_CacheFor(ByVal dd As String) As String
+    Dim c As String, fso As Object, man As Variant, p As Variant, parts As String
+    On Error GoTo Done
+    c = SK_CacheRoot(dd)
+    If Len(c) = 0 Then Exit Function
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set man = SK_JsonParse(SK_ReadUtf8(c & "\manifest.json"))
+    For Each p In man("parts")
+        If fso.FileExists(c & "\" & Replace(SK_JGet(p, "path"), "/", "\")) Then parts = parts & IIf(Len(parts) > 0, ",", "") & LCase$(SK_JGet(p, "key"))
+    Next
+    SK_CacheFor = SK_JGet(man, "revision") & "|" & parts
+Done:
+End Function
+
+' For your own macros that need effort data: the path of a part ("rules", "template" or "dictionary")
+' to read now: the live file when the folder is complete, else the tools' last complete copy, else "".
+Public Function SK_EffortFile(ByVal part As String) As String
+    Dim d As Object, rel As String
+    Set d = SK_LinkInfo()
+    rel = SK_PartFile(part)
+    If Len(rel) = 0 Then Exit Function
+    If InStr("," & d("parts") & ",", "," & LCase$(part) & ",") = 0 Then Exit Function
+    If d("cached") Then SK_EffortFile = SK_CacheRoot(d("dataDir")) & "\" & rel Else SK_EffortFile = d("dataDir") & "\" & rel
 End Function
 
 ' The folder picker. Returns the folder kept, or "" if the person cancelled.
@@ -1385,6 +1437,7 @@ Public Function SK_LinkInfo() As Object
         d(p) = ""
     Next
     d("ageHours") = 0
+    d("cached") = False
     Set SK_LinkInfo = d
     f = SK_LinkFolder()
     d("folder") = f
@@ -1394,13 +1447,14 @@ Public Function SK_LinkInfo() As Object
         Exit Function
     End If
     Set fso = CreateObject("Scripting.FileSystemObject")
+    dd = SK_DataDir(f)
+    d("dataDir") = dd
     If Not fso.FolderExists(f) Then
         d("state") = "Folder missing"
         d("note") = "The linked folder is not there: renamed, moved, or on a drive or sync that is off. Use Change to pick it again."
+        SK_UseCache d
         Exit Function
     End If
-    dd = SK_DataDir(f)
-    d("dataDir") = dd
     If Not fso.FileExists(dd & "\manifest.json") Then
         d("state") = "No data yet"
         d("note") = "No Stationkeeper Data in this folder yet. Open the effort in Stationkeeper and save it, or pick the effort's own folder."
@@ -1462,6 +1516,7 @@ Public Function SK_LinkInfo() As Object
     If Len(bad) > 0 Then
         d("state") = "Incomplete"
         d("note") = "Stationkeeper is still saving, or OneDrive is still syncing (" & bad & "). Try again in a minute."
+        SK_UseCache d
         Exit Function
     End If
     If d("ageHours") >= staleH Then
@@ -1474,11 +1529,24 @@ Public Function SK_LinkInfo() As Object
     d("note") = IIf(Len(d("effort")) > 0, d("effort"), "Effort") & ", revision " & d("revision") & _
         IIf(Len(d("published")) > 0, ", saved " & SK_Ago(d("ageHours")), "") & IIf(Len(d("by")) > 0, " by " & d("by"), "") & "."
     If d("state") <> "Current" Then d("note") = d("note") & " Not saved in Stationkeeper for a while: check it is the right effort."
+    d("note") = d("note") & " Stationkeeper tools use these rules first."
     Exit Function
 Unreadable:
     d("state") = "Unreadable"
     d("note") = "The folder has a manifest.json that is not Stationkeeper's, or cannot be read right now. Try again, or pick the effort's folder."
+    SK_UseCache d
 End Function
+
+' When the folder cannot be used right now, the tools' last complete copy stands in.
+Private Sub SK_UseCache(ByVal d As Object)
+    Dim c As String
+    On Error Resume Next
+    c = SK_CacheFor(d("dataDir"))
+    If Len(c) = 0 Then Exit Sub
+    d("cached") = True
+    d("parts") = Split(c, "|")(1)
+    d("note") = d("note") & " Until then the tools use the last complete copy (revision " & Split(c, "|")(0) & ")."
+End Sub
 
 ' True when the linked data has every part a macro needs. why says what is wrong.
 Public Function SK_DataReady(ByVal info As Object, ByVal parts As String, ByRef why As String) As Boolean
@@ -1487,8 +1555,7 @@ Public Function SK_DataReady(ByVal info As Object, ByVal parts As String, ByRef 
     Select Case info("state")
         Case "Current", "Aging", "Stale"
         Case Else
-            why = info("note")
-            Exit Function
+            If Not info("cached") Then why = info("note"): Exit Function
     End Select
     For Each p In Split(parts, ",")
         If InStr("," & info("parts") & ",", "," & Trim$(p) & ",") = 0 Then missing = missing & IIf(Len(missing) > 0, ",", "") & Trim$(p)

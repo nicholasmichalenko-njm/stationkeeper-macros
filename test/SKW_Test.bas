@@ -807,3 +807,59 @@ Public Function TW_CloseBook() As String
     Set mXL = Nothing
     TW_CloseBook = "closed"
 End Function
+
+' ---------------------------------------------------------------------
+' 1.0.0: the rules the tools use once an effort is linked.
+' ---------------------------------------------------------------------
+Public Function TW_Rules() As String
+    Dim s As String, v As Variant, b As String, c As Collection
+    SKW_Quiet = True
+    SKW_ForgetEffort
+    For Each v In SKW_Column("Banned phrases", "Phrase")
+        b = b & IIf(Len(b) > 0, ",", "") & v
+    Next
+    Set c = SKW_Column("Dictionaries", "Path")
+    s = "note=" & SKW_StdNote() & " | caption=" & SKW_Setting("CaptionStyle", "") & " | table=" & SKW_Setting("TableLabel", "") & _
+        " | firstrow=" & SKW_Setting("CaptionInFirstRow", "") & " | banned=" & b & " | placeholders=" & SKW_Placeholders().Count & _
+        " | acronyms=" & SKW_AcronymList().Count & " | source=" & SKW_Setting("StyleSource", "")
+    If c.Count > 0 Then s = s & " | dic=" & c(1) Else s = s & " | dic="
+    TW_Rules = s
+End Function
+
+' The local copy: which revision folders exist.
+Public Function TW_Cache() As String
+    Dim fso As Object, f As Object, s As String
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(SKW_CacheDir()) Then TW_Cache = "no cache": Exit Function
+    For Each f In fso.GetFolder(SKW_CacheDir()).SubFolders
+        s = s & " " & f.Name
+    Next
+    TW_Cache = "folders:" & s & " | root=" & Mid$(SKW_CacheRoot(), InStrRev(SKW_CacheRoot(), "\") + 1)
+End Function
+
+' Banned Phrases Review on a fresh document: the effort's phrase is caught, the workbook's is not.
+Public Function TW_EffortBanned() As String
+    Dim d As Object, s As String
+    SKW_Quiet = True
+    SKW_ForgetEffort
+    Set d = Documents.Add
+    d.Content.Text = "We leverage tools and utilize them."
+    d.Range(0, 0).Select
+    s = Replace(SKW_BannedPhrasesReview(), vbCr, " / ")
+    s = s & " ## text=" & Trim$(Replace(d.Content.Text, vbCr, ""))
+    If d.Comments.Count > 0 Then s = s & " ## comment=" & d.Comments(1).Range.Text
+    d.Range(0, 0).Select
+    SKW_SectionMap
+    s = s & " ## report=" & Left$(ReportText(), 300)
+    CloseReport
+    d.Close SaveChanges:=0
+    TW_EffortBanned = s
+End Function
+
+Public Function TW_RenameFolder(ByVal arg As String) As String
+    Dim a As Variant
+    a = Split(arg, "|")
+    Name a(0) As a(1)
+    SKW_ForgetEffort
+    TW_RenameFolder = "renamed"
+End Function

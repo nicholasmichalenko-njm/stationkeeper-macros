@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 0.10.0
+STATIONKEEPER MACROS 1.0.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -41,6 +41,8 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
    - The strip under the list shows the linked Stationkeeper effort folder.
      Link a folder... (or Change...) picks it once; Refresh reads it again; Unlink stops.
      Pick the folder Stationkeeper saves the effort to (it holds "Stationkeeper Data").
+     Once linked, the tools use the effort's rules first, then the standards workbook,
+     then their defaults. Each report says which rules it used.
 
 IF THE ADMIN SAYS WORD IS NOT LETTING IT LOOK INSIDE THE TEMPLATE
    Turn on File > Options > Trust Center > Trust Center Settings > Macro Settings >

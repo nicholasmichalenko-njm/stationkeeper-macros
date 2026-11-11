@@ -46,7 +46,7 @@ End Sub
 Public Function SKW_ChooseStandards(ByVal p As String) As String
     If Len(Dir$(p)) = 0 Then SKW_ChooseStandards = "Not found: " & p: Exit Function
     SKW_SetStandardsPath p
-    If Not SKW_HasStandards() Then
+    If SKW_Workbook() Is Nothing Then
         SKW_SetStandardsPath ""
         SKW_ChooseStandards = "That workbook could not be read, so the tools keep their built-in defaults."
         Exit Function

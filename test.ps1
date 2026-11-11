@@ -656,6 +656,56 @@ try {
         $d.Close([ref]0)
     }
 
+    # 16. 1.0.0: the tools read the linked effort's rules first, keep a local copy, and fall back to it.
+    [string]$effB = Join-Path $work 'Effort B'
+    Remove-Item $effB, "$effB moved" -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        try {
+            [void](TR $word 'T_SkClearCache')
+            [void](TR1 $word 'T_SkLink' '')
+            $r = RunW $word 'SKW_Test.TW_Rules'
+            Check 'not linked: the tools read the standards workbook as before' (($r -match '^note=Standards: Team standards\.xlsx \|') -and ($r -match 'caption=Caption \|') -and ($r -match 'banned=utilize,in order to,and/or \|') -and ($r -match 'placeholders=10 \|')) $r
+            [void](TR1 $word 'T_SkPublish' "$effB|3|3|Effort Caption")
+            [void](TR1 $word 'T_SkLink' $effB)
+            $r = RunW $word 'SKW_Test.TW_Rules'
+            Write-Output "RULES3: $r"
+            Check 'linked: the effort''s rules come first, stamped on reports' ($r -match '^note=Rules: effort Effort B rev 3, then Team standards\.xlsx \|') $r
+            Check 'effort settings win one by one; unset ones come from the workbook' (($r -match 'caption=Effort Caption \|') -and ($r -match 'table=Table \|') -and ($r -match 'firstrow=Yes \|')) ''
+            Check 'an effort list replaces the sheet, even an empty one' (($r -match 'banned=leverage \|') -and ($r -match 'placeholders=0 \|')) ''
+            Check 'a list the effort does not set stays from the workbook' ($r -match 'acronyms=1 \|') ''
+            Check 'the effort''s template and dictionary come from the local copy' (($r -match 'source=[^|]*\\Effort cache\\r3\\templates\\effort\.dotx \|') -and ($r -match 'dic=[^|]*\\Effort cache\\r3\\dictionaries\\effort\.dic$')) ''
+            $c = RunW $word 'SKW_Test.TW_Cache'
+            Check 'local copy: one revision folder' ($c -eq 'folders: r3 | root=r3') $c
+            $b = RunW $word 'SKW_Test.TW_EffortBanned'
+            Write-Output "BANNED: $($b.Substring(0, [Math]::Min(500, $b.Length)))"
+            Check 'tools follow the effort: its banned phrase caught, the workbook''s not; reports stamped' (($b -match 'against 1 banned phrase') -and ($b -match 'comment=[^#]*EF-1') -and ($b -notmatch 'PL-0') -and ($b -match 'report=[^#]*Rules: effort Effort B rev 3')) ''
+
+            [void](TR1 $word 'T_SkPublish' "$effB|4|3|Caption Four")
+            $r = RunW $word 'SKW_Test.TW_Rules'
+            Check 'mid-save: the last complete copy is used, and the report says so' (($r -match '^note=Rules: effort Effort B rev 3 \(last complete copy: incomplete\)') -and ($r -match 'caption=Effort Caption \|')) $r
+            $lf = TR $word 'T_SkLinkFiles'
+            Check 'menu: incomplete, but needs-data macros can use the copy' (($lf -like 'Incomplete | cached=True | parts=rules,template,dictionary | rules file=*\Effort cache\r3\rules\rules.json |*') -and ($lf -match 'last complete copy \(revision 3\)')) $lf
+            [void](TR1 $word 'T_SkPublish' "$effB|5|5|Effort Caption 5")
+            $r = RunW $word 'SKW_Test.TW_Rules'
+            Check 'a new revision is picked up on the next run, no reopening' (($r -match '^note=Rules: effort Effort B rev 5, then') -and ($r -match 'caption=Effort Caption 5 \|')) $r
+            $c = RunW $word 'SKW_Test.TW_Cache'
+            Check 'local copy: the old revision folder is removed' ($c -eq 'folders: r5 | root=r5') $c
+            [void](RunW $word 'SKW_Test.TW_RenameFolder' "$effB|$effB moved")
+            $r = RunW $word 'SKW_Test.TW_Rules'
+            $lf = TR $word 'T_SkLinkFiles'
+            [void](RunW $word 'SKW_Test.TW_RenameFolder' "$effB moved|$effB")
+            Check 'out of reach (offline, sync off): the last complete copy is used' (($r -match '^note=Rules: effort Effort B rev 5 \(last complete copy: folder missing\)') -and ($r -match 'caption=Effort Caption 5 \|') -and ($lf -like 'Folder missing | cached=True*')) "$r ;; $lf"
+            [void](TR1 $word 'T_SkLink' '')
+            $c = RunW $word 'SKW_Test.TW_Cache'
+            $r = RunW $word 'SKW_Test.TW_Rules'
+            Check 'Unlink removes the local copy; the tools go back to the workbook' (($c -eq 'no cache') -and ($r -match '^note=Standards: Team standards\.xlsx \|') -and ($r -match 'caption=Caption \|')) "$c ;; $r"
+        }
+        finally { [void](TR1 $word 'T_SkLink' '') }
+        $doc.Close([ref]0)
+    }
+
 }
 catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)

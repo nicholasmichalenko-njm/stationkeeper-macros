@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "0.10.0"
+Public Const SKW_VERSION As String = "1.0.0"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -27,6 +27,12 @@ Private mStd As Object
 Private mStdPath As String
 Private mStdStamp As Date
 Private mStdRead As Boolean
+Private mMerged As Object
+Private mMergedKey As String
+Private mRules As Object
+Private mRulesKey As String
+Private mEff As Object
+Private mEffAt As Date
 
 ' ---------------------------------------------------------------------
 ' Start and finish. changes = True for tools that change the document:
@@ -254,8 +260,9 @@ Public Function SKW_Row(ParamArray v() As Variant) As Variant
 End Function
 
 ' ---------------------------------------------------------------------
-' The standards workbook (one per template, chosen per person).
-' Sheets are read once and kept until the file changes.
+' The rules: the linked Stationkeeper effort first, then the standards
+' workbook (one per template, chosen per person), then built-in defaults.
+' The workbook is read once and kept until the file changes.
 ' ---------------------------------------------------------------------
 Public Function SKW_StandardsPath() As String
     SKW_StandardsPath = GetSetting(SKW_APP, "Standards", ThisDocument.Name, "")
@@ -271,28 +278,455 @@ Public Function SKW_HasStandards() As Boolean
     SKW_HasStandards = Not (SKW_Std() Is Nothing)
 End Function
 
+' Where the rules came from, for the top of every report.
 Public Function SKW_StdNote() As String
-    If SKW_HasStandards() Then
-        SKW_StdNote = "Standards: " & Mid$(mStdPath, InStrRev(mStdPath, "\") + 1)
+    Dim e As Object, wb As String
+    Set e = SKW_Effort()
+    If Not (SKW_Workbook() Is Nothing) Then wb = Mid$(mStdPath, InStrRev(mStdPath, "\") + 1)
+    If e("ok") Then
+        SKW_StdNote = "Rules: effort " & e("effort") & " rev " & e("revision") & _
+            IIf(e("fromCache"), " (last complete copy: " & LCase$(e("state")) & ")", "") & _
+            IIf(Len(wb) > 0, ", then " & wb, "")
+    ElseIf Len(wb) > 0 Then
+        SKW_StdNote = "Standards: " & wb & IIf(e("state") <> "Not linked", " (effort data: " & LCase$(e("state")) & ")", "")
     Else
-        SKW_StdNote = "Standards: built-in defaults (no standards workbook chosen)"
+        SKW_StdNote = "Standards: built-in defaults (no standards workbook chosen)" & _
+            IIf(e("state") <> "Not linked", " (effort data: " & LCase$(e("state")) & ")", "")
     End If
 End Function
 
+' The rules the tools use: the linked effort's rules first, then the standards workbook for
+' anything the effort does not set, then (in each tool) the built-in defaults.
 Public Function SKW_Std() As Object
+    Dim wbk As Object, e As Object, key As String
+    Set wbk = SKW_Workbook()
+    Set e = SKW_Effort()
+    If Not e("ok") Then Set SKW_Std = wbk: Exit Function
+    key = mStdPath & "|" & mStdStamp & "|" & IIf(wbk Is Nothing, "none", "wb") & "|" & e("key")
+    If key = mMergedKey And Not mMerged Is Nothing Then Set SKW_Std = mMerged: Exit Function
+    Set mMerged = SKW_Merge(wbk, e)
+    mMergedKey = key
+    Set SKW_Std = mMerged
+End Function
+
+' The standards workbook alone (read again whenever the file changes), or Nothing.
+Public Function SKW_Workbook() As Object
     Dim p As String, stamp As Date
     p = SKW_StandardsPath()
-    If Len(p) = 0 Then Set SKW_Std = Nothing: Exit Function
+    If Len(p) = 0 Then Set SKW_Workbook = Nothing: Exit Function
     On Error Resume Next
     stamp = FileDateTime(p)
-    If Err.Number <> 0 Then Set SKW_Std = Nothing: Exit Function
+    If Err.Number <> 0 Then Set SKW_Workbook = Nothing: Exit Function
     On Error GoTo 0
-    If mStdRead And p = mStdPath And stamp = mStdStamp Then Set SKW_Std = mStd: Exit Function
+    If mStdRead And p = mStdPath And stamp = mStdStamp Then Set SKW_Workbook = mStd: Exit Function
     Set mStd = SKW_ReadWorkbook(p)
     mStdPath = p
     mStdStamp = stamp
     mStdRead = True
-    Set SKW_Std = mStd
+    Set SKW_Workbook = mStd
+End Function
+
+' Workbook sheets with the effort's sections laid over them. A section the effort sets replaces the
+' sheet (even when its list is empty); settings are laid over one by one; the effort's template and
+' dictionary become StyleSource and the Dictionaries sheet.
+Private Function SKW_Merge(ByVal wbk As Object, ByVal e As Object) As Object
+    Dim res As Object, k As Variant, rules As Object, sheet As String, rows As Collection, item As Variant
+    Dim d As Object, f As Variant, setRows As Collection, r As Object, sk As Variant, done As Object, st As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    If Not wbk Is Nothing Then
+        For Each k In wbk.Keys
+            Set res(k) = wbk(k)
+        Next
+    End If
+    Set rules = e("rules")
+    For Each k In rules.Keys
+        If k <> "settings" And IsObject(rules(k)) Then
+            If TypeName(rules(k)) = "Collection" Then
+                sheet = Replace(LCase$(k), "_", " ")
+                Set rows = New Collection
+                For Each item In rules(k)
+                    If IsObject(item) Then
+                        Set d = CreateObject("Scripting.Dictionary")
+                        For Each f In item.Keys
+                            If Not IsObject(item(f)) Then d(Replace(LCase$(f), "_", " ")) = SKW_JText(item(f))
+                        Next
+                        rows.Add d
+                    End If
+                Next
+                Set res(sheet) = rows
+            End If
+        End If
+    Next
+    ' Settings, one by one.
+    Set setRows = New Collection
+    Set done = CreateObject("Scripting.Dictionary")
+    If rules.Exists("settings") Then
+        If TypeName(rules("settings")) = "Dictionary" Then
+            Set st = rules("settings")
+            For Each sk In st.Keys
+                If Not IsObject(st(sk)) Then
+                    If Not IsNull(st(sk)) Then done(LCase$(sk)) = SKW_JText(st(sk))
+                End If
+            Next
+        End If
+    End If
+    If Len(e("template")) > 0 Then done("stylesource") = e("template")
+    If res.Exists("settings") Then
+        For Each r In res("settings")
+            If done.Exists(LCase$(r("setting"))) Then
+                Set d = CreateObject("Scripting.Dictionary")
+                d("setting") = r("setting"): d("value") = done(LCase$(r("setting"))): d("from") = "effort"
+                setRows.Add d
+                done.Remove LCase$(r("setting"))
+            Else
+                setRows.Add r
+            End If
+        Next
+    End If
+    For Each sk In done.Keys
+        Set d = CreateObject("Scripting.Dictionary")
+        d("setting") = sk: d("value") = done(sk): d("from") = "effort"
+        setRows.Add d
+    Next
+    Set res("settings") = setRows
+    If Len(e("dictionary")) > 0 Then
+        Set rows = New Collection
+        Set d = CreateObject("Scripting.Dictionary")
+        d("path") = e("dictionary"): d("notes") = "Effort dictionary from Stationkeeper"
+        rows.Add d
+        Set res("dictionaries") = rows
+    End If
+    Set SKW_Merge = res
+End Function
+
+Private Function SKW_JText(ByVal v As Variant) As String
+    If IsNull(v) Or IsEmpty(v) Then Exit Function
+    If VarType(v) = vbBoolean Then SKW_JText = IIf(v, "Yes", "No") Else SKW_JText = CStr(v)
+End Function
+
+' ---------------------------------------------------------------------
+' The linked effort's data (written by the Stationkeeper app; read only).
+' The link is one folder per person per PC (set in the menu). Each run
+' reads the manifest. A complete new revision is copied to a local cache
+' (this person's profile, one effort, removed on Unlink); while the folder
+' is mid-save, mid-sync or out of reach, the last complete copy is used.
+' ---------------------------------------------------------------------
+Public Function SKW_LinkFolder() As String
+    SKW_LinkFolder = GetSetting(SKW_APP, "Link", "folder", "")
+End Function
+
+Public Function SKW_CacheDir() As String
+    SKW_CacheDir = Environ$("LOCALAPPDATA") & "\Stationkeeper Tools\Effort cache"
+End Function
+
+Private Function SKW_DataDir(ByVal f As String) As String
+    If Right$(f, 1) = "\" Then f = Left$(f, Len(f) - 1)
+    If LCase$(Mid$(f, InStrRev(f, "\") + 1)) = "stationkeeper data" Then SKW_DataDir = f Else SKW_DataDir = f & "\Stationkeeper Data"
+End Function
+
+' Keys: ok, state, effort, revision, fromCache, rules (parsed rules.json), template, dictionary, key.
+' Read fresh on each run; inside one run (3 seconds) the answer is reused.
+Public Function SKW_Effort() As Object
+    If Not mEff Is Nothing Then
+        If (Now - mEffAt) * 86400# < 3 And (Now - mEffAt) >= 0 Then Set SKW_Effort = mEff: Exit Function
+    End If
+    Set mEff = SKW_ReadEffort()
+    mEffAt = Now
+    Set SKW_Effort = mEff
+End Function
+
+' Forget the last answer (after a new link, and in tests).
+Public Sub SKW_ForgetEffort()
+    Set mEff = Nothing
+End Sub
+
+' True when the linked effort sets this sheet (its list wins, even when empty).
+Public Function SKW_FromEffort(ByVal sheet As String) As Boolean
+    Dim e As Object
+    Set e = SKW_Effort()
+    If e("ok") Then SKW_FromEffort = e("rules").Exists(Replace(LCase$(sheet), " ", "_"))
+End Function
+
+Private Function SKW_ReadEffort() As Object
+    Dim d As Object, f As String, dd As String, fso As Object, man As Object, why As String, cache As String
+    Set d = CreateObject("Scripting.Dictionary")
+    d("ok") = False: d("state") = "Not linked": d("effort") = "": d("revision") = "": d("fromCache") = False
+    d("template") = "": d("dictionary") = "": d("key") = ""
+    Set d("rules") = Nothing
+    Set SKW_ReadEffort = d
+    f = SKW_LinkFolder()
+    If Len(f) = 0 Then Exit Function
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    cache = SKW_CacheDir()
+    dd = SKW_DataDir(f)
+    If Not fso.FolderExists(f) Then
+        d("state") = "Folder missing"
+    ElseIf Not fso.FileExists(dd & "\manifest.json") Then
+        d("state") = "No data yet"
+    Else
+        Set man = SKW_CheckData(dd, fso, why)
+        If man Is Nothing Then
+            d("state") = why
+        Else
+            d("state") = "Current"
+            If SKW_CachedRevision(dd, fso) <> SKW_J(man, "revision") Then
+                If Not SKW_CopyToCache(dd, man, fso) Then d("state") = "Incomplete"
+            End If
+        End If
+    End If
+    ' Load from the cache (it now holds this revision, or the last complete one).
+    If SKW_CacheSource(fso) <> LCase$(dd) Then Exit Function
+    If d("state") = "Current" Or d("state") = "Incomplete" Or d("state") = "Unreadable" Or d("state") = "Folder missing" Then
+        If d("state") <> "Current" Then d("fromCache") = True
+        SKW_LoadCache d, fso
+    End If
+End Function
+
+' Returns the manifest when every part is there at full size and rules.json carries the same revision; else why.
+Private Function SKW_CheckData(ByVal dd As String, ByVal fso As Object, ByRef why As String) As Object
+    Dim man As Object, p As Variant, fp As String, rules As Object
+    On Error GoTo Bad
+    Set man = SKW_JParse(SKW_ReadText(dd & "\manifest.json"))
+    If SKW_J(man, "contract") <> "stationkeeper.effort-data" Then GoTo Bad
+    If Val(SKW_J(man, "min_reader_version")) > 1 Then why = "Needs a newer kit": Exit Function
+    For Each p In man("parts")
+        fp = dd & "\" & Replace(SKW_J(p, "path"), "/", "\")
+        If Not fso.FileExists(fp) Then why = "Incomplete": Exit Function
+        If Len(SKW_J(p, "bytes")) > 0 Then
+            If CStr(FileLen(fp)) <> SKW_J(p, "bytes") Then why = "Incomplete": Exit Function
+        End If
+        If LCase$(SKW_J(p, "key")) = "rules" Then
+            Set rules = SKW_JParse(SKW_ReadText(fp))
+            If SKW_J(rules, "manifest_revision") <> SKW_J(man, "revision") Then why = "Incomplete": Exit Function
+        End If
+    Next
+    Set SKW_CheckData = man
+    Exit Function
+Bad:
+    why = "Unreadable"
+End Function
+
+' The cache: source.txt (which Stationkeeper Data folder), current.txt (which revision folder),
+' and one folder per revision (r15\manifest.json, r15\rules\rules.json, ...). A new revision goes into
+' its own folder, so a dictionary or template Word still holds open is never overwritten.
+Private Function SKW_CacheSource(ByVal fso As Object) As String
+    On Error Resume Next
+    If fso.FileExists(SKW_CacheDir() & "\source.txt") Then SKW_CacheSource = LCase$(SKW_Line(SKW_ReadText(SKW_CacheDir() & "\source.txt")))
+End Function
+
+Private Function SKW_Line(ByVal s As String) As String
+    SKW_Line = Trim$(Replace(Replace(s, vbCr, ""), vbLf, ""))
+End Function
+
+' The folder of the revision in use, or "".
+Public Function SKW_CacheRoot() As String
+    Dim fso As Object, cur As String
+    On Error Resume Next
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FileExists(SKW_CacheDir() & "\current.txt") Then Exit Function
+    cur = SKW_Line(SKW_ReadText(SKW_CacheDir() & "\current.txt"))
+    If Len(cur) > 0 And fso.FileExists(SKW_CacheDir() & "\" & cur & "\manifest.json") Then SKW_CacheRoot = SKW_CacheDir() & "\" & cur
+End Function
+
+Private Function SKW_CachedRevision(ByVal dd As String, ByVal fso As Object) As String
+    On Error Resume Next
+    If SKW_CacheSource(fso) <> LCase$(dd) Then Exit Function
+    If Len(SKW_CacheRoot()) = 0 Then Exit Function
+    SKW_CachedRevision = SKW_J(SKW_JParse(SKW_ReadText(SKW_CacheRoot() & "\manifest.json")), "revision")
+End Function
+
+' Copies each part into a new revision folder, checks the copies (size, revision), writes the manifest
+' there, then points current.txt at it. Older revision folders are removed when nothing holds them.
+Private Function SKW_CopyToCache(ByVal dd As String, ByVal man As Object, ByVal fso As Object) As Boolean
+    Dim c As String, rv As String, p As Variant, rel As String, dst As String, sub1 As Object
+    On Error GoTo Fail
+    c = SKW_CacheDir()
+    SKW_MakeDirs c, fso
+    If SKW_CacheSource(fso) <> LCase$(dd) Then
+        On Error Resume Next
+        If fso.FileExists(c & "\current.txt") Then fso.DeleteFile c & "\current.txt", True
+        On Error GoTo Fail
+        SKW_WriteUtf8 c & "\source.txt", dd
+    End If
+    rv = "r" & SKW_J(man, "revision")
+    If fso.FolderExists(c & "\" & rv) Then fso.DeleteFolder c & "\" & rv, True
+    For Each p In man("parts")
+        rel = Replace(SKW_J(p, "path"), "/", "\")
+        dst = c & "\" & rv & "\" & rel
+        SKW_MakeDirs Left$(dst, InStrRev(dst, "\") - 1), fso
+        fso.CopyFile dd & "\" & rel, dst, True
+        If Len(SKW_J(p, "bytes")) > 0 Then
+            If CStr(FileLen(dst)) <> SKW_J(p, "bytes") Then GoTo Fail
+        End If
+        If LCase$(SKW_J(p, "key")) = "rules" Then
+            If SKW_J(SKW_JParse(SKW_ReadText(dst)), "manifest_revision") <> SKW_J(man, "revision") Then GoTo Fail
+        End If
+    Next
+    fso.CopyFile dd & "\manifest.json", c & "\" & rv & "\manifest.json", True
+    SKW_WriteUtf8 c & "\current.txt", rv
+    On Error Resume Next
+    For Each sub1 In fso.GetFolder(c).SubFolders
+        If LCase$(sub1.Name) <> LCase$(rv) Then sub1.Delete True
+    Next
+    SKW_CopyToCache = True
+    Exit Function
+Fail:
+    SKW_CopyToCache = False
+End Function
+
+Private Sub SKW_MakeDirs(ByVal p As String, ByVal fso As Object)
+    If fso.FolderExists(p) Then Exit Sub
+    SKW_MakeDirs fso.GetParentFolderName(p), fso
+    fso.CreateFolder p
+End Sub
+
+Private Sub SKW_LoadCache(ByVal d As Object, ByVal fso As Object)
+    Dim c As String, man As Object, p As Variant, k As String, fp As String, eff As Variant
+    On Error GoTo Fail
+    c = SKW_CacheRoot()
+    If Len(c) = 0 Then Exit Sub
+    Set man = SKW_JParse(SKW_ReadText(c & "\manifest.json"))
+    d("revision") = SKW_J(man, "revision")
+    If man.Exists("effort") Then
+        If IsObject(man("effort")) Then d("effort") = SKW_J(man("effort"), "name")
+    End If
+    If Len(d("effort")) = 0 Then d("effort") = "(unnamed)"
+    For Each p In man("parts")
+        k = LCase$(SKW_J(p, "key"))
+        fp = c & "\" & Replace(SKW_J(p, "path"), "/", "\")
+        If fso.FileExists(fp) Then
+            Select Case k
+                Case "rules"
+                    If mRulesKey <> fp & "|" & d("revision") Then
+                        Set mRules = SKW_JParse(SKW_ReadText(fp))
+                        mRulesKey = fp & "|" & d("revision")
+                    End If
+                    Set d("rules") = mRules
+                Case "template": d("template") = fp
+                Case "dictionary": d("dictionary") = fp
+            End Select
+        End If
+    Next
+    If d("rules") Is Nothing Then Set d("rules") = CreateObject("Scripting.Dictionary")
+    d("ok") = True
+    d("key") = SKW_CacheSource(fso) & "|" & d("revision")
+    Exit Sub
+Fail:
+    d("ok") = False
+End Sub
+
+Private Function SKW_ReadText(ByVal path As String) As String
+    Dim st As Object
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 2
+    st.Charset = "utf-8"
+    st.Open
+    st.LoadFromFile path
+    SKW_ReadText = st.ReadText
+    st.Close
+End Function
+
+' --- A small JSON reader (objects become Dictionaries, arrays Collections, numbers text) ---
+Private Function SKW_J(ByVal o As Variant, ByVal k As String) As String
+    If Not IsObject(o) Then Exit Function
+    If TypeName(o) <> "Dictionary" Then Exit Function
+    If Not o.Exists(k) Then Exit Function
+    If IsObject(o(k)) Then Exit Function
+    If IsNull(o(k)) Then Exit Function
+    SKW_J = CStr(o(k))
+End Function
+
+Private Function SKW_JParse(ByVal s As String) As Object
+    Dim pos As Long, v As Variant
+    pos = 1
+    SKW_JValue v, s, pos
+    Set SKW_JParse = v
+End Function
+
+Private Sub SKW_JSkip(ByVal s As String, pos As Long)
+    Do While pos <= Len(s)
+        Select Case Mid$(s, pos, 1)
+            Case " ", vbTab, vbCr, vbLf, ChrW$(&HFEFF): pos = pos + 1
+            Case Else: Exit Do
+        End Select
+    Loop
+End Sub
+
+Private Sub SKW_JValue(ByRef v As Variant, ByVal s As String, pos As Long)
+    Dim num As String, d As Object, c As Collection, k As String, x As Variant
+    SKW_JSkip s, pos
+    If pos > Len(s) Then Err.Raise vbObjectError + 7, SKW_APP, "JSON ends too early."
+    Select Case Mid$(s, pos, 1)
+        Case "{"
+            Set d = CreateObject("Scripting.Dictionary")
+            pos = pos + 1
+            Do
+                SKW_JSkip s, pos
+                If pos > Len(s) Then Err.Raise vbObjectError + 7, SKW_APP, "JSON ends too early."
+                If Mid$(s, pos, 1) = "}" Then pos = pos + 1: Exit Do
+                If Mid$(s, pos, 1) = "," Then pos = pos + 1: SKW_JSkip s, pos
+                k = SKW_JString(s, pos)
+                SKW_JSkip s, pos
+                If Mid$(s, pos, 1) <> ":" Then Err.Raise vbObjectError + 7, SKW_APP, "JSON is missing a colon."
+                pos = pos + 1
+                SKW_JValue x, s, pos
+                If IsObject(x) Then Set d(k) = x Else d(k) = x
+            Loop
+            Set v = d
+        Case "["
+            Set c = New Collection
+            pos = pos + 1
+            Do
+                SKW_JSkip s, pos
+                If pos > Len(s) Then Err.Raise vbObjectError + 7, SKW_APP, "JSON ends too early."
+                If Mid$(s, pos, 1) = "]" Then pos = pos + 1: Exit Do
+                If Mid$(s, pos, 1) = "," Then pos = pos + 1: SKW_JSkip s, pos
+                SKW_JValue x, s, pos
+                c.Add x
+            Loop
+            Set v = c
+        Case """": v = SKW_JString(s, pos)
+        Case "t": v = True: pos = pos + 4
+        Case "f": v = False: pos = pos + 5
+        Case "n": v = Null: pos = pos + 4
+        Case Else
+            Do While pos <= Len(s) And InStr("+-0123456789.eE", Mid$(s, pos, 1)) > 0
+                num = num & Mid$(s, pos, 1)
+                pos = pos + 1
+            Loop
+            If Len(num) = 0 Then Err.Raise vbObjectError + 7, SKW_APP, "JSON has something unexpected at character " & pos & "."
+            v = num
+    End Select
+End Sub
+
+Private Function SKW_JString(ByVal s As String, pos As Long) As String
+    Dim out As String, ch As String
+    If Mid$(s, pos, 1) <> """" Then Err.Raise vbObjectError + 7, SKW_APP, "JSON expected text at character " & pos & "."
+    pos = pos + 1
+    Do While pos <= Len(s)
+        ch = Mid$(s, pos, 1)
+        If ch = """" Then
+            pos = pos + 1
+            SKW_JString = out
+            Exit Function
+        ElseIf ch = "\" Then
+            pos = pos + 1
+            ch = Mid$(s, pos, 1)
+            Select Case ch
+                Case "n": out = out & vbCrLf
+                Case "r", "b", "f"
+                Case "t": out = out & vbTab
+                Case "u"
+                    out = out & ChrW$(CLng("&H" & Mid$(s, pos + 1, 4)))
+                    pos = pos + 4
+                Case Else: out = out & ch
+            End Select
+        Else
+            out = out & ch
+        End If
+        pos = pos + 1
+    Loop
+    Err.Raise vbObjectError + 7, SKW_APP, "JSON has text that never ends."
 End Function
 
 ' Every sheet: lower-case sheet name -> Collection of rows (lower-case header -> text).
@@ -393,11 +827,11 @@ Public Function SKW_SplitList(ByVal s As String) As Collection
     Set SKW_SplitList = c
 End Function
 
-' Placeholders: the workbook's list, else the defaults.
+' Placeholders: the effort's or the workbook's list, else the defaults.
 Public Function SKW_Placeholders() As Collection
     Dim c As Collection, v As Variant
     Set c = SKW_Column("Placeholders", "Text")
-    If c.Count = 0 Then
+    If c.Count = 0 And Not SKW_FromEffort("Placeholders") Then
         For Each v In Array("TBD", "TBR", "TBS", "XXX", "[insert", "Lorem ipsum", "<<", ">>", "???", _
                             "Click or tap here to enter text")
             c.Add v
