@@ -96,7 +96,10 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("MaxKeepWithNextChain", "8", "More paragraphs than this in a row set to Keep with next are reported."), _
         Array("StyleSource", "", "Full path of the team template to bring styles in from. Blank: the document's attached template."), _
         Array("AcronymList", "", "Full path of an acronym list exported from the Stationkeeper app (Excel or CSV), read with the Acronyms sheet."), _
-        Array("PageLimitTotal", "", "Page limit for the whole document. Blank: no limit."))
+        Array("PageLimitTotal", "", "Page limit for the whole document. Blank: no limit."), _
+        Array("BulletStyle", "List Bullet", "The team's bullet list style (Convert to Team List)."), _
+        Array("NumberStyle", "List Number", "The team's numbered list style (Convert to Team List)."), _
+        Array("AcronymListUsedOnly", "Yes", "Insert Acronym List: Yes lists only acronyms used in the document; No lists every team meaning."))
     Sheet wb, 3, "Allowed styles", Array( _
         Array("Style", "Required", "Notes"), _
         Array("Normal", "", ""), Array("Heading 1", "Yes", ""), Array("Heading 2", "", ""), Array("Heading 3", "", ""), _
@@ -286,6 +289,39 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Styles.RemoveUnusedCustomStyles", "Remove Unused Custom Styles", "Styles", _
         "Deletes custom styles nobody uses (not applied, not on the team list, not the base or next style of another). Lists what it deleted. One Ctrl+Z undoes it.", _
         "styles, cleanup, unused, delete styles", "Styles", "Whole document", "Yes")
+    s = s & "," & T("SKW_Utils.UnlinkFieldsSelection", "Unlink Fields (Selection)", "Fields", _
+        "Turns the fields in the selected text into plain text, so they never update again. Tables of contents and indexes stay fields. One Ctrl+Z undoes it.", _
+        "unlink, fields, plain text, freeze", "Fields", "Selection", "Yes")
+    s = s & "," & T("SKW_Utils.LockFieldsSelection", "Lock Fields (Selection)", "Fields", _
+        "Locks the fields in the selected text so updating fields leaves them as they are. One Ctrl+Z undoes it.", _
+        "lock, fields, freeze, ctrl+f11", "Fields", "Selection", "Yes")
+    s = s & "," & T("SKW_Utils.UnlockFieldsSelection", "Unlock Fields (Selection)", "Fields", _
+        "Unlocks the fields in the selected text so they update again. One Ctrl+Z undoes it.", _
+        "unlock, fields, ctrl+shift+f11", "Fields", "Selection", "Yes")
+    s = s & "," & T("SKW_Utils.RestartNumbering", "Restart Numbering", "Lists", _
+        "Starts the numbered list at the cursor again from 1. One Ctrl+Z undoes it.", _
+        "restart, numbering, list, start at 1", "Lists", "List at the cursor", "Yes")
+    s = s & "," & T("SKW_Utils.ContinueNumbering", "Continue Numbering", "Lists", _
+        "Continues the numbered list at the cursor from the list before it. One Ctrl+Z undoes it.", _
+        "continue, numbering, list", "Lists", "List at the cursor", "Yes")
+    s = s & "," & T("SKW_Utils.ConvertToTeamList", "Convert to Team List", "Lists", _
+        "Turns selected paragraphs that start with a typed bullet or number into the team list styles and takes the typed marker out. One Ctrl+Z undoes it.", _
+        "lists, bullets, numbering, convert, typed", "Lists", "Selection", "Yes")
+    s = s & "," & T("SKW_Utils.FitAllTables", "Fit All Tables", "Tables", _
+        "Fits every table wider than the margins to the page width (or only the tables in the selection). One Ctrl+Z undoes it.", _
+        "tables, fit, width, margins, autofit", "Tables", "Selection or whole document", "Yes")
+    s = s & "," & T("SKW_Utils.GoToNextFinding", "Go to Next Finding", "Tools setup", _
+        "Selects the next finding of the last report you ran, in the document it checked. Run it again for the one after.", _
+        "next, finding, report, go to, jump", "Text", "Cursor position", "No, it only changes the view")
+    s = s & "," & T("SKW_Utils.InstallToolShortcuts", "Install Tool Shortcuts", "Tools setup", _
+        "Sets Ctrl+Alt+Shift shortcuts for the most used tools in this template, leaving keys already in use alone.", _
+        "shortcuts, keyboard, keys", "Template", "Template", "It changes the template")
+    s = s & "," & T("SKW_Utils.InsertAcronymList", "Insert Acronym List", "Acronyms", _
+        "Inserts an Acronym and Definition table at the cursor: the acronyms used in this document that have a team meaning, A to Z. One Ctrl+Z undoes it.", _
+        "acronyms, list, table, insert, glossary", "Acronyms", "Cursor position", "Yes")
+    s = s & "," & T("SKW_Utils.ResetParagraphToStyle", "Reset Paragraph to Style", "Styles", _
+        "Puts the paragraph at the cursor or the selected paragraphs back to their style, removing all formatting set by hand. One Ctrl+Z undoes it.", _
+        "reset, paragraph, style, ctrl+q, ctrl+space", "Styles", "Cursor position", "Yes")
     s = s & "]}"
     SKW_ToolList = s
 End Function

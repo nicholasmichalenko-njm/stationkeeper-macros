@@ -41,6 +41,7 @@ Remove-Item (Join-Path $work 'Stationkeeper Macros backups') -Recurse -Force -Er
 Remove-Item $sample -Force -ErrorAction SilentlyContinue
 Get-ChildItem $work -Filter '~$*' -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 $excelBefore = @(Get-Process EXCEL -ErrorAction SilentlyContinue | ForEach-Object Id)
+$pptBefore = @(Get-Process POWERPNT -ErrorAction SilentlyContinue | ForEach-Object Id)
 $setKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\Settings'
 $prevBackup = (Get-ItemProperty $setKey -ErrorAction SilentlyContinue).backupDir
 foreach ($k in @('Team Sample Template.dotm')) { Remove-Item "HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\$k" -Recurse -ErrorAction SilentlyContinue }
@@ -298,7 +299,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(12 modules)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(13 modules)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -310,7 +311,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 32 tools arrive described, categorised and in the menu' (($tc -like '32 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 43 tools arrive described, categorised and in the menu' (($tc -like '43 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -470,6 +471,58 @@ try {
         Check 'remove unused custom styles: both unused ones go, Fancy Body stays, one Ctrl+Z brings them back' (($r -match 'Deleted 2 unused') -and ($r -match 'Unused Custom') -and ($r -match 'Unused Char') -and ($r -notmatch 'Fancy Body') -and ($e1 -eq 'False') -and ($e2 -eq 'True') -and ($fb -eq 'True')) "$r ## after=$e1 undo=$e2"
         $doc.Close([ref]0)
     }
+
+    # 12. 0.7.0: utilities.
+    [string]$d7 = Join-Path $work 'Defects 0.7.docx'
+    Remove-Item $d7 -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        [void](RunW $word 'SKW_Test.TW_BuildDefects')
+        [void](RunW $word 'SKW_Test.TW_BuildDefects2')
+        [void](RunW $word 'SKW_Test.TW_BuildDefects3' $d7)
+        $b = RunW $word 'SKW_Test.TW_BuildLists'
+        $r = RunW $word 'SKW_Test.TW_Numbering'
+        Write-Output "NUMBERING: $b ## $r"
+        Check 'continue numbering makes B1 3; restart at B2 makes it 1' (($r -match 'continue: .* B1=3\. B2=4\.') -and ($r -match 'restart: .* B1=3\. B2=1\.')) "$b ## $r"
+        $r = RunW $word 'SKW_Test.TW_Fields' 'lock'
+        $lk = RunW $word 'SKW_Test.TW_FieldLocks'
+        Check 'lock fields in the selection' (($r -match '^2 field\(s\) locked.*before=2 after=2') -and ($lk -eq 'LL')) "$r ## $lk"
+        $r = RunW $word 'SKW_Test.TW_Fields' 'unlock'
+        $lk = RunW $word 'SKW_Test.TW_FieldLocks'
+        Check 'unlock fields in the selection' (($r -match '^2 field\(s\) unlocked') -and ($lk -eq 'uu')) "$r ## $lk"
+        $r = RunW $word 'SKW_Test.TW_Fields' 'unlink'
+        Check 'unlink fields: the two fields become plain text' ($r -match '^2 field\(s\) turned into plain text.*before=2 after=0') $r
+        $u = 1; [void]$doc.Undo([ref]$u)
+        $r2 = RunW $word 'SKW_Test.TW_Fields' 'lock'
+        Check 'unlink: one Ctrl+Z brings the fields back' ($r2 -match 'before=2') $r2
+        $r = RunW $word 'SKW_Test.TW_Convert'
+        Write-Output "CONVERT: $r"
+        Check 'convert to team list: markers gone, bullet to List Bullet, number and letter to List Number' (($r -match 'Converted 1 bullet\(s\) to List Bullet and 2 numbered') -and ($r -match 'List Bullet:Typed bullet one:') -and ($r -match 'List Number:Typed number one:') -and ($r -match 'List Number:Typed letter one:')) ''
+        $w0 = RunW $word 'SKW_Test.TW_TableWidth' '2'
+        $r = RunW $word 'SKW_Test.TW_Fit'
+        $r = $r + ' ## width2=' + (RunW $word 'SKW_Test.TW_TableWidth' '2')
+        [void]$doc.Undo([ref]$u)
+        $w2 = RunW $word 'SKW_Test.TW_TableWidth' '2'
+        Check 'fit all tables: the 9-inch table fits the 6.5-inch text width; one Ctrl+Z restores it' (($w0 -eq '9.00') -and ($r -match 'Fitted 1 of 3') -and ($r -match 'width2=6\.[45]\d') -and ($w2 -eq '9.00')) "before=$w0 $r undo=$w2"
+        $r = RunW $word 'SKW_Test.TW_NextFinding'
+        Write-Output "NEXT: $r"
+        Check 'go to next finding walks the last report in the document' (($r -match '1: Finding 1 of \d+') -and ($r -match '2: Finding 2 of \d+') -and ($r -match 'sel=Bad head')) ''
+        $r = RunW $word 'SKW_Test.TW_InsertAcronyms'
+        $t1 = RunW $word 'SKW_Test.TW_TableCount'
+        [void]$doc.Undo([ref]$u)
+        $t2 = RunW $word 'SKW_Test.TW_TableCount'
+        Check 'insert acronym list: one table with RFP and its meaning; one Ctrl+Z takes it out' (($r -match 'Inserted 1 acronym') -and ($r -match 'tables\+1') -and ($r -match 'RFP') -and ($r -match 'Request for Proposal') -and ([int]$t2 -eq ([int]$t1 - 1))) "$r ## undo tables $t1 to $t2"
+        $r = RunW $word 'SKW_Test.TW_Reset'
+        [void]$doc.Undo([ref]$u)
+        $f2 = RunW $word 'SKW_Test.TW_FontName' 'typed in Arial'
+        Check 'reset paragraph to style: Arial and bold gone; one Ctrl+Z restores' (($r -match '1 paragraph\(s\) back to their style') -and ($r -notmatch 'font=Arial') -and ($r -match 'kept=0') -and ($f2 -eq 'Arial')) "$r ## undo font=$f2"
+        $r = RunW $word 'SKW_Test.TW_Shortcuts'
+        Check 'tool shortcuts set in the template' (($r -match 'Ctrl\+Alt\+Shift\+N: next finding') -and ($r -match 'N=.*GoToNextFinding')) $r
+        $doc.Close([ref]0)
+    }
+
+
 }
 catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)
@@ -478,6 +531,9 @@ finally {
     Stop-Job $guard -ErrorAction SilentlyContinue; Remove-Job $guard -Force -ErrorAction SilentlyContinue
     if (Test-Path (Join-Path $work 'dialog.txt')) { Check 'no dialog stopped a step' $false ((Get-Content (Join-Path $work 'dialog.txt') -Raw) -replace '\s+', ' ') }
     # End only Excel started by automation during this run (never one a person opened).
+    Get-CimInstance Win32_Process -Filter "Name='POWERPNT.EXE'" -ErrorAction SilentlyContinue |
+        Where-Object { ($pptBefore -notcontains $_.ProcessId) -and ($_.CommandLine -match '/automation|-Embedding') } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Get-CimInstance Win32_Process -Filter "Name='EXCEL.EXE'" -ErrorAction SilentlyContinue |
         Where-Object { ($excelBefore -notcontains $_.ProcessId) -and ($_.CommandLine -match '/automation|-Embedding') } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

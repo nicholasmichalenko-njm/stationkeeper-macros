@@ -9,12 +9,17 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "0.6.0"
+Public Const SKW_VERSION As String = "0.7.0"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
 Public SKW_LastReport As Object          ' the last report document made
 Public SKW_LastRows As Long              ' findings in the last report
+Public SKW_FindRows As Collection         ' the last report's rows, for Go to Next Finding
+Public SKW_FindCol As Long                ' which column of those rows holds the document's text
+Public SKW_FindDoc As String              ' the document that report checked
+Public SKW_FindTitle As String
+Public SKW_FindPos As Long
 
 Private mUndo As Boolean
 Private mScreen As Boolean
@@ -151,16 +156,27 @@ End Function
 ' ---------------------------------------------------------------------
 Public Function SKW_Report(ByVal title As String, ByVal intro As String, ByVal cols As Variant, _
                            ByVal rows As Collection) As Object
+    Set SKW_Report = SKW_ReportFor(title, intro, cols, rows, "")
+End Function
+
+' sourceName: what was checked when it is not the active Word document (a deck, a workbook).
+Public Function SKW_ReportFor(ByVal title As String, ByVal intro As String, ByVal cols As Variant, _
+                              ByVal rows As Collection, ByVal sourceName As String) As Object
     ' Written as an HTML file and opened as a new document, so nothing is edited in Word while it is
     ' made: the checked document's Undo list cannot pick up a step (Word sometimes files edits made to
     ' a hidden new document under the active one).
     Dim src As Object, d As Object, h As String, r As Variant, i As Long, tmp As String, v As Variant
-    Dim parts() As String, one As String, n As Long
-    Set src = ActiveDocument
+    Dim parts() As String, one As String, n As Long, srcName As String
+    If Len(sourceName) = 0 Then
+        Set src = ActiveDocument
+        srcName = src.Name
+    Else
+        srcName = sourceName
+    End If
     h = "<html><head><meta charset=""utf-8""><style>body{font-family:Calibri,sans-serif;font-size:10pt}" & _
         "h1{font-size:16pt}table{border-collapse:collapse}th,td{border:1px solid #999;padding:2pt 4pt;vertical-align:top;font-size:9pt}" & _
         "th{background:#DDEBF7;text-align:left}</style></head><body>" & _
-        "<h1>" & SKW_Html(title) & "</h1><p>Document: " & SKW_Html(src.Name) & " &nbsp; " & Format$(Now, "yyyy-mm-dd hh:nn") & _
+        "<h1>" & SKW_Html(title) & "</h1><p>" & IIf(Len(sourceName) > 0, "File: ", "Document: ") & SKW_Html(srcName) & " &nbsp; " & Format$(Now, "yyyy-mm-dd hh:nn") & _
         " &nbsp; " & SKW_Html(SKW_StdNote()) & "</p><p>" & SKW_Html(intro) & "</p>"
     If rows.Count > 0 Then
         h = h & "<table><thead><tr>"
@@ -195,9 +211,23 @@ Public Function SKW_Report(ByVal title As String, ByVal intro As String, ByVal c
     On Error GoTo 0
     If Not d Is Nothing Then d.Saved = True
     SKW_LastRows = rows.Count
+    ' Remember the findings so Go to Next Finding can walk through them in the document.
+    SKW_FindCol = -1
+    i = 0
+    For Each v In cols
+        Select Case LCase$(CStr(v))
+            Case "text", "excerpt", "text before", "first use", "sentence", "first cell"
+                If SKW_FindCol < 0 Then SKW_FindCol = i
+        End Select
+        i = i + 1
+    Next
+    Set SKW_FindRows = rows
+    If src Is Nothing Then SKW_FindDoc = "" Else SKW_FindDoc = src.FullName
+    SKW_FindTitle = title
+    SKW_FindPos = 0
     Set SKW_LastReport = d
-    Set SKW_Report = d
-    If SKW_IsQuiet() Then src.Activate
+    Set SKW_ReportFor = d
+    If SKW_IsQuiet() And Not src Is Nothing Then src.Activate
 End Function
 
 Public Function SKW_Html(ByVal s As String) As String

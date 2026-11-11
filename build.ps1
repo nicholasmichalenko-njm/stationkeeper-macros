@@ -18,7 +18,7 @@ Invoke-WordJob -Root $Root -Job {
     $vbp.Name = 'StationkeeperMacrosKit'
     [void]$vbp.VBComponents.Import((Join-Path $Root 'src\SK_Macros.bas'))
     [void]$vbp.VBComponents.Import((Join-Path $Root 'src\SK_Install.bas'))
-    foreach ($t in Get-ChildItem (Join-Path $Root 'src\tools') -Filter 'SKW_*.bas' | Sort-Object Name) {
+    foreach ($t in Get-ChildItem (Join-Path $Root 'src\tools') -Filter '*.bas' | Sort-Object Name) {
         [void]$vbp.VBComponents.Import([string]$t.FullName)
     }
     Write-Host 'step: modules imported'
@@ -55,7 +55,7 @@ Invoke-WordJob -Root $Root -Job {
     [string]$timp = Join-Path $imp 'Stationkeeper Tools'
     New-Item -ItemType Directory -Force $timp | Out-Null
     foreach ($c in @($vbp.VBComponents)) {
-        if ($c.Name -like 'SKW_*') { $c.Export([string](Join-Path $timp "$($c.Name).bas")) }
+        if ($c.Name -like 'SK[WPX]_*') { $c.Export([string](Join-Path $timp "$($c.Name).bas")) }
     }
     $doc.Close(0)
     Write-Output "Built $kit"

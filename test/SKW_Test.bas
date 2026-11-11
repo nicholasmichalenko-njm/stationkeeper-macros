@@ -528,3 +528,146 @@ Public Function TW_StyleExists(ByVal nm As String) As String
     Set st = ActiveDocument.Styles(nm)
     TW_StyleExists = Not st Is Nothing
 End Function
+
+' ---------------------------------------------------------------------
+' 0.7.0: utilities
+' ---------------------------------------------------------------------
+Public Function TW_BuildLists() As String
+    Dim d As Object, r As Object, a As Object, b As Object
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    Set a = AddPara(d, "Item A1")
+    AddPara d, "Item A2"
+    Set r = d.Range(FindText(d, "Item A1").Start, FindText(d, "Item A2").End)
+    r.ListFormat.ApplyNumberDefault
+    Set r = AddPara(d, "Between the lists.")
+    r.ListFormat.RemoveNumbers
+    AddPara d, "Item B1"
+    AddPara d, "Item B2"
+    Set r = d.Range(FindText(d, "Item B1").Start, FindText(d, "Item B2").End)
+    r.ListFormat.ApplyNumberDefault
+    Set r = AddPara(d, "After the lists.")
+    r.ListFormat.RemoveNumbers
+    ' A paragraph with two plain fields for the field tools.
+    AddPara d, "Fields here: A and B end."
+    Set r = FindText(d, "A and")
+    r.MoveEnd wdCharacter, -4
+    d.Fields.Add r, wdFieldEmpty, "QUOTE ""Alpha""", False
+    Set r = FindText(d, "B end")
+    r.MoveEnd wdCharacter, -4
+    d.Fields.Add r, wdFieldEmpty, "QUOTE ""Bravo""", False
+    TW_BuildLists = "B1=" & FindText(d, "Item B1").ListFormat.ListString
+End Function
+
+Public Function TW_Numbering() As String
+    Dim d As Object, s As String
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    FindText(d, "Item B1").Select
+    Selection.Collapse wdCollapseStart
+    s = "continue: " & SKW_Numbering(True) & " B1=" & FindText(d, "Item B1").ListFormat.ListString & " B2=" & FindText(d, "Item B2").ListFormat.ListString
+    FindText(d, "Item B2").Select
+    Selection.Collapse wdCollapseStart
+    s = s & " ## restart: " & SKW_Numbering(False) & " B1=" & FindText(d, "Item B1").ListFormat.ListString & " B2=" & FindText(d, "Item B2").ListFormat.ListString
+    TW_Numbering = s
+End Function
+
+Public Function TW_Fields(ByVal what As String) As String
+    Dim d As Object, r As Object, n0 As Long
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    Set r = FindText(d, "Fields here:").Paragraphs(1).Range
+    r.Select
+    n0 = r.Fields.Count
+    TW_Fields = SKW_FieldsSelection(what) & " ## before=" & n0 & " after=" & r.Fields.Count & " text=" & SKW_Excerpt(r.Text, 60)
+End Function
+
+' Read in its own run: inside the run that changed them, Word still reports the old lock state.
+Public Function TW_FieldLocks() As String
+    Dim f As Object
+    For Each f In FindText(ActiveDocument, "Fields here:").Paragraphs(1).Range.Fields
+        TW_FieldLocks = TW_FieldLocks & IIf(f.Locked, "L", "u")
+    Next
+End Function
+
+Public Function TW_Convert() As String
+    Dim d As Object, r As Object
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    Set r = d.Range(FindText(d, "Typed bullet one").Paragraphs(1).Range.Start, FindText(d, "Typed letter one").Paragraphs(1).Range.End)
+    r.Select
+    TW_Convert = Replace(SKW_ConvertToTeamList(), vbCr, " / ") & " ## " & ParaInfo(d, "Typed bullet one") & " | " & ParaInfo(d, "Typed number one") & " | " & ParaInfo(d, "Typed letter one")
+End Function
+
+Private Function ParaInfo(ByVal d As Object, ByVal t As String) As String
+    Dim p As Object
+    Set p = FindText(d, t).Paragraphs(1)
+    ParaInfo = SKW_ParaStyleName(p.Range) & ":" & Trim$(Replace(p.Range.Text, vbCr, "")) & ":" & p.Range.ListFormat.ListString
+End Function
+
+Public Function TW_Fit() As String
+    SKW_Quiet = True
+    ActiveDocument.Range(0, 0).Select
+    TW_Fit = Replace(SKW_FitAllTables(), vbCr, " / ")
+End Function
+
+Public Function TW_TableWidth(ByVal i As String) As String
+    TW_TableWidth = TableWidth(ActiveDocument.Tables(CLng(i)))
+End Function
+
+Private Function TableWidth(ByVal t As Object) As String
+    Dim c As Object, w As Single
+    For Each c In t.Range.Cells
+        If c.RowIndex > 1 Then Exit For
+        w = w + c.Width
+    Next
+    TableWidth = Format$(w / 72, "0.00")
+End Function
+
+Public Function TW_NextFinding() As String
+    Dim s As String
+    SKW_Quiet = True
+    s = SKW_TableStandardsAudit()
+    CloseReport
+    s = s & " ## 1: " & SKW_GoToNextFinding() & " [sel=" & SKW_Excerpt(Selection.Text, 30) & "]"
+    s = s & " ## 2: " & SKW_GoToNextFinding() & " [sel=" & SKW_Excerpt(Selection.Text, 30) & "]"
+    TW_NextFinding = s
+End Function
+
+Public Function TW_Shortcuts() As String
+    Dim s As String, kb As Object
+    s = Replace(SKW_InstallToolShortcuts(), vbCr, " / ")
+    CustomizationContext = MacroContainer
+    Set kb = FindKey(BuildKeyCode(wdKeyControl, wdKeyAlt, wdKeyShift, wdKeyN))
+    TW_Shortcuts = s & " ## N=" & kb.Command
+End Function
+
+Public Function TW_InsertAcronyms() As String
+    Dim d As Object, n As Long, s As String
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    AddPara d, "Acronym list goes here."
+    FindText(d, "Acronym list goes here.").Select
+    Selection.Collapse wdCollapseStart
+    n = d.Tables.Count
+    s = Replace(SKW_InsertAcronymList(True), vbCr, " / ")
+    TW_InsertAcronyms = s & " ## tables+" & (d.Tables.Count - n) & IIf(d.Tables.Count > n, " cell=" & SKW_Excerpt(d.Tables(d.Tables.Count).Range.Text, 80), "")
+End Function
+
+Public Function TW_TableCount() As String
+    TW_TableCount = ActiveDocument.Tables.Count
+End Function
+
+Public Function TW_Reset() As String
+    Dim d As Object, s As String
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    FindText(d, "typed in Arial").Select
+    Selection.Collapse wdCollapseStart
+    s = Replace(SKW_ResetParagraphToStyle(), vbCr, " / ")
+    TW_Reset = s & " ## font=" & FindText(d, "typed in Arial").Font.Name & " kept=" & FindText(d, "kept").Font.Bold
+End Function
+
+Public Function TW_FontName(ByVal t As String) As String
+    TW_FontName = FindText(ActiveDocument, t).Font.Name
+End Function
