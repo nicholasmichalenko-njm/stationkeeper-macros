@@ -5,6 +5,8 @@ Attribute VB_Name = "SKW_Layout"
 '   KeepWithNextAudit   report: headings and captions that can be stranded at the bottom of a page
 '   BreakHygiene        report: manual page breaks, empty paragraphs used as spacing, line breaks
 '   TOCCheck            report: headings missing from the contents, entries with no heading, old page numbers
+'   PageLimitCounter    report: pages per top-level part against the team's page limits
+'   GraphicsAudit       report: pictures and shapes without alt text, too wide, floating, broken links
 ' =====================================================================
 Option Explicit
 
@@ -303,4 +305,153 @@ Public Function SKW_TOCCheck() As String
         ", page numbers out of date " & nPage & ". Safe Update All Fields brings them up to date. Changes nothing.", _
         Array("Contents", "Rule", "Finding", "Page", "Text"), rows
     SKW_TOCCheck = "Missing " & nMiss & ", no heading " & nGone & ", old page numbers " & nPage & "."
+End Function
+
+' ---------------------------------------------------------------------
+' Page limits and graphics
+' ---------------------------------------------------------------------
+
+' Counts the pages of each top-level heading's part and of the whole document, and compares them with the limits on the Page limits sheet (Heading, Max pages) and the PageLimitTotal setting. Changes nothing.
+Public Sub PageLimitCounter()
+    SKW_Show SKW_PageLimitCounter()
+End Sub
+
+' Lists every picture, chart and shape: inline or floating, size, wider than the margins, scaled up, missing alt text (screen readers), linked to a file that is gone. Changes nothing.
+Public Sub GraphicsAudit()
+    SKW_Show SKW_GraphicsAudit()
+End Sub
+
+Private Function PageNo(ByVal r As Object) As Long
+    On Error Resume Next
+    PageNo = r.Information(wdActiveEndAdjustedPageNumber)
+End Function
+
+Public Function SKW_PageLimitCounter() As String
+    Dim d As Object, msg As String, rows As New Collection, p As Object, limits As Object, r As Object, total As Long, lim As String
+    Dim starts As New Collection, titles As New Collection, i As Long, a As Long, b As Long, pages As Long, nOver As Long, t As String
+    Dim x As Object, totalLimit As String, k As Variant
+    Set SKW_LastReport = Nothing
+    msg = SKW_Begin("Page limit counter", False)
+    If Len(msg) > 0 Then SKW_PageLimitCounter = msg: Exit Function
+    Set d = ActiveDocument
+    Set limits = CreateObject("Scripting.Dictionary")
+    For Each r In SKW_Rows("Page limits")
+        If r.Exists("heading") And r.Exists("max pages") Then
+            If Len(r("heading")) > 0 Then limits(LCase$(r("heading"))) = r("max pages")
+        End If
+    Next
+    total = d.ComputeStatistics(wdStatisticPages)
+    For Each p In d.Paragraphs
+        If p.Format.OutlineLevel = 1 And Not p.Range.Information(wdWithInTable) Then
+            t = Trim$(Replace(Replace(p.Range.Text, vbCr, ""), Chr$(12), ""))
+            If Len(t) > 0 Then starts.Add PageNo(p.Range): titles.Add t
+        End If
+    Next
+    For i = 1 To starts.Count
+        a = starts(i)
+        If i < starts.Count Then
+            b = starts(i + 1)
+            pages = b - a + 1
+            If b > a Then pages = b - a   ' the next part starts on a later page: this part ends on the page before
+        Else
+            b = total: pages = b - a + 1
+        End If
+        If pages < 1 Then pages = 1
+        lim = ""
+        For Each k In limits.Keys
+            If LCase$(titles(i)) Like k & "*" Then lim = limits(k): Exit For
+        Next
+        If IsNumeric(lim) And Len(lim) > 0 Then
+            If pages > CLng(lim) Then nOver = nOver + 1
+            rows.Add SKW_Row(titles(i), a, pages, lim, IIf(pages > CLng(lim), "OVER by " & (pages - CLng(lim)), "OK, " & (CLng(lim) - pages) & " to spare"))
+        Else
+            rows.Add SKW_Row(titles(i), a, pages, "", "")
+        End If
+    Next
+    totalLimit = SKW_Setting("PageLimitTotal", "")
+    If IsNumeric(totalLimit) And Len(totalLimit) > 0 Then
+        If total > CLng(totalLimit) Then nOver = nOver + 1
+        rows.Add SKW_Row("Whole document", 1, total, totalLimit, IIf(total > CLng(totalLimit), "OVER by " & (total - CLng(totalLimit)), "OK, " & (CLng(totalLimit) - total) & " to spare"))
+    Else
+        rows.Add SKW_Row("Whole document", 1, total, "", "")
+    End If
+    SKW_Finish
+    SKW_Report "Page Limit Counter", total & " page(s), " & starts.Count & " top-level part(s), " & nOver & " over the limit. " & _
+        "A part runs from its heading's page to the page before the next top-level heading (a shared page counts once, for the earlier part). " & _
+        "Limits: Page limits sheet (Heading, Max pages; a heading matches when it starts with that text) and PageLimitTotal. Check the customer's own counting rules (cover, contents, tabs). Changes nothing.", _
+        Array("Part", "Starts on page", "Pages", "Limit", "Result"), rows
+    SKW_PageLimitCounter = total & " page(s), " & nOver & " over the limit."
+End Function
+
+Public Function SKW_GraphicsAudit() As String
+    Dim d As Object, msg As String, rows As New Collection, sh As Object, i As Long, kind As String, notes As String, tw As Single
+    Dim nNoAlt As Long, nWide As Long, nLink As Long, nFloat As Long, src As String, alt As String
+    Set SKW_LastReport = Nothing
+    msg = SKW_Begin("Graphics audit", False)
+    If Len(msg) > 0 Then SKW_GraphicsAudit = msg: Exit Function
+    Set d = ActiveDocument
+    For Each sh In d.InlineShapes
+        i = i + 1
+        notes = ""
+        Select Case sh.Type
+            Case 3: kind = "Picture"
+            Case 4: kind = "Linked picture"
+            Case 12: kind = "Chart"
+            Case 15: kind = "SmartArt"
+            Case 1: kind = "Embedded object"
+            Case 2: kind = "Linked object"
+            Case Else: kind = "Inline item " & sh.Type
+        End Select
+        If sh.Type = 6 Or sh.Type = 9 Then GoTo NextInline   ' horizontal lines
+        alt = ""
+        On Error Resume Next
+        alt = Trim$(sh.AlternativeText)
+        tw = 0
+        With sh.Range.Sections(1).PageSetup
+            tw = .PageWidth - .LeftMargin - .RightMargin - .Gutter
+        End With
+        On Error GoTo 0
+        If Len(alt) = 0 Then notes = notes & "; no alt text": nNoAlt = nNoAlt + 1
+        If tw > 0 And sh.Width > tw + 2 And Not sh.Range.Information(wdWithInTable) Then notes = notes & "; wider than the margins": nWide = nWide + 1
+        On Error Resume Next
+        If sh.ScaleWidth > 100.5 Then notes = notes & "; scaled up to " & Format$(sh.ScaleWidth, "0") & "% (may look soft)"
+        src = ""
+        src = sh.LinkFormat.SourceFullName
+        On Error GoTo 0
+        If Len(src) > 0 Then
+            If Len(Dir$(src)) = 0 Then notes = notes & "; linked file not found: " & src: nLink = nLink + 1
+        End If
+        rows.Add SKW_Row(i, kind & " (inline)", Format$(sh.Width / 72, "0.00") & " x " & Format$(sh.Height / 72, "0.00") & " in", _
+            SKW_Page(sh.Range), Mid$(notes & " ", 3), alt)
+NextInline:
+    Next
+    For Each sh In d.Shapes
+        i = i + 1
+        nFloat = nFloat + 1
+        notes = "; floating (text wraps around it; it can drift from its text)"
+        alt = ""
+        On Error Resume Next
+        alt = Trim$(sh.AlternativeText)
+        On Error GoTo 0
+        If Len(alt) = 0 And sh.Type <> 17 Then notes = notes & "; no alt text": nNoAlt = nNoAlt + 1   ' 17 = text box
+        rows.Add SKW_Row(i, ShapeKind(sh.Type) & " (floating)", Format$(sh.Width / 72, "0.00") & " x " & Format$(sh.Height / 72, "0.00") & " in", _
+            SKW_Page(sh.Anchor), Mid$(notes, 3), alt)
+    Next
+    SKW_Finish
+    SKW_Report "Graphics Audit", i & " graphic(s). No alt text " & nNoAlt & ", wider than the margins " & nWide & ", missing linked files " & nLink & _
+        ", floating " & nFloat & ". Shapes in headers and footers are not listed. Changes nothing.", Array("#", "Kind", "Size", "Page", "Notes", "Alt text"), rows
+    SKW_GraphicsAudit = i & " graphic(s): no alt text " & nNoAlt & ", too wide " & nWide & ", missing links " & nLink & ", floating " & nFloat & "."
+End Function
+
+Private Function ShapeKind(ByVal t As Long) As String
+    Select Case t
+        Case 13: ShapeKind = "Picture"
+        Case 11: ShapeKind = "Linked picture"
+        Case 3: ShapeKind = "Chart"
+        Case 17: ShapeKind = "Text box"
+        Case 6: ShapeKind = "Group"
+        Case 20: ShapeKind = "Drawing canvas"
+        Case 24: ShapeKind = "SmartArt"
+        Case Else: ShapeKind = "Shape"
+    End Select
 End Function

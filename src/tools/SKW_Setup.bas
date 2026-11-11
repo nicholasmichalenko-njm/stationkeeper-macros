@@ -57,7 +57,7 @@ End Function
 
 Public Function SKW_StandardsSummary() As String
     Dim s As String, v As Variant
-    For Each v In Array("Allowed styles", "Table types", "Placeholders", "Banned phrases", "Fonts", "Acronyms", "Style map", "Settings")
+    For Each v In Array("Allowed styles", "Table types", "Placeholders", "Banned phrases", "Fonts", "Acronyms", "Style map", "Page limits", "Settings")
         s = s & v & ": " & SKW_Rows(CStr(v)).Count & IIf(v = "Settings", "", ", ")
     Next
     SKW_StandardsSummary = s
@@ -94,7 +94,9 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("TableLabel", "Table", "The caption label for tables (the SEQ name)."), _
         Array("FigureLabel", "Figure", "The caption label for figures (the SEQ name)."), _
         Array("MaxKeepWithNextChain", "8", "More paragraphs than this in a row set to Keep with next are reported."), _
-        Array("StyleSource", "", "Full path of the team template to bring styles in from. Blank: the document's attached template."))
+        Array("StyleSource", "", "Full path of the team template to bring styles in from. Blank: the document's attached template."), _
+        Array("AcronymList", "", "Full path of an acronym list exported from the Stationkeeper app (Excel or CSV), read with the Acronyms sheet."), _
+        Array("PageLimitTotal", "", "Page limit for the whole document. Blank: no limit."))
     Sheet wb, 3, "Allowed styles", Array( _
         Array("Style", "Required", "Notes"), _
         Array("Normal", "", ""), Array("Heading 1", "Yes", ""), Array("Heading 2", "", ""), Array("Heading 3", "", ""), _
@@ -124,6 +126,7 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
     Sheet wb, 9, "Ignore", Array(Array("Text", "Why"), Array("", ""))
     Sheet wb, 10, "Dictionaries", Array(Array("Path", "Notes"), Array("", "Full path to a team custom dictionary (.dic)"))
     Sheet wb, 11, "Style map", Array(Array("From", "To", "Notes"), Array("", "", "Remap Style changes every use of From to To (for example an old style to the team style)"))
+    Sheet wb, 12, "Page limits", Array(Array("Heading", "Max pages", "Notes"), Array("", "", "A top-level heading (or how it starts, for example Volume I) and its page limit"))
     wb.Worksheets(1).Activate
     wb.SaveAs p, 51
     If openAfter And Not SKW_IsQuiet() Then
@@ -253,6 +256,36 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Layout.TOCCheck", "TOC Check", "Fields", _
         "Report comparing the table of contents with the headings: headings missing, entries with no heading, page numbers out of date. Changes nothing.", _
         "toc, contents, headings, page numbers", "Fields, Pages and sections", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Acronyms.AcronymQuickCheck", "Acronym Quick Check (text only)", "Acronyms", _
+        "Report of the acronyms in the typed text: uses, first use in running text, spelled out there or not, and the team meaning (Acronyms sheet or the app's export). Text only: pictures are not scanned; the Stationkeeper app does the full check. Changes nothing.", _
+        "acronyms, abbreviations, first use, define, spelled out", "Acronyms, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Text.TypographySweep", "Typography Sweep", "Text", _
+        "Report of typing slips: double spaces, spaces before punctuation, straight quotes, double or spaced hyphens, three dots and spaces at paragraph ends. Changes nothing.", _
+        "typography, double spaces, quotes, dashes, ellipsis, typos", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Text.LoadTeamDictionaries", "Load Team Dictionaries", "Tools setup", _
+        "Adds the team's custom dictionaries (Dictionaries sheet) to Word on this PC, so team words are not marked as misspelled.", _
+        "dictionary, spelling, custom dictionary, proofing", "Template", "Template", "No, it changes Word's dictionary list")
+    s = s & "," & T("SKW_Text.CheckSelectionSpelling", "Check Selection Spelling", "Text", _
+        "Report of the spelling and grammar issues Word finds in the selected text, with Word's first suggestion. Changes nothing.", _
+        "spelling, grammar, proofing, check", "Text", "Selection", "No, it only reports")
+    s = s & "," & T("SKW_Styles.FontNotAllowed", "Font Not Allowed", "Styles", _
+        "Report of every font used in the text, flagging the ones not on the team's Fonts sheet. Changes nothing.", _
+        "fonts, typeface, allowed, compliance", "Styles, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Layout.PageLimitCounter", "Page Limit Counter", "Layout", _
+        "Report of the pages in each top-level part and the whole document against the team's page limits. Changes nothing.", _
+        "page limit, page count, volumes, pages", "Pages and sections", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Layout.GraphicsAudit", "Graphics Audit", "Layout", _
+        "Report of every picture, chart and shape: inline or floating, size, too wide, scaled up, no alt text, linked file missing. Changes nothing.", _
+        "graphics, pictures, images, alt text, accessibility, figures", "Figures", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Output.MetadataCleanCopy", "Metadata Clean Copy", "Before delivery", _
+        "Saves a copy beside the document without author, company, template path, document variables and other personal details. The open document is not changed.", _
+        "metadata, clean, properties, author, personal information, delivery", "Whole document", "Whole document", "No, it saves a clean copy")
+    s = s & "," & T("SKW_Output.PDFWithBookmarks", "PDF with Bookmarks", "Before delivery", _
+        "Saves a PDF beside the document with bookmarks from the headings and tags for screen readers, without the file's personal details.", _
+        "pdf, export, bookmarks, accessible, tagged", "Whole document", "Whole document", "No, it saves a PDF")
+    s = s & "," & T("SKW_Styles.RemoveUnusedCustomStyles", "Remove Unused Custom Styles", "Styles", _
+        "Deletes custom styles nobody uses (not applied, not on the team list, not the base or next style of another). Lists what it deleted. One Ctrl+Z undoes it.", _
+        "styles, cleanup, unused, delete styles", "Styles", "Whole document", "Yes")
     s = s & "]}"
     SKW_ToolList = s
 End Function

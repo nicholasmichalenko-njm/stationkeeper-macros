@@ -61,7 +61,8 @@ Public Function TW_AllReports() As String
     SKW_Quiet = True
     For Each v In Array("SKW_FindBrokenReferences", "SKW_FieldCodeReport", "SKW_PreDeliveryLeftovers", "SKW_NonAllowedStyleReport", _
                         "SKW_DirectFormattingReport", "SKW_TableStandardsAudit", "SKW_StyleInspector", "SKW_SectionMap", "SKW_CaptionAudit", _
-                        "SKW_KeepWithNextAudit", "SKW_BreakHygiene", "SKW_TypedListsFinder", "SKW_TOCCheck")
+                        "SKW_KeepWithNextAudit", "SKW_BreakHygiene", "SKW_TypedListsFinder", "SKW_TOCCheck", "SKW_AcronymQuickCheck", _
+                        "SKW_TypographySweep", "SKW_FontNotAllowed", "SKW_PageLimitCounter", "SKW_GraphicsAudit")
         s = s & v & ": " & Application.Run(CStr(v)) & " / "
         CloseReport
     Next
@@ -458,4 +459,72 @@ End Function
 Public Function TW_Import() As String
     SKW_Quiet = True
     TW_Import = Replace(SKW_ImportTeamStyles(""), vbCr, " / ")
+End Function
+
+' ---------------------------------------------------------------------
+' 0.6.0: batch 3
+' ---------------------------------------------------------------------
+Public Function TW_BuildDefects3(ByVal savePath As String) As String
+    Dim d As Object, st As Object
+    SKW_Quiet = True
+    Set d = ActiveDocument
+    d.TrackRevisions = False
+    AddPara d, "Request for Proposal (RFP) text."
+    AddPara d, "The SOW covers the work."
+    AddPara d, "Statement of Work (SOW) is the scope."
+    AddPara d, "Typos  here ,and ""straight"" quotes -- dash ... end. "
+    AddPara d, "We recieve teh data."
+    On Error Resume Next
+    Set st = d.Styles("Unused Custom")
+    On Error GoTo 0
+    If st Is Nothing Then
+        d.Styles.Add "Unused Custom", wdStyleTypeParagraph
+        d.Styles.Add "Unused Char", wdStyleTypeCharacter
+    End If
+    If d.InlineShapes.Count > 0 Then d.InlineShapes(1).AlternativeText = "Red dot"
+    d.BuiltInDocumentProperties("Author") = "Test Author"
+    d.BuiltInDocumentProperties("Company") = "Test Company"
+    d.SaveAs2 FileName:=savePath, FileFormat:=wdFormatXMLDocument
+    d.Range(0, 0).Select
+    TW_BuildDefects3 = "saved=" & d.FullName
+End Function
+
+Public Function TW_Spelling() As String
+    Dim s As String
+    SKW_Quiet = True
+    FindText(ActiveDocument, "We recieve teh data.").Select
+    s = SKW_CheckSelectionSpelling() & " ## " & ReportText()
+    CloseReport
+    TW_Spelling = s
+End Function
+
+Public Function TW_Dictionaries() As String
+    TW_Dictionaries = Replace(SKW_LoadTeamDictionaries(), vbCr, " / ")
+End Function
+
+Public Function TW_Clean(ByVal target As String) As String
+    Dim s As String, c As Object, a As String
+    SKW_Quiet = True
+    s = Replace(SKW_MetadataCleanCopy(target), vbCr, " / ")
+    Set c = Documents.Open(FileName:=target, ReadOnly:=True, AddToRecentFiles:=False, Visible:=False)
+    a = c.BuiltInDocumentProperties("Author") & "|" & c.BuiltInDocumentProperties("Company")
+    c.Close 0
+    TW_Clean = s & " ## props=[" & a & "] active=" & ActiveDocument.Name
+End Function
+
+Public Function TW_Pdf(ByVal target As String) As String
+    SKW_Quiet = True
+    TW_Pdf = Replace(SKW_PDFWithBookmarks(target), vbCr, " / ") & " ## bytes=" & FileLen(target)
+End Function
+
+Public Function TW_RemoveUnused() As String
+    SKW_Quiet = True
+    TW_RemoveUnused = Replace(SKW_RemoveUnusedCustomStyles(), vbCr, " / ")
+End Function
+
+Public Function TW_StyleExists(ByVal nm As String) As String
+    Dim st As Object
+    On Error Resume Next
+    Set st = ActiveDocument.Styles(nm)
+    TW_StyleExists = Not st Is Nothing
 End Function

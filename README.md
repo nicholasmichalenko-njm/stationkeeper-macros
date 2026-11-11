@@ -81,11 +81,11 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 20 tools in 0.5.0)
+## Stationkeeper Tools (0.4.0 and later; 30 tools in 0.6.0)
 
 Checking and fixing tools for Word documents, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
-**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies nine modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies twelve modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook.** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
@@ -111,6 +111,16 @@ Checking and fixing tools for Word documents, in the same kit. They work on thei
 | Typed Lists Finder | Paragraphs starting with a typed bullet or number instead of a real list | No, report |
 | Toggle Field Codes | Shows or hides field codes (Alt+F9) | View only |
 | TOC Check | Headings missing from the contents, entries whose heading changed, page numbers out of date | No, report |
+| Acronym Quick Check (text only) | Acronyms in the typed text: uses, first use in running text (not tables or headings), spelled out there as "Words (ACR)" or not, team meaning from the Acronyms sheet or the Stationkeeper app's export (setting AcronymList). Pictures are not scanned and the report says so; the app does the full check | No, report |
+| Typography Sweep | Double spaces, space before punctuation, straight quotes, double or spaced hyphens, three dots, spaces at paragraph ends | No, report |
+| Load Team Dictionaries | Adds the dictionaries on the Dictionaries sheet to Word on this PC | Word settings only |
+| Check Selection Spelling | Word's spelling and grammar issues in the selection, with its first suggestion | No, report |
+| Font Not Allowed | Every font used, flagging ones not on the Fonts sheet | No, report |
+| Page Limit Counter | Pages per top-level part and in total against the Page limits sheet and PageLimitTotal | No, report |
+| Graphics Audit | Pictures, charts and shapes: inline or floating, size, too wide, scaled up, no alt text, missing linked file | No, report |
+| Metadata Clean Copy | Saves "<name> - clean.docx" beside the document without author, company, template path, variables and personal details | No, saves a copy |
+| PDF with Bookmarks | Saves a tagged PDF with heading bookmarks, without file details | No, saves a PDF |
+| Remove Unused Custom Styles | Deletes custom styles not applied anywhere, not on the team list and not depended on | Yes, one Ctrl+Z |
 
 How they behave:
 - **Reports** open as a new Word document with one table and the standards used at the top. They change nothing in your document, not even its Undo list (the report is written as a web page and opened, so Word edits nothing while making it).
@@ -142,7 +152,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 94 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 106 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -160,7 +170,7 @@ build.ps1, test.ps1
 
 ## Next
 
-- Stationkeeper Tools, ten at a time, a release for each: acronym quick check, typography, dictionaries, fonts, PDF (0.6.0); utilities (0.7.0); PowerPoint (0.8.0); Excel (0.9.0).
+- Stationkeeper Tools, ten at a time, a release for each: utilities (0.7.0); PowerPoint (0.8.0); Excel (0.9.0).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

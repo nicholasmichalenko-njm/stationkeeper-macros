@@ -298,7 +298,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(9 modules)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(12 modules)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -310,7 +310,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 22 tools arrive described, categorised and in the menu' (($tc -like '22 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 32 tools arrive described, categorised and in the menu' (($tc -like '32 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -385,7 +385,7 @@ try {
         $u0 = RunW $word 'SKW_Test.TW_UndoList'
         [void](RunW $word 'SKW_Test.TW_AllReports')
         $u1 = RunW $word 'SKW_Test.TW_UndoList'
-        Check 'all 13 report tools leave the Undo list as it was' ($u0 -eq $u1) "before: $u0 ## after: $u1"
+        Check 'all 18 report tools leave the Undo list as it was' ($u0 -eq $u1) "before: $u0 ## after: $u1"
         $r = RunW $word 'SKW_Test.TW_Report' 'SKW_SectionMap'
         Write-Output "SECTIONS: $($r.Substring(0, [Math]::Min(900, $r.Length)))"
         Check 'section map: two sections, the second landscape with its own footer' (($r -like '2 section(s) mapped*') -and ($r -match 'Landscape') -and ($r -match 'same as previous / own')) ''
@@ -424,6 +424,50 @@ try {
         Write-Output "IMPORT: $r ## size set=$s0 after import=$s1 after one undo=$s2"
         Check 'import team styles: Normal comes back from the template and is listed' (($r -match 'changed: [^.]*Normal') -and ($s1 -ne '20')) "$r ## after=$s1"
         $script:importUndo = $s2
+        $doc.Close([ref]0)
+    }
+
+    # 11. 0.6.0: batch 3 on a saved defect document (clean copy and PDF need a file).
+    [string]$d6 = Join-Path $work 'Defects 0.6.docx'
+    [string]$c6 = Join-Path $work 'Defects 0.6 - clean.docx'
+    [string]$p6 = Join-Path $work 'Defects 0.6.pdf'
+    Remove-Item $d6, $c6, $p6 -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        [void](RunW $word 'SKW_Test.TW_BuildDefects')
+        [void](RunW $word 'SKW_Test.TW_BuildDefects2')
+        $b = RunW $word 'SKW_Test.TW_BuildDefects3' $d6
+        Check 'batch 3 defects added and saved' (Test-Path $d6) $b
+        $u0 = RunW $word 'SKW_Test.TW_UndoList'
+        [void](RunW $word 'SKW_Test.TW_AllReports')
+        $u1 = RunW $word 'SKW_Test.TW_UndoList'
+        Check 'all 18 report tools leave the Undo list as it was (batch 3 document)' ($u0 -eq $u1) "before: $u0 ## after: $u1"
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_AcronymQuickCheck'
+        Write-Output "ACRONYMS: $($r.Substring(0, [Math]::Min(1500, $r.Length)))"
+        Check 'acronym quick check: labelled text only, RFP spelled out and on the list, SOW spelled out only later' (($r -match 'text only') -and ($r -match 'pictures and images are not scanned') -and ($r -match '\| RFP \| 1 \| \d+ \| Yes \| Yes \| Request for Proposal \|') -and ($r -match '\| SOW \| 2 \| \d+ \| No \(spelled out later\) \| No \|')) ''
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_TypographySweep'
+        Check 'typography sweep: double space, space before punctuation, straight quotes, double hyphen, three dots, space at paragraph end' (($r -match 'Double space [1-9]') -and ($r -match 'Space before punctuation [1-9]') -and ($r -match 'Straight quote [1-9]') -and ($r -match 'Double hyphen [1-9]') -and ($r -match 'Three dots [1-9]') -and ($r -match 'Space at paragraph end [1-9]')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Spelling'
+        Check 'check selection spelling: the two misspellings with suggestions' (($r -match '^Spelling [2-9]') -and ($r -match 'recieve \| receive')) ($r.Substring(0, [Math]::Min(400, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Dictionaries'
+        Check 'team dictionaries: says the list is empty' ($r -match 'lists no dictionaries') $r
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_FontNotAllowed'
+        Check 'fonts: Arial and Courier New not allowed' (($r -match 'Not allowed \| Arial') -and ($r -match 'Not allowed \| Courier New')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_PageLimitCounter'
+        Check 'page limit counter: parts by top-level heading and the whole document' (($r -match 'page\(s\), 0 over the limit') -and ($r -match '\| Introduction \| 1 \|') -and ($r -match '\| Heading added later \|') -and ($r -match '\| Whole document \| 1 \|')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Report' 'SKW_GraphicsAudit'
+        Check 'graphics audit: two pictures, one without alt text' ($r -like '2 graphic(s): no alt text 1,*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Clean' $c6
+        Check 'metadata clean copy: author and company gone, the open document untouched' ((Test-Path $c6) -and ($r -match 'props=\[\|\]') -and ($r -match 'active=Defects 0\.6\.docx') -and ($r -match 'comment')) $r
+        $r = RunW $word 'SKW_Test.TW_Pdf' $p6
+        Check 'PDF with bookmarks saved' ((Test-Path $p6) -and ($r -match 'bytes=\d{4,}')) $r
+        $r = RunW $word 'SKW_Test.TW_RemoveUnused'
+        $e1 = RunW $word 'SKW_Test.TW_StyleExists' 'Unused Custom'
+        $u = 1; [void]$doc.Undo([ref]$u)
+        $e2 = RunW $word 'SKW_Test.TW_StyleExists' 'Unused Custom'
+        $fb = RunW $word 'SKW_Test.TW_StyleExists' 'Fancy Body'
+        Check 'remove unused custom styles: both unused ones go, Fancy Body stays, one Ctrl+Z brings them back' (($r -match 'Deleted 2 unused') -and ($r -match 'Unused Custom') -and ($r -match 'Unused Char') -and ($r -notmatch 'Fancy Body') -and ($e1 -eq 'False') -and ($e2 -eq 'True') -and ($fb -eq 'True')) "$r ## after=$e1 undo=$e2"
         $doc.Close([ref]0)
     }
 }

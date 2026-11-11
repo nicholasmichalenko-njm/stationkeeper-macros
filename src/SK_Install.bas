@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Install"
 ' =====================================================================
-' Stationkeeper Macros kit installer 0.5.0
+' Stationkeeper Macros kit installer 0.6.0
 ' Lives only in "Stationkeeper Macros Kit.dotm". It copies the menu and
 ' the admin into a template you pick, with Word's Organizer. No VBA
 ' editor needed. Your own macros are not touched.
@@ -14,7 +14,7 @@ Attribute VB_Name = "SK_Install"
 Option Explicit
 
 Private Const KIT_ITEMS As String = "SK_Macros|frmSKMenu|frmSKAdmin"
-Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists"
+Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output"
 
 Public Sub StationkeeperMacrosInstall()
     Dim p As String

@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 0.5.0
+STATIONKEEPER MACROS 0.6.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.

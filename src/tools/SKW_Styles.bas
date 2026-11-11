@@ -7,6 +7,8 @@ Attribute VB_Name = "SKW_Styles"
 '   ClearDirectFormattingSelection   clears hand formatting in the selection, keeps emphasis
 '   ImportTeamStyles                 brings in the team's style definitions
 '   RemapStyle                       changes every use of one style to another
+'   FontNotAllowed                   report: fonts used that are not on the team list
+'   RemoveUnusedCustomStyles         deletes custom styles nobody uses
 ' =====================================================================
 Option Explicit
 
@@ -591,4 +593,145 @@ Fail:
     msg = Err.Description
     SKW_Finish
     SKW_RemapStyle = "Stopped: " & msg & ". Press Ctrl+Z to undo what was done."
+End Function
+
+' ---------------------------------------------------------------------
+' Fonts and unused styles
+' ---------------------------------------------------------------------
+
+' Lists every font used in the text and flags the ones not on the team's Fonts sheet (Allowed = Yes). Without a list it shows which fonts are used and where. Changes nothing.
+Public Sub FontNotAllowed()
+    SKW_Show SKW_FontNotAllowed()
+End Sub
+
+' Deletes custom styles nobody uses: not applied anywhere, not on the team's allowed list, and not the base or next style of another style. Lists what it deleted. One Ctrl+Z undoes it.
+Public Sub RemoveUnusedCustomStyles()
+    If Not SKW_IsQuiet() Then
+        If MsgBox("Delete the custom styles that are not used in " & ActiveDocument.Name & "?" & vbCr & vbCr & _
+                  "Styles on the team's allowed list, built-in styles and styles other styles depend on are kept. One Ctrl+Z undoes it.", _
+                  vbOKCancel + vbQuestion, SKW_APP) <> vbOK Then Exit Sub
+    End If
+    SKW_Show SKW_RemoveUnusedCustomStyles()
+End Sub
+
+Public Function SKW_FontNotAllowed() As String
+    Dim d As Object, msg As String, rows As New Collection, allowed As New Collection, r As Object, story As Object, p As Object
+    Dim fonts As Object, nm As String, w As Object, k As Variant, e As Variant, nBad As Long, n As Long
+    Set SKW_LastReport = Nothing
+    msg = SKW_Begin("Fonts not allowed", False)
+    If Len(msg) > 0 Then SKW_FontNotAllowed = msg: Exit Function
+    Set d = ActiveDocument
+    For Each r In SKW_Rows("Fonts")
+        If r.Exists("font") Then
+            If Len(r("font")) > 0 And (Not r.Exists("allowed") Or SKW_IsYes(IIf(r.Exists("allowed"), r("allowed"), "Yes"))) Then allowed.Add r("font")
+        End If
+    Next
+    Set fonts = CreateObject("Scripting.Dictionary")
+    For Each story In SKW_Stories(d)
+        If story.StoryType <> wdCommentsStory Then
+            For Each p In story.Paragraphs
+                If Len(p.Range.Text) > 1 Then
+                    nm = FontNameOf(d, p.Range.Font.Name)
+                    If Len(nm) > 0 Then
+                        NoteFont fonts, nm, story, p.Range
+                    Else
+                        n = 0
+                        For Each w In p.Range.Words
+                            n = n + 1
+                            If n > 300 Then Exit For
+                            nm = FontNameOf(d, w.Font.Name)
+                            If Len(nm) > 0 Then NoteFont fonts, nm, story, w
+                        Next
+                    End If
+                End If
+            Next
+        End If
+    Next
+    For Each k In fonts.Keys
+        e = fonts(k)
+        If allowed.Count > 0 And Not SKW_InList(allowed, CStr(k)) Then
+            nBad = nBad + 1
+            rows.Add SKW_Row("Not allowed", k, e(0), e(1), e(2), e(3))
+        Else
+            rows.Add SKW_Row(IIf(allowed.Count > 0, "Allowed", "Used"), k, e(0), e(1), e(2), e(3))
+        End If
+    Next
+    SKW_Finish
+    SKW_Report "Font Not Allowed", fonts.Count & " font(s) used, " & nBad & " not on the team list" & _
+        IIf(allowed.Count = 0, " (no Fonts list in the standards workbook, so none are flagged)", " (" & allowed.Count & " allowed)") & _
+        ". Theme fonts are shown by their real names. Changes nothing.", Array("Rule", "Font", "Paragraphs", "Where first", "Page", "Text"), rows
+    SKW_FontNotAllowed = fonts.Count & " font(s) used, " & nBad & " not allowed."
+End Function
+
+Private Sub NoteFont(ByVal fonts As Object, ByVal nm As String, ByVal story As Object, ByVal r As Object)
+    Dim e As Variant
+    If fonts.Exists(nm) Then
+        e = fonts(nm)
+        e(0) = e(0) + 1
+        fonts(nm) = e
+    Else
+        fonts(nm) = Array(1, SKW_StoryName(story.StoryType), SKW_Page(r), SKW_Excerpt(r.Text, 60))
+    End If
+End Sub
+
+Private Sub KeepRef(ByVal keep As Object, ByVal o As Object, ByVal ref As Variant)
+    Dim nm As String
+    On Error Resume Next
+    nm = ref.NameLocal
+    If Err.Number <> 0 Then nm = CStr(ref)
+    If Len(nm) > 0 And LCase$(nm) <> LCase$(o.NameLocal) Then keep(nm) = True
+End Sub
+
+Public Function SKW_RemoveUnusedCustomStyles() As String
+    Dim d As Object, msg As String, st As Object, allowed As Collection, keep As Object, used As Boolean, story As Object
+    Dim t As Object, o As Object, del As New Collection, names As String, n As Long, v As Variant, prefix As String, tn As String
+    Set SKW_LastReport = Nothing
+    msg = SKW_Begin("Remove unused custom styles", True)
+    If Len(msg) > 0 Then SKW_RemoveUnusedCustomStyles = msg: Exit Function
+    Set d = ActiveDocument
+    Set allowed = SKW_Column("Allowed styles", "Style")
+    prefix = SKW_Setting("StylePrefix", "")
+    ' Styles other styles depend on, and table styles in use, are kept.
+    Set keep = CreateObject("Scripting.Dictionary")
+    On Error Resume Next
+    For Each o In d.Styles
+        ' A style naming itself (its own next style, say) does not count as depending on it.
+        KeepRef keep, o, o.BaseStyle
+        KeepRef keep, o, o.NextParagraphStyle
+        ' LinkStyle answers with an unrelated style when a style is not linked, so ask only linked ones.
+        If o.Linked Then KeepRef keep, o, o.LinkStyle
+    Next
+    For Each t In d.Tables
+        tn = "": tn = t.Style.NameLocal
+        keep(tn) = True
+    Next
+    Err.Clear
+    On Error GoTo Fail
+    For Each st In d.Styles
+        If Not st.BuiltIn And st.Type <> wdStyleTypeList Then
+            If Not keep.Exists(st.NameLocal) And Not SKW_InList(allowed, st.NameLocal) And _
+               Not (Len(prefix) > 0 And LCase$(Left$(st.NameLocal, Len(prefix))) = LCase$(prefix)) Then
+                used = False
+                If st.Type <> wdStyleTypeTable Then
+                    For Each story In SKW_Stories(d)
+                        If SKW_StyleRanges(story, st, 1).Count > 0 Then used = True: Exit For
+                    Next
+                End If
+                If Not used Then del.Add st
+            End If
+        End If
+    Next
+    For Each v In del
+        names = names & ", " & v.NameLocal
+        v.Delete
+        n = n + 1
+    Next
+    SKW_Finish
+    SKW_RemoveUnusedCustomStyles = "Deleted " & n & " unused custom style(s)" & IIf(n > 0, ": " & Mid$(names, 3), "") & "." & vbCr & _
+        "Kept built-in styles, styles on the team list, styles in use and styles others depend on. One Ctrl+Z undoes it."
+    Exit Function
+Fail:
+    msg = Err.Description
+    SKW_Finish
+    SKW_RemoveUnusedCustomStyles = "Stopped after " & n & " style(s): " & msg & ". Press Ctrl+Z to undo what was done."
 End Function
