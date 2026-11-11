@@ -250,3 +250,103 @@ Public Function T_PrimaryLabel(ByVal path As String) As String
     Unload frmSKAdmin
     SK_SetPrimaryList ""
 End Function
+
+' ---------------------------------------------------------------------
+' 0.10.0: three kinds of macro, the Stationkeeper link
+' ---------------------------------------------------------------------
+Private Function T_SkMark(ByVal m As Object, ByVal key As String, ByVal kind As String) As String
+    Dim e As Object
+    Set e = SK_FindEntry(m, key)
+    If e Is Nothing Then T_SkMark = key & "=missing": Exit Function
+    e("stationkeeper") = kind
+    e("shown") = "1"
+    If Len(e("description")) = 0 Then e("description") = "Self-test macro."
+    T_SkMark = e("run")
+End Function
+
+' Marks four menu macros: built, needs rules, needs the template, not related. Saves.
+Public Function T_SkSetup() As String
+    Dim m As Object, s As String
+    Set m = SK_LoadModel()
+    s = "built=" & T_SkMark(m, "ShowHiddenText", "Built for Stationkeeper")
+    s = s & " needs=" & T_SkMark(m, "WriteTestMarker", "Needs Stationkeeper data: rules")
+    s = s & " needsT=" & T_SkMark(m, "UpdateAllFields", "Needs Stationkeeper data: template")
+    s = s & " none=" & T_SkMark(m, "FitTablesToMargins", "Not related")
+    s = s & " | " & Split(SK_SaveModel(m, "self-test: Stationkeeper kinds"), vbCr)(0)
+    T_SkSetup = s
+End Function
+
+' After a reload: the kinds kept in the catalog, and the tools' prefilled kinds.
+Public Function T_SkKinds() As String
+    Dim m As Object, s As String, k As Variant, e As Object
+    Set m = SK_LoadModel()
+    For Each k In Array("ShowHiddenText", "WriteTestMarker", "UpdateAllFields", "FitTablesToMargins", _
+                        "SKW_Styles.StyleInspector", "SKW_Fields.ToggleFieldCodes", "SKX_Book.BookFontAudit", "SKP_Deck.DeckDeliveryCopy")
+        Set e = SK_FindEntry(m, CStr(k))
+        If e Is Nothing Then s = s & " " & k & "=missing" Else s = s & " " & SK_NamePart(e("run")) & "=" & e("stationkeeper") & ";"
+    Next
+    T_SkKinds = Trim$(s) & " | xml has stationkeeper=" & (InStr(SK_CatalogXml(), "<stationkeeper>Needs Stationkeeper data: rules</stationkeeper>") > 0)
+End Function
+
+' Links to a folder ("" unlinks) and reads the state: state | parts | note.
+Public Function T_SkLink(ByVal folder As String) As String
+    Dim d As Object
+    SK_SetLinkFolder folder
+    Set d = SK_LinkInfo()
+    T_SkLink = d("state") & " | parts=" & d("parts") & " | rev=" & d("revision") & " | effort=" & d("effort") & " | " & d("note")
+End Function
+
+' Writes a stand-in for what Stationkeeper publishes. arg = "<effort folder>|current|stale|incomplete|bad".
+Public Function T_SkMakeData(ByVal arg As String) As String
+    Dim f As String, kind As String, dd As String, fso As Object, utc As String, rev As Long, rulesRev As Long
+    Dim rules As String, man As String, bytes As Long, nowUtc As Date
+    f = Split(arg, "|")(0): kind = Split(arg, "|")(1)
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(f) Then fso.CreateFolder f
+    dd = f & "\Stationkeeper Data"
+    If Not fso.FolderExists(dd) Then fso.CreateFolder dd
+    If Not fso.FolderExists(dd & "\rules") Then fso.CreateFolder dd & "\rules"
+    nowUtc = Now + (Now - SK_FromUtcText(Format$(Now, "yyyy-mm-dd\Thh:nn:ss\Z")))
+    If kind = "stale" Then nowUtc = nowUtc - 5
+    utc = Format$(nowUtc, "yyyy-mm-dd\Thh:nn:ss\Z")
+    rev = 15: rulesRev = 15
+    If kind = "incomplete" Then rulesRev = 14
+    rules = "{""schema_version"": ""1.0"", ""manifest_revision"": " & rulesRev & ", ""acronyms"": [{""acronym"": ""RFP"", ""definition"": ""Request for Proposal""}]}"
+    SK_WriteUtf8 dd & "\rules\rules.json", rules
+    bytes = FileLen(dd & "\rules\rules.json")
+    man = "{""contract"": """ & IIf(kind = "bad", "something.else", "stationkeeper.effort-data") & """, ""schema_version"": ""1.0"", " & _
+        """min_reader_version"": ""1.0"", ""effort"": {""id"": ""E-1"", ""name"": ""Effort A"", ""cui"": true}, " & _
+        """revision"": " & rev & ", ""published_utc"": """ & utc & """, ""published_by"": ""tester"", " & _
+        """freshness"": {""warn_after_hours"": 24, ""stale_after_hours"": 72}, " & _
+        """parts"": [{""key"": ""rules"", ""path"": ""rules/rules.json"", ""format"": ""json"", ""part_revision"": 15, ""bytes"": " & bytes & "}]}"
+    SK_WriteUtf8 dd & "\manifest.json", man
+    T_SkMakeData = dd & " rules=" & bytes & " bytes, utc=" & utc
+End Function
+
+' The menu under each filter, the link strip, and what Run does for the four marked macros.
+Public Function T_SkMenu() As String
+    Dim s As String, k As Variant
+    Load frmSKMenu
+    s = "LINK " & frmSKMenu.TestLink()
+    For Each k In Array("Needs effort data", "Stationkeeper tools", "My macros", "Ready to run now")
+        s = s & " || " & UCase$(k) & " " & frmSKMenu.TestShow(CStr(k))
+    Next
+    s = s & " || GATE built: " & frmSKMenu.TestGate("Module1.ShowHiddenText")
+    s = s & " || GATE needs: " & frmSKMenu.TestGate("Module2.WriteTestMarker")
+    s = s & " || GATE needsT: " & frmSKMenu.TestGate("Module1.UpdateAllFields")
+    s = s & " || GATE none: " & frmSKMenu.TestGate("Module1.FitTablesToMargins")
+    frmSKMenu.TestShow "All macros"
+    Unload frmSKMenu
+    T_SkMenu = s
+End Function
+
+Public Function T_SkAskPref(ByVal v As String) As String
+    SK_SetPref "askBuilt", v
+    T_SkAskPref = SK_GetPref("askBuilt", "1")
+End Function
+
+Public Function T_SkTestOne(ByVal run As String) As String
+    Dim e As Object
+    Set e = SK_FindEntry(SK_LoadModel(), run)
+    T_SkTestOne = SK_TestMacro(e("run"), e("workson"), e("stationkeeper"))
+End Function

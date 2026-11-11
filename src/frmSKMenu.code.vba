@@ -1,6 +1,7 @@
 ' =====================================================================
 ' Stationkeeper Macros: the menu
-' Search as you type, sort, filter by what a macro affects, read, run.
+' Search as you type, sort, filter by what a macro affects or by its
+' tie to Stationkeeper, read, run. The link strip shows the effort folder.
 ' The controls are built in code, so this form needs no designer work.
 ' =====================================================================
 Option Explicit
@@ -13,6 +14,19 @@ Private WithEvents btnRun As MSForms.CommandButton
 Private WithEvents btnPin As MSForms.CommandButton
 Private WithEvents btnClose As MSForms.CommandButton
 Private WithEvents chkKeep As MSForms.CheckBox
+Private WithEvents cboShow As MSForms.ComboBox
+Private WithEvents btnLink As MSForms.CommandButton
+Private WithEvents btnRefresh As MSForms.CommandButton
+Private WithEvents btnUnlink As MSForms.CommandButton
+Private WithEvents btnAskRun As MSForms.CommandButton
+Private WithEvents btnAskLink As MSForms.CommandButton
+Private WithEvents btnAskCancel As MSForms.CommandButton
+Private chkAskNever As MSForms.CheckBox
+Private fraAsk As MSForms.Frame
+Private lblAskHead As MSForms.Label
+Private lblAskText As MSForms.Label
+Private lblLink As MSForms.Label
+Private lblLegend As MSForms.Label
 Private lblTitle As MSForms.Label
 Private lblRun As MSForms.Label
 Private txtDesc As MSForms.TextBox
@@ -24,6 +38,10 @@ Private mModel As Object
 Private mItems As Collection
 Private mView() As Long
 Private mBusy As Boolean
+Private mInfo As Object          ' the Stationkeeper link, read fresh (SK_LinkInfo)
+Private mAskRun As String        ' the macro waiting on the question panel
+Private mAskKind As String       ' "ask" or "needs"
+Private mNeedsOk As Object       ' "Works on" answers met right now, per refresh
 
 Private Function AddCtl(ByVal progId As String, ByVal nm As String, ByVal l As Single, ByVal t As Single, _
                         ByVal w As Single, ByVal h As Single) As Object
@@ -34,6 +52,17 @@ Private Function AddCtl(ByVal progId As String, ByVal nm As String, ByVal l As S
     c.Font.Name = "Segoe UI"
     c.Font.Size = 9
     Set AddCtl = c
+End Function
+
+Private Function AddIn(ByVal parent As Object, ByVal progId As String, ByVal nm As String, ByVal l As Single, _
+                       ByVal t As Single, ByVal w As Single, ByVal h As Single) As Object
+    Dim c As Object
+    Set c = parent.Controls.Add(progId, nm, True)
+    c.Left = l: c.Top = t: c.Width = w: c.Height = h
+    On Error Resume Next
+    c.Font.Name = "Segoe UI"
+    c.Font.Size = 9
+    Set AddIn = c
 End Function
 
 Private Function AddLabel(ByVal nm As String, ByVal cap As String, ByVal l As Single, ByVal t As Single, _
@@ -52,32 +81,45 @@ Private Sub UserForm_Initialize()
     Set mModel = SK_LoadModel()
     Me.Caption = mModel("look")("menuTitle") & "   |   " & ThisDocument.Name
     Me.Width = 672
-    Me.Height = 448
+    Me.Height = 484
     Me.BackColor = &HFFFFFF
 
     AddLabel "lblSearch", "Search", 10, 8, 60, 14
-    Set lblCount = AddLabel("lblCount", "", 160, 8, 150, 14)
+    Set lblCount = AddLabel("lblCount", "", 100, 8, 150, 14)
     lblCount.TextAlign = fmTextAlignRight
     lblCount.ForeColor = &H808080
-    Set txtSearch = AddCtl("Forms.TextBox.1", "txtSearch", 10, 22, 300, 20)
+    Set txtSearch = AddCtl("Forms.TextBox.1", "txtSearch", 10, 22, 240, 20)
     txtSearch.Font.Size = 10
 
-    AddLabel "lblSort", "Sort by", 322, 8, 100, 14
-    Set cboSort = AddCtl("Forms.ComboBox.1", "cboSort", 322, 22, 110, 20)
+    AddLabel "lblShow", "Show", 258, 8, 100, 14
+    Set cboShow = AddCtl("Forms.ComboBox.1", "cboShow", 258, 22, 116, 20)
+    cboShow.Style = fmStyleDropDownList
+    cboShow.AddItem "All macros"
+    cboShow.AddItem "My macros"
+    cboShow.AddItem "Stationkeeper tools"
+    cboShow.AddItem "Needs effort data"
+    cboShow.AddItem "Ready to run now"
+
+    AddLabel "lblSort", "Sort by", 382, 8, 80, 14
+    Set cboSort = AddCtl("Forms.ComboBox.1", "cboSort", 382, 22, 84, 20)
     cboSort.Style = fmStyleDropDownList
     cboSort.AddItem "Category"
     cboSort.AddItem "A to Z"
     cboSort.AddItem "Most used"
     cboSort.AddItem "Recent"
 
-    AddLabel "lblAff", "What it affects", 444, 8, 160, 14
-    Set cboAffects = AddCtl("Forms.ComboBox.1", "cboAffects", 444, 22, 206, 20)
+    AddLabel "lblAff", "What it affects", 474, 8, 160, 14
+    Set cboAffects = AddCtl("Forms.ComboBox.1", "cboAffects", 474, 22, 176, 20)
     cboAffects.Style = fmStyleDropDownList
 
-    Set lstMacros = AddCtl("Forms.ListBox.1", "lstMacros", 10, 50, 300, 318)
-    lstMacros.ColumnCount = 2
-    lstMacros.ColumnWidths = "190 pt;95 pt"
+    Set lstMacros = AddCtl("Forms.ListBox.1", "lstMacros", 10, 50, 300, 298)
+    lstMacros.ColumnCount = 3
+    lstMacros.ColumnWidths = "168 pt;34 pt;84 pt"
     lstMacros.IntegralHeight = False
+    Set lblLegend = AddLabel("lblLegend", ChrW$(&H25C7) & " SK  built for Stationkeeper, works alone     " & _
+                             ChrW$(&H25C6) & " SK  needs Stationkeeper data", 10, 352, 300, 14)
+    lblLegend.ForeColor = &H808080
+    lblLegend.Font.Size = 8
 
     Set lblTitle = AddLabel("lblTitle", "", 322, 50, 328, 20)
     lblTitle.Font.Size = 12
@@ -105,11 +147,45 @@ Private Sub UserForm_Initialize()
     chkKeep.Caption = "Keep this menu open"
     chkKeep.BackStyle = fmBackStyleTransparent
 
-    Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 380, 450, 14)
+    ' The link strip: where the Stationkeeper data comes from.
+    Set lblLink = AddLabel("lblLink", "", 10, 374, 428, 30)
+    lblLink.WordWrap = True
+    Set btnLink = AddCtl("Forms.CommandButton.1", "btnLink", 444, 376, 82, 22)
+    Set btnRefresh = AddCtl("Forms.CommandButton.1", "btnRefresh", 530, 376, 58, 22)
+    btnRefresh.Caption = "Refresh"
+    Set btnUnlink = AddCtl("Forms.CommandButton.1", "btnUnlink", 592, 376, 58, 22)
+    btnUnlink.Caption = "Unlink"
+
+    Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 418, 450, 14)
     lblStatus.ForeColor = &H808080
-    Set btnClose = AddCtl("Forms.CommandButton.1", "btnClose", 570, 374, 80, 24)
+    Set btnClose = AddCtl("Forms.CommandButton.1", "btnClose", 570, 412, 80, 24)
     btnClose.Caption = "Close"
     btnClose.Cancel = True
+
+    ' The question panel (over the description) for macros tied to Stationkeeper.
+    Set fraAsk = AddCtl("Forms.Frame.1", "fraAsk", 322, 88, 328, 244)
+    fraAsk.Caption = ""
+    fraAsk.BackColor = &HF7F3EE
+    fraAsk.SpecialEffect = fmSpecialEffectFlat
+    fraAsk.BorderStyle = fmBorderStyleSingle
+    fraAsk.BorderColor = &HC0B4A0
+    Set lblAskHead = AddIn(fraAsk, "Forms.Label.1", "lblAskHead", 10, 8, 306, 18)
+    lblAskHead.Font.Bold = True
+    lblAskHead.Font.Size = 10
+    lblAskHead.BackStyle = fmBackStyleTransparent
+    Set lblAskText = AddIn(fraAsk, "Forms.Label.1", "lblAskText", 10, 30, 306, 146)
+    lblAskText.WordWrap = True
+    lblAskText.BackStyle = fmBackStyleTransparent
+    lblAskText.Font.Size = 9.5
+    Set chkAskNever = AddIn(fraAsk, "Forms.CheckBox.1", "chkAskNever", 10, 180, 300, 16)
+    chkAskNever.Caption = "Don't ask again"
+    chkAskNever.BackStyle = fmBackStyleTransparent
+    Set btnAskRun = AddIn(fraAsk, "Forms.CommandButton.1", "btnAskRun", 10, 206, 80, 24)
+    btnAskRun.Caption = "Run it"
+    Set btnAskLink = AddIn(fraAsk, "Forms.CommandButton.1", "btnAskLink", 96, 206, 140, 24)
+    Set btnAskCancel = AddIn(fraAsk, "Forms.CommandButton.1", "btnAskCancel", 242, 206, 74, 24)
+    btnAskCancel.Caption = "Cancel"
+    fraAsk.Visible = False
 
     ' What the menu shows: macros in the template that the admin put in the menu.
     Set mItems = New Collection
@@ -152,6 +228,13 @@ Private Sub UserForm_Initialize()
         If LCase$(cboSort.List(i)) = LCase$(v) Then cboSort.ListIndex = i
     Next
     chkKeep.Value = (SK_GetPref("keepOpen", mModel("look")("keepOpen")) = "1")
+    v = SK_GetPref("show", "All macros")
+    cboShow.ListIndex = 0
+    For i = 0 To cboShow.ListCount - 1
+        If LCase$(cboShow.List(i)) = LCase$(v) Then cboShow.ListIndex = i
+    Next
+    Set mInfo = SK_LinkInfo()
+    ShowLink
 
     mBusy = False
     RefreshList
@@ -232,17 +315,20 @@ Private Sub RefreshList()
     Dim q As String, aff As String, mode As String, n As Long, cnt As Long, i As Long, j As Long
     Dim e As Object, s As Double, w As String, keyTmp As String, idxTmp As Long, whyTmp As String
     Dim keys() As String, idx() As Long, why() As String, col2 As String, pinned As Boolean, lastRun As String
+    Dim flt As String
 
     If mBusy Then Exit Sub
     q = Trim$(txtSearch.Text)
     If cboAffects.ListIndex > 0 Then aff = cboAffects.Text
+    flt = cboShow.Text
+    Set mNeedsOk = CreateObject("Scripting.Dictionary")
     mode = cboSort.Text
     n = mItems.Count
     ReDim keys(1 To n + 1): ReDim idx(1 To n + 1): ReDim why(1 To n + 1)
 
     For i = 1 To n
         Set e = mItems(i)
-        If Len(aff) = 0 Or HasAffect(e, aff) Then
+        If (Len(aff) = 0 Or HasAffect(e, aff)) And ShowPasses(e, flt) Then
             s = 0: w = ""
             If Len(q) > 0 Then s = ScoreEntry(e, q, w)
             If Len(q) = 0 Or s > 0 Then
@@ -306,7 +392,8 @@ Private Sub RefreshList()
             End Select
         End If
         lstMacros.AddItem e("title")
-        lstMacros.List(i - 1, 1) = col2
+        lstMacros.List(i - 1, 1) = SK_SkBadge(e("stationkeeper"))
+        lstMacros.List(i - 1, 2) = col2
         mView(i - 1) = idx(i)
     Next
 
@@ -321,6 +408,7 @@ End Function
 
 Private Sub ShowDetail()
     Dim e As Object, info As String
+    If Not fraAsk Is Nothing Then fraAsk.Visible = False
     If lstMacros.ListIndex < 0 Then
         lblTitle.Caption = ""
         lblRun.Caption = ""
@@ -328,7 +416,7 @@ Private Sub ShowDetail()
             txtDesc.Text = "No macros are in the menu yet." & vbCrLf & vbCrLf & _
                 "Run StationkeeperMacrosAdmin to describe this template's macros and choose which ones show here."
         Else
-            txtDesc.Text = "No macro matches. Try fewer letters, another word for what it does, or set Affects to Anything."
+            txtDesc.Text = "No macro matches. Try fewer letters, another word for what it does, or set Show to All macros and Affects to Anything."
         End If
         lblInfo.Caption = ""
         btnRun.Enabled = False
@@ -342,7 +430,8 @@ Private Sub ShowDetail()
     info = "Category:  " & Dash(e("category"), "Uncategorized") & vbCrLf & _
            "What it affects:  " & Dash(e("affects"), "not set") & vbCrLf & _
            "Works on:  " & Dash(e("workson"), "not set") & NeedsNote(e("workson")) & vbCrLf & _
-           "Does it change the document?  " & Dash(e("changes"), "not set")
+           "Does it change the document?  " & Dash(e("changes"), "not set") & vbCrLf & _
+           "Stationkeeper:  " & SK_SkLabel(e("stationkeeper"))
     lblInfo.Caption = info
     btnPin.Caption = IIf(SK_IsPinned(e("run")), "Unpin", "Pin to top")
     btnRun.Enabled = True
@@ -367,7 +456,7 @@ Private Sub SelectRun(ByVal run As String)
 End Sub
 
 Private Sub RunSelected()
-    Dim e As Object, keep As Boolean, ok As Boolean, run As String, why As String
+    Dim e As Object, why As String, gate As String
     If lstMacros.ListIndex < 0 Then Exit Sub
     Set e = mItems(mView(lstMacros.ListIndex))
     ' Check what the macro needs before it can fail.
@@ -376,6 +465,19 @@ Private Sub RunSelected()
         Beep
         Exit Sub
     End If
+    ' Its tie to Stationkeeper: run, ask gently, or say what data it needs.
+    Set mInfo = SK_LinkInfo()
+    ShowLink
+    gate = SK_Gate(e("stationkeeper"), mInfo, why)
+    If Len(gate) > 0 Then
+        ShowAsk e, gate, why
+        Exit Sub
+    End If
+    DoRun e
+End Sub
+
+Private Sub DoRun(ByVal e As Object)
+    Dim keep As Boolean, ok As Boolean, run As String
     If mModel("look")("confirmChanges") = "1" And LCase$(Left$(e("changes"), 3)) = "yes" Then
         If MsgBox(e("title") & " changes the document. Run it?", vbYesNo + vbQuestion, SK_APP) <> vbYes Then Exit Sub
     End If
@@ -428,6 +530,156 @@ Private Sub cboAffects_Change()
     RefreshList
 End Sub
 
+Private Sub cboShow_Change()
+    If mBusy Then Exit Sub
+    SK_SetPref "show", cboShow.Text
+    RefreshList
+End Sub
+
+' ---------------------------------------------------------------------
+' Stationkeeper: the filter, the link strip, the question panel
+' ---------------------------------------------------------------------
+Private Function IsSkTool(ByVal e As Object) As Boolean
+    IsSkTool = (SK_ModulePart(e("run")) Like "SK[WPX]_*")
+End Function
+
+Private Function ShowPasses(ByVal e As Object, ByVal flt As String) As Boolean
+    Dim k As String, why As String, w As String
+    k = SK_SkKind(e("stationkeeper"))
+    Select Case flt
+        Case "My macros": ShowPasses = (k = "none" And Not IsSkTool(e))
+        Case "Stationkeeper tools": ShowPasses = (k <> "none" Or IsSkTool(e))
+        Case "Needs effort data": ShowPasses = (k = "needs")
+        Case "Ready to run now"
+            w = LCase$(e("workson"))
+            If Not mNeedsOk.Exists(w) Then mNeedsOk(w) = SK_NeedsMet(e("workson"), why)
+            ShowPasses = mNeedsOk(w)
+            If ShowPasses And k = "needs" Then ShowPasses = SK_DataReady(mInfo, SK_SkParts(e("stationkeeper")), why)
+        Case Else: ShowPasses = True
+    End Select
+End Function
+
+Private Sub ShowLink()
+    Dim st As String
+    st = mInfo("state")
+    lblLink.Caption = SK_LinkLine(mInfo) & vbCrLf & mInfo("note")
+    Select Case st
+        Case "Current": lblLink.ForeColor = &H2E7D32
+        Case "Not linked": lblLink.ForeColor = &H606060
+        Case "Aging", "Stale", "Incomplete": lblLink.ForeColor = &H1A6FB8
+        Case Else: lblLink.ForeColor = &H2828C0
+    End Select
+    btnLink.Caption = IIf(st = "Not linked", "Link a folder...", "Change...")
+    btnUnlink.Enabled = (st <> "Not linked")
+End Sub
+
+Private Sub ReadLink()
+    Dim run As String
+    Set mInfo = SK_LinkInfo()
+    ShowLink
+    If lstMacros.ListIndex >= 0 Then run = mItems(mView(lstMacros.ListIndex))("run")
+    RefreshList
+    If Len(run) > 0 Then SelectRun run
+End Sub
+
+Private Sub ShowAsk(ByVal e As Object, ByVal kind As String, ByVal why As String)
+    Dim parts As String, files As String, p As Variant
+    mAskRun = e("run")
+    mAskKind = kind
+    chkAskNever.Value = False
+    If kind = "ask" Then
+        lblAskHead.Caption = "Built for Stationkeeper"
+        lblAskText.Caption = "This is built for Stationkeeper but is still functional. Would you like to run it?" & vbCrLf & vbCrLf & _
+            "Without a linked effort it uses the team standards workbook, or its own defaults if there is none. " & _
+            "Link a folder to point it at an effort's data."
+        btnAskRun.Visible = True
+        chkAskNever.Visible = True
+        btnAskLink.Caption = "Link a folder..."
+        btnAskRun.Default = True
+    Else
+        parts = SK_SkParts(e("stationkeeper"))
+        For Each p In Split(parts, ",")
+            files = files & IIf(Len(files) > 0, ", ", "") & SK_PartFile(p)
+        Next
+        lblAskHead.Caption = "Needs Stationkeeper data"
+        lblAskText.Caption = "This macro is used with the Stationkeeper application. Please point to the Stationkeeper " & _
+            "data folder for your effort." & vbCrLf & vbCrLf & _
+            "It needs " & SK_PartNames(parts) & ". Stationkeeper writes " & IIf(InStr(parts, ",") > 0, "them", "it") & _
+            " when you save the effort, to Stationkeeper Data\" & files & " inside the effort folder. " & _
+            "Pick the effort folder (or the Stationkeeper Data folder in it)." & vbCrLf & vbCrLf & "Right now: " & why
+        btnAskRun.Visible = False
+        chkAskNever.Visible = False
+        btnAskLink.Caption = "Point to the folder..."
+        btnAskLink.Default = True
+    End If
+    fraAsk.Visible = True
+    lblStatus.Caption = e("title") & ": " & IIf(kind = "ask", "run it, link a folder, or cancel.", "point to the effort folder, or cancel.")
+End Sub
+
+Private Sub HideAsk()
+    fraAsk.Visible = False
+    btnAskRun.Default = False
+    btnAskLink.Default = False
+    btnRun.Default = True
+    mAskRun = ""
+End Sub
+
+Private Function AskEntry() As Object
+    Dim e As Object
+    For Each e In mItems
+        If e("run") = mAskRun Then Set AskEntry = e: Exit Function
+    Next
+End Function
+
+Private Sub btnAskRun_Click()
+    Dim e As Object
+    Set e = AskEntry()
+    If chkAskNever.Value Then SK_SetPref "askBuilt", "0"
+    HideAsk
+    If Not e Is Nothing Then DoRun e
+End Sub
+
+Private Sub btnAskLink_Click()
+    Dim e As Object, why As String
+    Set e = AskEntry()
+    If Len(SK_PickLinkFolder()) = 0 Then Exit Sub     ' cancelled: the question stays
+    Set mInfo = SK_LinkInfo()
+    ShowLink
+    If e Is Nothing Then HideAsk: Exit Sub
+    If Len(SK_Gate(e("stationkeeper"), mInfo, why)) > 0 And mAskKind = "needs" Then
+        ShowAsk e, "needs", why                          ' still not there: say what is wrong now
+        Exit Sub
+    End If
+    HideAsk
+    DoRun e
+End Sub
+
+Private Sub btnAskCancel_Click()
+    HideAsk
+    ShowDetail
+    lblStatus.Caption = "Type to search. Up and Down move, Enter runs, Esc closes."
+End Sub
+
+Private Sub btnLink_Click()
+    If Len(SK_PickLinkFolder()) = 0 Then Exit Sub
+    ReadLink
+    lblStatus.Caption = "Linked: " & mInfo("folder")
+End Sub
+
+Private Sub btnRefresh_Click()
+    ReadLink
+    lblStatus.Caption = "Read the link again at " & Format$(Now, "h:nn am/pm") & "."
+End Sub
+
+Private Sub btnUnlink_Click()
+    If MsgBox("Stop using " & mInfo("folder") & "?" & vbCr & vbCr & _
+              "Nothing is deleted. Stationkeeper tools go back to the team standards workbook.", _
+              vbYesNo + vbQuestion, SK_APP) <> vbYes Then Exit Sub
+    SK_SetLinkFolder ""
+    ReadLink
+    lblStatus.Caption = "Unlinked."
+End Sub
+
 Private Sub chkKeep_Click()
     If mBusy Then Exit Sub
     SK_SetPref "keepOpen", IIf(chkKeep.Value, "1", "0")
@@ -447,6 +699,7 @@ Private Sub btnPin_Click()
 End Sub
 
 Private Sub btnClose_Click()
+    If fraAsk.Visible Then btnAskCancel_Click: Exit Sub   ' Esc closes the question first
     Unload Me
 End Sub
 
@@ -458,7 +711,44 @@ Public Function TestSearch(ByVal q As String) As String
     txtSearch.Text = q
     s = lstMacros.ListCount & ":"
     For i = 0 To lstMacros.ListCount - 1
-        s = s & " [" & lstMacros.List(i, 0) & " / " & lstMacros.List(i, 1) & "]"
+        s = s & " [" & lstMacros.List(i, 0) & " / " & lstMacros.List(i, 2) & "]"
     Next
     TestSearch = s
+End Function
+
+' The list under a Show filter: count, then title and badge (SK- for built, SK+ for needs data).
+Public Function TestShow(ByVal flt As String) As String
+    Dim s As String, i As Long, b As String
+    txtSearch.Text = ""
+    cboShow.Text = flt
+    s = lstMacros.ListCount & ":"
+    For i = 0 To lstMacros.ListCount - 1
+        b = lstMacros.List(i, 1)
+        b = Replace(Replace(b, ChrW$(&H25C7) & " SK", "SK-"), ChrW$(&H25C6) & " SK", "SK+")
+        s = s & " [" & lstMacros.List(i, 0) & IIf(Len(b) > 0, " " & b, "") & "]"
+    Next
+    TestShow = s
+End Function
+
+' What Run does for a macro, without running it: the panel it shows, or "run".
+Public Function TestGate(ByVal run As String) As String
+    Dim e As Object, why As String, g As String
+    For Each e In mItems
+        If LCase$(e("run")) = LCase$(run) Then Exit For
+    Next
+    If e Is Nothing Then TestGate = "not in the menu": Exit Function
+    Set mInfo = SK_LinkInfo()
+    ShowLink
+    g = SK_Gate(e("stationkeeper"), mInfo, why)
+    If Len(g) = 0 Then TestGate = "run": Exit Function
+    ShowAsk e, g, why
+    TestGate = g & " | " & lblAskHead.Caption & " | " & Replace(lblAskText.Caption, vbCrLf, " / ") & " | buttons: " & _
+        IIf(btnAskRun.Visible, btnAskRun.Caption & ", ", "") & btnAskLink.Caption & ", " & btnAskCancel.Caption & _
+        IIf(chkAskNever.Visible, " | " & chkAskNever.Caption, "")
+    HideAsk
+End Function
+
+Public Function TestLink() As String
+    TestLink = Replace(lblLink.Caption, vbCrLf, " / ") & " | button=" & btnLink.Caption & " unlink=" & btnUnlink.Enabled & _
+        " | legend=" & Replace(Replace(lblLegend.Caption, ChrW$(&H25C7), "<o>"), ChrW$(&H25C6), "<f>")
 End Function

@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.9.0
+' Stationkeeper Macros 0.10.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,8 +15,10 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.9.0"
+Public Const SK_VERSION As String = "0.10.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
+Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
+Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
 
 Public SK_LastScanMethod As String
 Public SK_LastModuleCount As Long
@@ -296,6 +298,7 @@ Public Function SK_NewEntry(ByVal run As String) As Object
     e("affects") = ""
     e("workson") = ""
     e("changes") = ""
+    e("stationkeeper") = ""  ' "" or "Not related", "Built for Stationkeeper", "Needs Stationkeeper data: rules, ..."
     e("also") = ""
     e("shown") = ""          ' "" = not decided yet, "1" = in the menu, "0" = hidden
     e("added") = Format$(Now, "yyyy-mm-dd")
@@ -451,10 +454,12 @@ Private Sub SK_PrefillTools(ByVal entries As Collection)
         End If
         If Not hit Is Nothing Then
             If hit("isNew") Then
-                For Each f In Array("title", "category", "description", "keywords", "affects", "workson", "changes")
+                For Each f In Array("title", "category", "description", "keywords", "affects", "workson", "changes", "stationkeeper")
                     If r.Exists(f) Then hit(f) = r(f)
                 Next
                 If r.Exists("shown") Then hit("shown") = SK_ShownFromText(r("shown"))
+            ElseIf Len(hit("stationkeeper")) = 0 And r.Exists("stationkeeper") Then
+                hit("stationkeeper") = r("stationkeeper")   ' catalogs from before 0.10.0
             End If
         End If
     Next
@@ -482,6 +487,7 @@ Private Function SK_EntryFromNode(ByVal nd As Object) As Object
     e("affects") = SK_ChildText(nd, "affects")
     e("workson") = SK_ChildText(nd, "worksOn")
     e("changes") = SK_ChildText(nd, "changes")
+    e("stationkeeper") = SK_ChildText(nd, "stationkeeper")
     e("also") = SK_ChildText(nd, "also")
     e("added") = SK_ChildText(nd, "added")
     Set SK_EntryFromNode = e
@@ -542,7 +548,7 @@ Public Function SK_BuildXml(ByVal m As Object) As String
             SK_El("title", e("title")) & SK_El("category", e("category")) & _
             SK_El("description", e("description")) & SK_El("keywords", e("keywords")) & _
             SK_El("affects", e("affects")) & SK_El("worksOn", e("workson")) & _
-            SK_El("changes", e("changes")) & SK_El("also", e("also")) & _
+            SK_El("changes", e("changes")) & SK_El("stationkeeper", e("stationkeeper")) & SK_El("also", e("also")) & _
             SK_El("added", e("added")) & "</macro>"
     Next
     s = s & "<history>"
@@ -751,12 +757,12 @@ End Function
 
 Public Function SK_ExportCsv(ByVal m As Object) As String
     Dim s As String, e As Object, path As String
-    s = "Macro,Title,Category,Description,Keywords,What it affects,Works on,Does it change the document,Show in menu,Status" & vbCrLf
+    s = "Macro,Title,Category,Description,Keywords,What it affects,Works on,Does it change the document,Show in menu,Status,Stationkeeper" & vbCrLf
     For Each e In m("entries")
         s = s & SK_CsvQ(e("run")) & "," & SK_CsvQ(e("title")) & "," & SK_CsvQ(e("category")) & "," & _
             SK_CsvQ(e("description")) & "," & SK_CsvQ(e("keywords")) & "," & SK_CsvQ(e("affects")) & "," & _
             SK_CsvQ(e("workson")) & "," & SK_CsvQ(e("changes")) & "," & _
-            SK_CsvQ(SK_YesNo(e("shown"))) & "," & SK_CsvQ(SK_EntryStatus(e)) & vbCrLf
+            SK_CsvQ(SK_YesNo(e("shown"))) & "," & SK_CsvQ(SK_EntryStatus(e)) & "," & SK_CsvQ(e("stationkeeper")) & vbCrLf
     Next
     If Len(SK_BackupDir()) = 0 Then Err.Raise vbObjectError + 1, SK_APP, "Choose a backup folder first (Settings tab)."
     path = SK_BackupDir() & "\" & SK_BaseName() & " - macro catalog " & Format$(Now, "yyyy-mm-dd hhnn") & ".csv"
@@ -827,6 +833,7 @@ Public Function SK_FieldKey(ByVal h As String) As String
         Case "does it change the document", "does this change the document", "changes the document", "changes"
             SK_FieldKey = "changes"
         Case "show in menu", "show in the menu", "showinmenu", "in menu", "shown": SK_FieldKey = "shown"
+        Case "stationkeeper", "stationkeeper link", "built for stationkeeper": SK_FieldKey = "stationkeeper"
     End Select
 End Function
 
@@ -1105,9 +1112,9 @@ Public Function SK_UpdateFromRows(ByVal m As Object, ByVal rows As Collection, B
     Dim r As Object, e As Object, f As Variant, v As String, changed As Boolean, i As Long
     Dim nSame As Long, nMissing As Long, missing As String, notOnList As Long
     Dim per As Object, onList As Object, s As String, names As Variant, fields As Variant
-    fields = Array("title", "category", "description", "keywords", "affects", "workson", "changes", "shown")
+    fields = Array("title", "category", "description", "keywords", "affects", "workson", "changes", "shown", "stationkeeper")
     names = Array("titles", "categories", "descriptions", "keywords", "what it affects", "works on", _
-                  "does it change the document", "show in menu")
+                  "does it change the document", "show in menu", "Stationkeeper")
     Set per = CreateObject("Scripting.Dictionary")
     Set onList = CreateObject("Scripting.Dictionary")
     nChanged = 0
@@ -1172,18 +1179,18 @@ Public Function SK_ExportXlsx(ByVal m As Object) As String
     If Len(SK_BackupDir()) = 0 Then Err.Raise vbObjectError + 1, SK_APP, "Choose a backup folder first (Settings tab)."
     path = SK_BackupDir() & "\" & SK_BaseName() & " - macro list " & Format$(Now, "yyyy-mm-dd hhnn") & ".xlsx"
     hdr = Array("Macro", "Title", "Category", "Description", "Keywords", "What it affects", "Works on", _
-                "Does it change the document", "Show in menu", "Status", "Test")
-    widths = Array(30, 28, 18, 60, 24, 24, 18, 22, 12, 22, 12)
+                "Does it change the document", "Show in menu", "Status", "Test", "Stationkeeper")
+    widths = Array(30, 28, 18, 60, 24, 24, 18, 22, 12, 22, 12, 30)
     n = m("entries").Count
-    ReDim data(1 To n + 1, 1 To 11)
-    For c = 0 To 10: data(1, c + 1) = hdr(c): Next
+    ReDim data(1 To n + 1, 1 To 12)
+    For c = 0 To 11: data(1, c + 1) = hdr(c): Next
     r = 1
     For Each e In m("entries")
         r = r + 1
         data(r, 1) = e("run"): data(r, 2) = e("title"): data(r, 3) = e("category")
         data(r, 4) = Replace(e("description"), vbCrLf, vbLf): data(r, 5) = e("keywords"): data(r, 6) = e("affects")
         data(r, 7) = e("workson"): data(r, 8) = e("changes"): data(r, 9) = SK_YesNo(e("shown"))
-        data(r, 10) = SK_EntryStatus(e): data(r, 11) = SK_TestState(e("run"))
+        data(r, 10) = SK_EntryStatus(e): data(r, 11) = SK_TestState(e("run")): data(r, 12) = e("stationkeeper")
     Next
     On Error GoTo Fail
     Set xl = CreateObject("Excel.Application")
@@ -1192,12 +1199,12 @@ Public Function SK_ExportXlsx(ByVal m As Object) As String
     Set wb = xl.Workbooks.Add
     Set ws = wb.Worksheets(1)
     ws.Name = "Macros"
-    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 11)).NumberFormat = "@"
-    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 11)).Value = data
+    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 12)).NumberFormat = "@"
+    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 12)).Value = data
     ws.Rows(1).Font.Bold = True
-    For c = 0 To 10: ws.Columns(c + 1).ColumnWidth = widths(c): Next
+    For c = 0 To 11: ws.Columns(c + 1).ColumnWidth = widths(c): Next
     ws.Columns(4).WrapText = True
-    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 11)).AutoFilter
+    ws.Range(ws.Cells(1, 1), ws.Cells(n + 1, 12)).AutoFilter
     wb.SaveAs FileName:=path, FileFormat:=51
     wb.Close False
     xl.Quit
@@ -1209,6 +1216,309 @@ Fail:
     If Not wb Is Nothing Then wb.Close False
     If Not xl Is Nothing Then xl.Quit
     Err.Raise vbObjectError + 8, SK_APP, "Could not make the Excel file: " & ed
+End Function
+
+' ---------------------------------------------------------------------
+' Stationkeeper: three kinds of macro, and the link to an effort's data
+'   Not related              your own macros; they always run
+'   Built for Stationkeeper  runs on its own; a gentle question when not linked
+'   Needs Stationkeeper data runs only with the effort's data; otherwise the
+'                            menu says what it needs and offers the folder pick
+' The link is one folder per person on this PC: the effort folder that
+' Stationkeeper saves to (it holds "Stationkeeper Data"). Stationkeeper
+' writes there; the macros only read. The state is read fresh every time.
+' ---------------------------------------------------------------------
+
+' "none", "built" or "needs", from the catalog's Stationkeeper text.
+Public Function SK_SkKind(ByVal v As String) As String
+    v = LCase$(Trim$(v))
+    If Left$(v, 5) = "needs" Then
+        SK_SkKind = "needs"
+    ElseIf Left$(v, 5) = "built" Then
+        SK_SkKind = "built"
+    Else
+        SK_SkKind = "none"
+    End If
+End Function
+
+' The parts a "Needs Stationkeeper data" macro reads: rules, template, dictionary (rules when none is named).
+Public Function SK_SkParts(ByVal v As String) As String
+    Dim s As String, p As Variant
+    v = LCase$(v)
+    For Each p In Array("rules", "template", "dictionary")
+        If InStr(v, p) > 0 Then s = s & IIf(Len(s) > 0, ",", "") & p
+    Next
+    If Len(s) = 0 Then s = "rules"
+    SK_SkParts = s
+End Function
+
+' Outlined diamond: built for Stationkeeper. Filled diamond: needs Stationkeeper data.
+Public Function SK_SkBadge(ByVal v As String) As String
+    Select Case SK_SkKind(v)
+        Case "built": SK_SkBadge = ChrW$(&H25C7) & " SK"
+        Case "needs": SK_SkBadge = ChrW$(&H25C6) & " SK"
+    End Select
+End Function
+
+Public Function SK_SkLabel(ByVal v As String) As String
+    Select Case SK_SkKind(v)
+        Case "built": SK_SkLabel = "Built for Stationkeeper, works on its own"
+        Case "needs": SK_SkLabel = "Needs Stationkeeper data (" & SK_PartNames(SK_SkParts(v)) & ")"
+        Case Else: SK_SkLabel = "Not related"
+    End Select
+End Function
+
+' "rules,template" -> "the effort rules and the effort template"
+Public Function SK_PartNames(ByVal parts As String) As String
+    Dim a As Variant, i As Long, s As String
+    a = Split(parts, ",")
+    For i = 0 To UBound(a)
+        If i > 0 Then s = s & IIf(i = UBound(a), " and ", ", ")
+        s = s & "the effort " & Trim$(a(i))
+    Next
+    SK_PartNames = s
+End Function
+
+Public Function SK_PartFile(ByVal part As String) As String
+    Select Case LCase$(Trim$(part))
+        Case "rules": SK_PartFile = "rules\rules.json"
+        Case "template": SK_PartFile = "templates\effort.dotx"
+        Case "dictionary": SK_PartFile = "dictionaries\effort.dic"
+    End Select
+End Function
+
+Public Function SK_LinkFolder() As String
+    SK_LinkFolder = GetSetting(SK_LINK_APP, "Link", "folder", "")
+End Function
+
+Public Function SK_SetLinkFolder(ByVal f As String) As Boolean
+    If Len(f) = 0 Then
+        On Error Resume Next
+        DeleteSetting SK_LINK_APP, "Link", "folder"
+    Else
+        If Right$(f, 1) = "\" And Len(f) > 3 Then f = Left$(f, Len(f) - 1)
+        SaveSetting SK_LINK_APP, "Link", "folder", f
+    End If
+    SK_SetLinkFolder = True
+End Function
+
+' The folder picker. Returns the folder kept, or "" if the person cancelled.
+Public Function SK_PickLinkFolder() As String
+    Dim f As String, start As String
+    start = SK_LinkFolder()
+    If Len(start) = 0 Then
+        On Error Resume Next
+        start = ActiveDocument.Path
+        On Error GoTo 0
+    End If
+    f = SK_PickFolder("Pick the effort folder Stationkeeper saves to (it holds Stationkeeper Data)", start)
+    If Len(f) > 0 Then SK_SetLinkFolder f
+    SK_PickLinkFolder = f
+End Function
+
+' The Stationkeeper Data folder for a picked folder: the folder itself when it is one, else its subfolder.
+Public Function SK_DataDir(ByVal f As String) As String
+    If Right$(f, 1) = "\" Then f = Left$(f, Len(f) - 1)
+    If LCase$(Mid$(f, InStrRev(f, "\") + 1)) = "stationkeeper data" Then
+        SK_DataDir = f
+    Else
+        SK_DataDir = f & "\Stationkeeper Data"
+    End If
+End Function
+
+Public Function SK_JsonParse(ByVal text As String) As Variant
+    Dim pos As Long, v As Variant
+    pos = 1
+    SK_JsonAssign v, text, pos
+    If IsObject(v) Then Set SK_JsonParse = v Else SK_JsonParse = v
+End Function
+
+' A plain value from a parsed JSON object ("" when missing, null or not plain).
+Public Function SK_JGet(ByVal o As Object, ByVal k As String) As String
+    If o Is Nothing Then Exit Function
+    If TypeName(o) <> "Dictionary" Then Exit Function
+    If Not o.Exists(k) Then Exit Function
+    If IsObject(o(k)) Then Exit Function
+    If IsNull(o(k)) Then Exit Function
+    SK_JGet = CStr(o(k))
+End Function
+
+' Minutes to add to local time to get UTC (Windows' active time zone bias).
+Private Function SK_UtcBias() As Long
+    On Error Resume Next
+    SK_UtcBias = CLng(CreateObject("WScript.Shell").RegRead( _
+        "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation\ActiveTimeBias"))
+End Function
+
+' "2026-11-10T21:42:05Z" -> local Date. Returns 0 when the text is not a time.
+Public Function SK_FromUtcText(ByVal t As String) As Date
+    On Error GoTo Bad
+    t = Trim$(t)
+    If Len(t) < 19 Then Exit Function
+    SK_FromUtcText = DateSerial(CInt(Mid$(t, 1, 4)), CInt(Mid$(t, 6, 2)), CInt(Mid$(t, 9, 2))) + _
+        TimeSerial(CInt(Mid$(t, 12, 2)), CInt(Mid$(t, 15, 2)), CInt(Mid$(t, 18, 2))) - SK_UtcBias() / 1440#
+    Exit Function
+Bad:
+    SK_FromUtcText = 0
+End Function
+
+Public Function SK_Ago(ByVal hours As Double) As String
+    If hours < 1 / 60 Then
+        SK_Ago = "just now"
+    ElseIf hours < 1 Then
+        SK_Ago = CLng(hours * 60) & " min ago"
+    ElseIf hours < 48 Then
+        SK_Ago = Format$(hours, "0") & " h ago"
+    Else
+        SK_Ago = Format$(hours / 24, "0") & " days ago"
+    End If
+End Function
+
+' Reads the link fresh. Keys: folder, dataDir, state, note, effort, revision, published, by, ageHours, parts.
+' States: Not linked, Folder missing, No data yet, Unreadable, Needs a newer kit, Incomplete, Current, Aging, Stale.
+Public Function SK_LinkInfo() As Object
+    Dim d As Object, fso As Object, f As String, dd As String, man As Variant, p As Variant, rules As Variant
+    Dim present As String, bad As String, fp As String, pub As Date, warnH As Double, staleH As Double
+    Dim fr As Object, eff As Object, ok As Boolean
+    Set d = CreateObject("Scripting.Dictionary")
+    For Each p In Array("folder", "dataDir", "state", "note", "effort", "revision", "published", "by", "parts")
+        d(p) = ""
+    Next
+    d("ageHours") = 0
+    Set SK_LinkInfo = d
+    f = SK_LinkFolder()
+    d("folder") = f
+    If Len(f) = 0 Then
+        d("state") = "Not linked"
+        d("note") = "Not linked. Stationkeeper tools use the team standards workbook, then their own defaults."
+        Exit Function
+    End If
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(f) Then
+        d("state") = "Folder missing"
+        d("note") = "The linked folder is not there: renamed, moved, or on a drive or sync that is off. Use Change to pick it again."
+        Exit Function
+    End If
+    dd = SK_DataDir(f)
+    d("dataDir") = dd
+    If Not fso.FileExists(dd & "\manifest.json") Then
+        d("state") = "No data yet"
+        d("note") = "No Stationkeeper Data in this folder yet. Open the effort in Stationkeeper and save it, or pick the effort's own folder."
+        Exit Function
+    End If
+    On Error GoTo Unreadable
+    man = Empty
+    Set man = SK_JsonParse(SK_ReadUtf8(dd & "\manifest.json"))
+    If SK_JGet(man, "contract") <> "stationkeeper.effort-data" Then GoTo Unreadable
+    If Val(SK_JGet(man, "min_reader_version")) > SK_READER Then
+        d("state") = "Needs a newer kit"
+        d("note") = "This effort's data needs a newer Stationkeeper Macros. Ask for the latest release."
+        Exit Function
+    End If
+    If man.Exists("effort") Then
+        If IsObject(man("effort")) Then Set eff = man("effort"): d("effort") = SK_JGet(eff, "name")
+    End If
+    d("revision") = SK_JGet(man, "revision")
+    d("by") = SK_JGet(man, "published_by")
+    pub = SK_FromUtcText(SK_JGet(man, "published_utc"))
+    If pub > 0 Then
+        d("published") = Format$(pub, "yyyy-mm-dd h:nn am/pm")
+        d("ageHours") = (Now - pub) * 24#
+        If d("ageHours") < 0 Then d("ageHours") = 0
+    End If
+    warnH = 24: staleH = 72
+    If man.Exists("freshness") Then
+        If IsObject(man("freshness")) Then
+            Set fr = man("freshness")
+            If Val(SK_JGet(fr, "warn_after_hours")) > 0 Then warnH = Val(SK_JGet(fr, "warn_after_hours"))
+            If Val(SK_JGet(fr, "stale_after_hours")) > 0 Then staleH = Val(SK_JGet(fr, "stale_after_hours"))
+        End If
+    End If
+    ' Every listed part must be there at its full size; rules.json must carry the manifest's revision.
+    If man.Exists("parts") Then
+        For Each p In man("parts")
+            If IsObject(p) Then
+                fp = dd & "\" & Replace(SK_JGet(p, "path"), "/", "\")
+                ok = fso.FileExists(fp)
+                If ok And Len(SK_JGet(p, "bytes")) > 0 Then ok = (CStr(FileLen(fp)) = SK_JGet(p, "bytes"))
+                If ok Then
+                    present = present & IIf(Len(present) > 0, ",", "") & LCase$(SK_JGet(p, "key"))
+                Else
+                    bad = bad & IIf(Len(bad) > 0, ", ", "") & SK_JGet(p, "path")
+                End If
+            End If
+        Next
+    End If
+    If InStr("," & present & ",", ",rules,") > 0 Then
+        Set rules = SK_JsonParse(SK_ReadUtf8(dd & "\rules\rules.json"))
+        If SK_JGet(rules, "manifest_revision") <> d("revision") Then
+            bad = bad & IIf(Len(bad) > 0, ", ", "") & "rules/rules.json (revision " & SK_JGet(rules, "manifest_revision") & ")"
+            present = Replace("," & present & ",", ",rules,", ",")
+            If Left$(present, 1) = "," Then present = Mid$(present, 2)
+            If Right$(present, 1) = "," Then present = Left$(present, Len(present) - 1)
+        End If
+    End If
+    d("parts") = present
+    If Len(bad) > 0 Then
+        d("state") = "Incomplete"
+        d("note") = "Stationkeeper is still saving, or OneDrive is still syncing (" & bad & "). Try again in a minute."
+        Exit Function
+    End If
+    If d("ageHours") >= staleH Then
+        d("state") = "Stale"
+    ElseIf d("ageHours") >= warnH Then
+        d("state") = "Aging"
+    Else
+        d("state") = "Current"
+    End If
+    d("note") = IIf(Len(d("effort")) > 0, d("effort"), "Effort") & ", revision " & d("revision") & _
+        IIf(Len(d("published")) > 0, ", saved " & SK_Ago(d("ageHours")), "") & IIf(Len(d("by")) > 0, " by " & d("by"), "") & "."
+    If d("state") <> "Current" Then d("note") = d("note") & " Not saved in Stationkeeper for a while: check it is the right effort."
+    Exit Function
+Unreadable:
+    d("state") = "Unreadable"
+    d("note") = "The folder has a manifest.json that is not Stationkeeper's, or cannot be read right now. Try again, or pick the effort's folder."
+End Function
+
+' True when the linked data has every part a macro needs. why says what is wrong.
+Public Function SK_DataReady(ByVal info As Object, ByVal parts As String, ByRef why As String) As Boolean
+    Dim p As Variant, missing As String
+    why = ""
+    Select Case info("state")
+        Case "Current", "Aging", "Stale"
+        Case Else
+            why = info("note")
+            Exit Function
+    End Select
+    For Each p In Split(parts, ",")
+        If InStr("," & info("parts") & ",", "," & Trim$(p) & ",") = 0 Then missing = missing & IIf(Len(missing) > 0, ",", "") & Trim$(p)
+    Next
+    If Len(missing) > 0 Then
+        why = "This effort's Stationkeeper Data has no " & Replace(SK_PartNames(missing), "the effort ", "effort ") & _
+              " yet. Add it in Stationkeeper and save the effort."
+        Exit Function
+    End If
+    SK_DataReady = True
+End Function
+
+' What the menu does before a run: "" runs it, "ask" asks gently (built for Stationkeeper, not linked),
+' "needs" stops and says what data is needed (why).
+Public Function SK_Gate(ByVal skText As String, ByVal info As Object, ByRef why As String) As String
+    why = ""
+    Select Case SK_SkKind(skText)
+        Case "built"
+            If info("state") = "Not linked" And SK_GetPref("askBuilt", "1") = "1" Then SK_Gate = "ask"
+        Case "needs"
+            If Not SK_DataReady(info, SK_SkParts(skText), why) Then SK_Gate = "needs"
+    End Select
+End Function
+
+' The one-line link summary the menu shows.
+Public Function SK_LinkLine(ByVal info As Object) As String
+    Select Case info("state")
+        Case "Not linked": SK_LinkLine = "Stationkeeper data: not linked"
+        Case Else: SK_LinkLine = "Stationkeeper data: " & info("state") & "  |  " & info("folder")
+    End Select
 End Function
 
 ' ---------------------------------------------------------------------
@@ -1330,9 +1640,15 @@ Public Function SK_SetTestDoc(ByVal path As String) As Boolean
 End Function
 
 ' Returns "Passed ...", "Failed ..." or "Skipped ...".
-Public Function SK_TestMacro(ByVal run As String, ByVal worksOn As String) As String
+Public Function SK_TestMacro(ByVal run As String, ByVal worksOn As String, Optional ByVal skText As String = "") As String
     Dim prev As Object, scratch As Object, t As Single, why As String, src As String, rec As Boolean
     Dim before As New Collection, dd As Object, extra As New Collection, x As Variant, known As Boolean
+    If SK_SkKind(skText) = "needs" Then
+        If Not SK_DataReady(SK_LinkInfo(), SK_SkParts(skText), why) Then
+            SK_TestMacro = "Skipped: it needs Stationkeeper data. " & why
+            Exit Function
+        End If
+    End If
     On Error Resume Next
     For Each dd In Documents
         before.Add dd.FullName
@@ -1394,14 +1710,16 @@ End Function
 ' Tests every macro found. Skips the ones whose code saves, closes or deletes
 ' files or ends Word, unless includeRisky. Returns a summary.
 Public Function SK_TestAll(ByVal m As Object, ByVal includeRisky As Boolean) As String
-    Dim e As Object, r As String, nP As Long, nF As Long, nS As Long, nR As Long, failed As String
+    Dim e As Object, r As String, nP As Long, nF As Long, nS As Long, nR As Long, nD As Long, failed As String
     For Each e In m("entries")
         If e("found") Then
             If Not includeRisky And SK_IsRisky(e) Then
                 nR = nR + 1
             Else
-                r = SK_TestMacro(e("run"), e("workson"))
-                If Left$(r, 6) = "Passed" Then
+                r = SK_TestMacro(e("run"), e("workson"), e("stationkeeper"))
+                If Left$(r, 28) = "Skipped: it needs Stationkee" Then
+                    nD = nD + 1
+                ElseIf Left$(r, 6) = "Passed" Then
                     nP = nP + 1
                 ElseIf Left$(r, 6) = "Failed" Then
                     nF = nF + 1
@@ -1413,7 +1731,8 @@ Public Function SK_TestAll(ByVal m As Object, ByVal includeRisky As Boolean) As 
         End If
     Next
     SK_TestAll = "Passed: " & nP & "    Failed: " & nF & "    Skipped (needs a selection, table or list): " & nS & _
-        "    Not run (saves, closes or deletes files, or ends Word): " & nR & failed
+        "    Not run (saves, closes or deletes files, or ends Word): " & nR & _
+        IIf(nD > 0, "    Skipped (needs Stationkeeper data): " & nD, "") & failed
 End Function
 
 Public Function SK_IsRisky(ByVal e As Object) As Boolean

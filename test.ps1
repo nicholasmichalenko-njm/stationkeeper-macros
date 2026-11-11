@@ -44,6 +44,8 @@ $excelBefore = @(Get-Process EXCEL -ErrorAction SilentlyContinue | ForEach-Objec
 $pptBefore = @(Get-Process POWERPNT -ErrorAction SilentlyContinue | ForEach-Object Id)
 $setKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\Settings'
 $prevBackup = (Get-ItemProperty $setKey -ErrorAction SilentlyContinue).backupDir
+$linkKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Link'
+$prevLink = (Get-ItemProperty $linkKey -ErrorAction SilentlyContinue).folder
 foreach ($k in @('Team Sample Template.dotm')) { Remove-Item "HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\$k" -Recurse -ErrorAction SilentlyContinue }
 
 # Guard: a dialog left open by Word (a VBA error, a security question) would stall a step for ever.
@@ -592,6 +594,68 @@ try {
         finally { [void](RunW $word 'SKW_Test.TW_CloseBook') }
         $doc.Close([ref]0)
     }
+    # 15. 0.10.0: three kinds of macro, filters, badges, the two questions, the link strip and its states.
+    [string]$effort = Join-Path $work 'Effort A'
+    Remove-Item $effort -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        try {
+            $su = TR $word 'T_SkSetup'
+            Check 'mark built, needs rules, needs template, not related; save' (($su -match 'built=Module1\.ShowHiddenText') -and ($su -match 'needs=Module2\.WriteTestMarker') -and ($su -match 'needsT=Module1\.UpdateAllFields') -and ($su -match '\| Saved to')) $su
+            $k = TR $word 'T_SkKinds'
+            Check 'kinds kept in the catalog; tools prefilled (built or not related)' (($k -match 'ShowHiddenText=Built for Stationkeeper;') -and ($k -match 'WriteTestMarker=Needs Stationkeeper data: rules;') -and ($k -match 'StyleInspector=Built for Stationkeeper;') -and ($k -match 'ToggleFieldCodes=Not related;') -and ($k -match 'BookFontAudit=Built for Stationkeeper;') -and ($k -match 'DeckDeliveryCopy=Not related;') -and ($k -match 'xml has stationkeeper=True')) $k
+
+            $l = TR1 $word 'T_SkLink' ''
+            Check 'link: not linked' ($l -like 'Not linked*') $l
+            [void](TR1 $word 'T_SkAskPref' '1')
+            $mn = TR $word 'T_SkMenu'
+            Write-Output "MENU0: $mn"
+            Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
+            Check 'filter Needs effort data: the two, with the filled badge' ($mn -match 'NEEDS EFFORT DATA 2: \[[^\]]+ SK\+\] \[[^\]]+ SK\+\] \|\|') ''
+            Check 'filter Stationkeeper tools: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER TOOLS \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER TOOLS \d+:[^|]*\[Toggle Field Codes\]') -and ($mn -notmatch 'STATIONKEEPER TOOLS [^|]*Fit Tables To Margins')) ''
+            Check 'filter My macros: own macros only' (($mn -match 'MY MACROS \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'MY MACROS [^|]*(SK-|SK\+|Style Inspector)')) ''
+            Check 'filter Ready to run now: needs-data macros left out when not linked' (($mn -match 'READY TO RUN NOW \d+:') -and ($mn -notmatch 'READY TO RUN NOW [^|]*SK\+')) ''
+            Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link a folder\.\.\., Cancel \| Don''t ask again') ''
+            Check 'needs data, not linked: says what and where, offers the picker' ($mn -match 'GATE needs: needs \| Needs Stationkeeper data \| This macro is used with the Stationkeeper application\. Please point to the Stationkeeper data folder for your effort\.[^|]*It needs the effort rules\.[^|]*Stationkeeper Data\\rules\\rules\.json[^|]*Right now: Not linked\.[^|]*\| buttons: Point to the folder\.\.\., Cancel \|\|') ''
+            Check 'not related: runs with no question' ($mn -match 'GATE none: run') ''
+            $t1 = TR1 $word 'T_SkTestOne' 'Module2.WriteTestMarker'
+            Check 'test run skips a needs-data macro when not linked' ($t1 -like 'Skipped: it needs Stationkeeper data. Not linked*') $t1
+            [void](TR1 $word 'T_SkAskPref' '0')
+            $mn = TR $word 'T_SkMenu'
+            Check 'Don''t ask again: built runs with no question' ($mn -match 'GATE built: run') ''
+            [void](TR1 $word 'T_SkAskPref' '1')
+
+            $l = TR1 $word 'T_SkLink' (Join-Path $work 'No Such Effort')
+            Check 'link: folder missing' ($l -like 'Folder missing*') $l
+            $l = TR1 $word 'T_SkLink' $work
+            Check 'link: no data yet' ($l -like 'No data yet*') $l
+            $md = TR1 $word 'T_SkMakeData' "$effort|current"
+            $l = TR1 $word 'T_SkLink' $effort
+            Check 'link: current, rules present, effort named' (($l -like 'Current | parts=rules | rev=15 | effort=Effort A*') -and ($l -match 'by tester')) "$l ;; $md"
+            $l2 = TR1 $word 'T_SkLink' (Join-Path $effort 'Stationkeeper Data')
+            Check 'link: picking the Stationkeeper Data folder itself works too' ($l2 -like 'Current*') $l2
+            [void](TR1 $word 'T_SkLink' $effort)
+            $mn = TR $word 'T_SkMenu'
+            Write-Output "MENU1: $mn"
+            Check 'menu link strip: current, Change, Unlink' (($mn -match 'LINK Stationkeeper data: Current  \|  ') -and ($mn -match 'Effort A, revision 15, saved') -and ($mn -match 'button=Change\.\.\. unlink=True')) ''
+            Check 'linked: built and needs-rules run with no question' (($mn -match 'GATE built: run') -and ($mn -match 'GATE needs: run')) ''
+            Check 'linked, part missing: needs-template says the template is missing' ($mn -match 'GATE needsT: needs \| Needs Stationkeeper data \| [^|]*Right now: This effort''s Stationkeeper Data has no effort template yet\.') ''
+            Check 'Ready to run now: needs-rules in, needs-template out' (($mn -match 'READY TO RUN NOW [^|]*\[Write Test Marker SK\+\]') -and ($mn -notmatch 'READY TO RUN NOW [^|]*\[Update All Fields')) ''
+            [void](TR1 $word 'T_SkMakeData' "$effort|incomplete")
+            $l = TR1 $word 'T_SkLink' $effort
+            Check 'link: incomplete when rules.json is a revision behind' (($l -like 'Incomplete*') -and ($l -match 'rules/rules\.json \(revision 14\)')) $l
+            [void](TR1 $word 'T_SkMakeData' "$effort|stale")
+            $l = TR1 $word 'T_SkLink' $effort
+            Check 'link: stale after 72 hours' (($l -like 'Stale*') -and ($l -match 'saved 5 days ago')) $l
+            [void](TR1 $word 'T_SkMakeData' "$effort|bad")
+            $l = TR1 $word 'T_SkLink' $effort
+            Check 'link: a manifest that is not Stationkeeper''s' ($l -like 'Unreadable*') $l
+        }
+        finally { [void](TR1 $word 'T_SkLink' '') }
+        $d.Close([ref]0)
+    }
+
 }
 catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)
@@ -608,6 +672,7 @@ finally {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Remove-ItemProperty 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Standards' -Name 'Team Sample Template.dotm' -ErrorAction SilentlyContinue
     Remove-ItemProperty 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Run' -Name 'quiet' -ErrorAction SilentlyContinue
+    if ($null -ne $prevLink) { if (-not (Test-Path $linkKey)) { [void](New-Item $linkKey -Force) }; Set-ItemProperty $linkKey -Name folder -Value $prevLink }
     if ($null -ne $prevBackup) { Set-ItemProperty $setKey -Name backupDir -Value $prevBackup }
     else { Remove-ItemProperty $setKey -Name backupDir -ErrorAction SilentlyContinue }
     Write-Output ''

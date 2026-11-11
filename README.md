@@ -2,7 +2,7 @@
 
 A menu and a bookshelf for the macros in a Word template.
 
-- **The menu** (`StationkeeperMacros`): search as you type, sort by category, A to Z, most used or recent, filter by what a macro affects, read what it does, and run it. It can stay open beside the document.
+- **The menu** (`StationkeeperMacros`): search as you type, sort by category, A to Z, most used or recent, filter by what a macro affects or by its tie to Stationkeeper, read what it does, and run it. It can stay open beside the document, and shows which Stationkeeper effort folder it reads.
 - **The admin** (`StationkeeperMacrosAdmin`): see every macro in the template, then give each one a title, description, category, keywords, what each one affects and whether it changes the document, and choose which ones show in the menu. Set and order your own categories, export the catalog to Excel and back, and check for macros that were added, moved or removed.
 
 It works with whatever macros are already in the template: one module or many. It never edits your code. Part of the Stationkeeper suite and separate from the Stationkeeper app.
@@ -47,6 +47,28 @@ Run `StationkeeperMacros` (or press Alt+Shift+M, or use the Add-ins tab button) 
 - **One Ctrl+Z undoes a whole macro.** Each run is one step on Word's Undo list, named "Stationkeeper: <title>".
 - **The menu checks what a macro needs first.** A macro set to work on a selection, a table at the cursor or a list at the cursor will not run until that is true, and the menu says what to do.
 - Pins, Most used and Recent belong to each person on their own PC and are never saved in the template.
+
+### Three kinds of macro
+
+The menu is a general macro menu. Each macro is one of three kinds (the admin's **Stationkeeper** box; the Stationkeeper Tools come filled in):
+
+| Kind | Badge | What Run does |
+|---|---|---|
+| Not related | none | Runs. Your own macros, and general tools such as Toggle Field Codes. |
+| Built for Stationkeeper | ◇ SK | Runs on its own. If no effort folder is linked, it asks first: "This is built for Stationkeeper but is still functional. Would you like to run it?" with **Run it**, **Link a folder...**, **Cancel** and **Don't ask again**. |
+| Needs Stationkeeper data | ◆ SK | Runs only when the linked effort has the data it needs (the effort rules, template or dictionary). If not, it says "This macro is used with the Stationkeeper application. Please point to the Stationkeeper data folder for your effort.", names the files it needs and where Stationkeeper writes them, says what is wrong right now, and offers **Point to the folder...**. |
+
+**Show** filters the list: All macros, My macros, Stationkeeper tools, Needs effort data, and Ready to run now (what can run right now, given the selection and the link).
+
+### The Stationkeeper link
+
+The strip under the list shows where the Stationkeeper data comes from, with **Link a folder...** (or **Change...**), **Refresh** and **Unlink**.
+
+- **One folder pick.** Pick the effort folder that Stationkeeper saves to, or the `Stationkeeper Data` folder inside it. It can be a local folder or a synced SharePoint or OneDrive folder. Each person links once on their own PC, and the link works for every template.
+- **Read fresh every time.** The menu reads the folder each time it opens, before each run, and on **Refresh**. A save in Stationkeeper, or a colleague's save once OneDrive has synced it, shows up on the next run, with no reopening.
+- **What the strip says:** Not linked; Folder missing; No data yet; Incomplete (Stationkeeper is mid-save or OneDrive is mid-sync, so try again in a minute); Current; Aging (not saved in Stationkeeper for 24 hours); Stale (72 hours). Each effort sets its own warning times.
+- **Read only.** The macros never write to the effort folder; Stationkeeper is the only writer. The file layout is in the effort data contract (project doc `stationkeeper-effort-data-contract-v1.md`).
+- **In 0.10.0 the link decides what can run;** the tools still read their rules from the standards workbook. From 1.0.0, the tools that are built for Stationkeeper read the linked effort's rules first.
 
 ## The primary list: update many macros at once
 
@@ -183,6 +205,7 @@ A `Public Sub` (or plain `Sub`) with no arguments, in a standard module. These a
 - **The catalog** (titles, descriptions, categories, keywords, what it affects, show or hide, history): a hidden XML part inside the template, namespace `urn:stationkeeper:macros:1`. Changing it never touches code, so a code signature stays valid.
 - **Backups, a readable copy of the catalog, and Excel exports:** the folder each person chooses the first time they save or export (kept in their Windows profile, for every template).
 - **Each person's pins, counts and preferences:** their Windows profile (`HKCU\Software\VB and VBA Program Settings\Stationkeeper Macros`).
+- **The Stationkeeper link** (the effort folder): their Windows profile (`...\Stationkeeper Tools\Link`), one per person per PC.
 
 ## Build and test (developers)
 
@@ -190,7 +213,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 128 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 163 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.
@@ -208,7 +231,7 @@ build.ps1, test.ps1
 
 ## Next
 
-- The menu's three kinds of macro (0.10.0): not related, built for Stationkeeper, needs Stationkeeper data; badges, filters, and the linked-folder strip. Then the effort data link (1.0.0, see the link plan).
+- 1.0.0, the effort data link: tools built for Stationkeeper read the linked effort's rules first (then the standards workbook, then defaults), from a per-person local copy refreshed on each new revision. Needs the Stationkeeper app to publish (App 1).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

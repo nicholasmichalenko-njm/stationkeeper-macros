@@ -24,6 +24,7 @@ Private WithEvents txtKeywords As MSForms.TextBox
 Private WithEvents lstAffects As MSForms.ListBox
 Private WithEvents cboChanges As MSForms.ComboBox
 Private WithEvents chkShown As MSForms.CheckBox
+Private WithEvents cboSk As MSForms.ComboBox
 Private lblComment As MSForms.Label
 Private lblHealth As MSForms.Label
 Private lblTest As MSForms.Label
@@ -200,15 +201,23 @@ Private Sub UserForm_Initialize()
     For Each v In Array("Yes", "No, it only reports", "No, it only changes the view", "It changes the template")
         cboChanges.AddItem v
     Next
-    Set chkShown = Chk(pg, "chkShown", "Show in the menu", 568, 282, 190, 18)
+    Lbl pg, "lblSk", "Stationkeeper", 568, 274, 190, 14
+    Set cboSk = AddTo(pg, "Forms.ComboBox.1", "cboSk", 568, 288, 190, 20)
+    cboSk.Style = fmStyleDropDownCombo
+    For Each v In Array("Not related", "Built for Stationkeeper", "Needs Stationkeeper data: rules", _
+                        "Needs Stationkeeper data: template", "Needs Stationkeeper data: dictionary", _
+                        "Needs Stationkeeper data: rules, template")
+        cboSk.AddItem v
+    Next
+    Set chkShown = Chk(pg, "chkShown", "Show in the menu", 568, 312, 190, 18)
     chkShown.Font.Bold = True
-    Set btnTestOne = Btn(pg, "btnTestOne", "Test this macro", 568, 306, 190, 22)
-    Set lblTest = Lbl(pg, "lblTest", "", 568, 332, 190, 44)
+    Set btnTestOne = Btn(pg, "btnTestOne", "Test this macro", 568, 334, 190, 22)
+    Set lblTest = Lbl(pg, "lblTest", "", 568, 358, 190, 22)
     lblTest.WordWrap = True
     Set lblComment = Lbl(pg, "lblComment", "", 372, 356, 190, 58)
     lblComment.ForeColor = &H808080
     lblComment.WordWrap = True
-    Set lblHealth = Lbl(pg, "lblHealth", "", 568, 378, 190, 36)
+    Set lblHealth = Lbl(pg, "lblHealth", "", 568, 382, 190, 32)
     lblHealth.ForeColor = &H99&
     lblHealth.WordWrap = True
 
@@ -449,13 +458,14 @@ Private Sub LoadFields()
     txtTitle.Enabled = en: cboCategory.Enabled = en: cboWorksOn.Enabled = en
     txtDescription.Enabled = en: txtKeywords.Enabled = en: lstAffects.Enabled = en
     cboChanges.Enabled = en: chkShown.Enabled = en: btnUseComment.Enabled = en: btnTestOne.Enabled = en
+    cboSk.Enabled = en
     For i = 0 To lstAffects.ListCount - 1
         lstAffects.Selected(i) = False
     Next
     If Not en Then
         lblMacro.Caption = "No macro matches this filter."
         txtTitle.Text = "": cboCategory.Text = "": cboWorksOn.Text = "": txtDescription.Text = ""
-        txtKeywords.Text = "": cboChanges.Text = "": chkShown.Value = False
+        txtKeywords.Text = "": cboChanges.Text = "": chkShown.Value = False: cboSk.Text = ""
         lblComment.Caption = ""
         lblTest.Caption = ""
         lblHealth.Caption = ""
@@ -469,6 +479,7 @@ Private Sub LoadFields()
     txtDescription.Text = mCur("description")
     txtKeywords.Text = mCur("keywords")
     cboChanges.Text = mCur("changes")
+    cboSk.Text = IIf(Len(mCur("stationkeeper")) > 0, mCur("stationkeeper"), "Not related")
     chkShown.Value = (mCur("shown") = "1")
     chkShown.Enabled = mCur("found")
     For Each a In Split(mCur("affects"), ",")
@@ -680,6 +691,12 @@ End Sub
 Private Sub cboChanges_Change()
     If mLoading Or mCur Is Nothing Then Exit Sub
     mCur("changes") = cboChanges.Text
+    MarkEdit
+End Sub
+
+Private Sub cboSk_Change()
+    If mLoading Or mCur Is Nothing Then Exit Sub
+    mCur("stationkeeper") = Trim$(cboSk.Text)
     MarkEdit
 End Sub
 
@@ -1108,7 +1125,7 @@ Private Sub btnTestOne_Click()
     End If
     lblTest.Caption = "Testing... If Word shows an error, click End."
     DoEvents
-    r = SK_TestMacro(run, mCur("workson"))
+    r = SK_TestMacro(run, mCur("workson"), mCur("stationkeeper"))
     UpdateRow
     ShowTestAndHealth
     If Left$(r, 7) = "Skipped" Or Left$(r, 3) = "Not" Then lblTest.Caption = r
@@ -1235,7 +1252,8 @@ Public Function TestLabels() As String
     For i = 0 To mp.Pages.Count - 1
         s = s & mp.Pages(i).Caption & "|"
     Next
-    s = s & " A=" & mp.Pages(0).Controls("lblA").Caption & " | Ch=" & mp.Pages(0).Controls("lblCh").Caption
+    s = s & " A=" & mp.Pages(0).Controls("lblA").Caption & " | Ch=" & mp.Pages(0).Controls("lblCh").Caption & _
+        " | Sk=" & mp.Pages(0).Controls("lblSk").Caption & " (" & cboSk.ListCount & " choices)"
     On Error Resume Next
     Set c = Nothing
     Set c = mp.Pages(0).Controls("txtAlso")

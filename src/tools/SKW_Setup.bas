@@ -391,5 +391,21 @@ Private Function T(ByVal run As String, ByVal title As String, ByVal cat As Stri
                    ByVal kw As String, ByVal affects As String, ByVal works As String, ByVal changes As String) As String
     T = "{""Macro"": """ & run & """, ""Title"": """ & title & """, ""Category"": """ & cat & """, ""Description"": """ & desc & _
         """, ""Keywords"": """ & kw & """, ""Affects"": """ & affects & """, ""Works on"": """ & works & _
-        """, ""Changes"": """ & changes & """, ""Show in menu"": ""Yes""}"
+        """, ""Changes"": """ & changes & """, ""Show in menu"": ""Yes"", ""Stationkeeper"": """ & SkKind(run) & """}"
+End Function
+
+' Tools that read team rules (the standards workbook now, the effort's data once linked) are
+' "Built for Stationkeeper": they run on their own. The rest are general tools with no tie.
+Private Function SkKind(ByVal run As String) As String
+    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|PreDeliveryLeftovers|StyleInspector|" & _
+        "NonAllowedStyleReport|DirectFormattingReport|ClearDirectFormattingSelection|TableStandardsAudit|" & _
+        "ApplyTeamTableType|BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
+        "AcronymQuickCheck|LoadTeamDictionaries|FontNotAllowed|PageLimitCounter|RemoveUnusedCustomStyles|" & _
+        "ConvertToTeamList|InsertAcronymList|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
+        "DeckSmallText|BookLeftovers|BookBannedPhrases|BookAcronymCheck|BookFontAudit|"
+    If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
+        SkKind = "Built for Stationkeeper"
+    Else
+        SkKind = "Not related"
+    End If
 End Function
