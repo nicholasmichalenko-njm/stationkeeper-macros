@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Install"
 ' =====================================================================
-' Stationkeeper Macros kit installer 1.1.0
+' Stationkeeper Macros kit installer 1.2.0
 ' Lives only in "Stationkeeper Macros Kit.dotm". It copies the menu and
 ' the admin into a template you pick, with Word's Organizer. No VBA
 ' editor needed. Your own macros are not touched.
