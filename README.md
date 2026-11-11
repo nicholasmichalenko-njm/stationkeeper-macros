@@ -81,11 +81,11 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 51 tools in 0.8.0)
+## Stationkeeper Tools (0.4.0 and later; 61 tools in 0.9.0)
 
-Checking and fixing tools for Word documents, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
+Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
-**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies fourteen modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies fifteen modules (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook.** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
@@ -145,6 +145,21 @@ Checking and fixing tools for Word documents, in the same kit. They work on thei
 | Deck Empty Placeholders | Empty placeholders left on slides | No, report |
 | Deck Delivery Copy | "<name> - delivery.pptx" without notes, comments, hidden slides or personal details | No, saves a copy |
 
+**Excel (0.9.0).** These check the workbook open in Excel (the active one, or the only one open). They never start Excel or open a file on their own, and their reports open in Word. On very large sheets they read the first 20,000 text cells of each sheet.
+
+| Tool | What it does | Changes the workbook? |
+|---|---|---|
+| Book Formula Errors | Cells showing #DIV/0!, #N/A, #REF!, #VALUE! and the rest, with the formula | No, report |
+| Book Broken Names | Defined names that point at #REF!, at nothing, or at another file | No, report |
+| Book External Links | Other workbooks this one links to, and the cells that use them | No, report |
+| Book Hidden Content | Hidden and very hidden sheets, hidden rows and columns, hidden names | No, report |
+| Book Leftovers | Notes, comments and placeholder text (TBD, XXX, [insert) | No, report |
+| Book Banned Phrases | Banned phrases in cell text, with replacements | No, report |
+| Book Acronym Check (text only) | Acronyms, first cell, spelled out or not, team meaning | No, report |
+| Book Font Audit | Fonts used, flagged against the Fonts sheet | No, report |
+| Book Merged Cells | Merged areas (they break sorting, filtering and screen readers) | No, report |
+| Book Delivery Copy | "<name> - delivery.xlsx" without notes, comments, links to other workbooks (kept as values) or personal details. Hidden sheets stay; Book Hidden Content lists them | No, saves a copy |
+
 How they behave:
 - **Reports** open as a new Word document with one table and the standards used at the top. They change nothing in your document, not even its Undo list (the report is written as a web page and opened, so Word edits nothing while making it).
 - **Fixes** are one step on Undo, named "Stationkeeper: ...".
@@ -193,7 +208,7 @@ build.ps1, test.ps1
 
 ## Next
 
-- Stationkeeper Tools: Excel (0.9.0). Then the menu's three kinds of macro (0.10.0) and the effort data link (see the link plan).
+- The menu's three kinds of macro (0.10.0): not related, built for Stationkeeper, needs Stationkeeper data; badges, filters, and the linked-folder strip. Then the effort data link (1.0.0, see the link plan).
 
 - Library mode: add or remove whole macro modules from a master Macro Library template, and export one macro family as its own small template.
 - Load Nicholas's ProposalEngine macros as `SKM_` modules with their catalog filled.

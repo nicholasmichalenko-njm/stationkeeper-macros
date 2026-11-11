@@ -125,11 +125,12 @@ End Function
 
 ' The text pieces of a shape: its text frame, or each cell of its table.
 Public Function SKP_TextRanges(ByVal sh As Object) As Collection
-    Dim c As New Collection, r As Long, k As Long
+    Dim c As New Collection, r As Long, k As Long, nR As Long, nK As Long
     On Error Resume Next
     If sh.HasTable Then
-        For r = 1 To sh.Table.Rows.Count
-            For k = 1 To sh.Table.Columns.Count
+        nR = sh.Table.Rows.Count: nK = sh.Table.Columns.Count   ' read first: a failed loop bound under Resume Next can loop forever
+        For r = 1 To nR
+            For k = 1 To nK
                 c.Add sh.Table.Cell(r, k).Shape.TextFrame.TextRange
             Next
         Next
@@ -477,7 +478,7 @@ Public Function SKP_DeckEmptyPlaceholders() As String
 End Function
 
 Public Function SKP_DeckDeliveryCopy(ByVal target As String) As String
-    Dim p As Object, c As Object, msg As String, i As Long, sld As Object, sh As Object, nNotes As Long, nCom As Long, nHid As Long, k As Long
+    Dim p As Object, c As Object, msg As String, i As Long, sld As Object, sh As Object, nNotes As Long, nCom As Long, nHid As Long, k As Long, nK As Long
     Set SKW_LastReport = Nothing
     Set p = SKP_Deck()
     If p Is Nothing Then SKP_DeckDeliveryCopy = SKP_Why(): Exit Function
@@ -501,7 +502,8 @@ Public Function SKP_DeckDeliveryCopy(ByVal target As String) As String
             End If
         Next
         On Error Resume Next
-        For k = sld.Comments.Count To 1 Step -1
+        nK = 0: nK = sld.Comments.Count
+        For k = nK To 1 Step -1
             sld.Comments(k).Delete
             nCom = nCom + 1
         Next

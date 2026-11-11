@@ -353,6 +353,36 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKP_Deck.DeckDeliveryCopy", "Deck Delivery Copy", "PowerPoint", _
         "Saves a copy of the open deck beside it with no speaker notes, comments, hidden slides or personal details. The open deck is not changed.", _
         "powerpoint, deck, delivery, clean, notes, metadata", "Whole document", "Whole document", "No, it saves a clean copy")
+    s = s & "," & T("SKX_Book.BookFormulaErrors", "Book Formula Errors", "Excel", _
+        "Report of cells showing an error (#REF!, #N/A, #DIV/0! and the rest) in the workbook open in Excel. Changes nothing.", _
+        "excel, workbook, errors, ref, formulas", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookBrokenNames", "Book Broken Names", "Excel", _
+        "Report of defined names pointing at #REF! or at another file. Changes nothing.", _
+        "excel, workbook, names, ref, broken", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookExternalLinks", "Book External Links", "Excel", _
+        "Report of links to other workbooks and the cells using them. Changes nothing.", _
+        "excel, workbook, links, external, other files", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookHiddenContent", "Book Hidden Content", "Excel", _
+        "Report of hidden and very hidden sheets, hidden rows and columns, and hidden names. Changes nothing.", _
+        "excel, workbook, hidden sheets, hidden rows, delivery", "Hidden text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookLeftovers", "Book Leftovers", "Excel", _
+        "Report of notes, comments and placeholder text (TBD, XXX) in the open workbook. Changes nothing.", _
+        "excel, workbook, comments, notes, placeholders, delivery", "Comments and tracking, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookBannedPhrases", "Book Banned Phrases", "Excel", _
+        "Report of the team's banned phrases in the workbook's cell text, with the replacement. Changes nothing.", _
+        "excel, workbook, banned, phrases", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookAcronymCheck", "Book Acronym Check (text only)", "Excel", _
+        "Report of acronyms in the workbook's cell text with the team meaning. Charts and pictures are not read. Changes nothing.", _
+        "excel, workbook, acronyms", "Acronyms, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookFontAudit", "Book Font Audit", "Excel", _
+        "Report of fonts used in filled cells, flagging ones not on the team's Fonts sheet. Changes nothing.", _
+        "excel, workbook, fonts", "Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookMergedCells", "Book Merged Cells", "Excel", _
+        "Report of merged cells, which break sorting, filtering and screen readers. Changes nothing.", _
+        "excel, workbook, merged cells, accessibility", "Tables", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookDeliveryCopy", "Book Delivery Copy", "Excel", _
+        "Saves a copy of the open workbook beside it with notes and comments out, links to other files turned into values, and personal details out. The open workbook is not changed.", _
+        "excel, workbook, delivery, clean, comments, links, metadata", "Whole document", "Whole document", "No, it saves a clean copy")
     s = s & "]}"
     SKW_ToolList = s
 End Function

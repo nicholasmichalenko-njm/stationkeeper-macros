@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Macros"
 ' =====================================================================
-' Stationkeeper Macros 0.8.0
+' Stationkeeper Macros 0.9.0
 ' A menu and an admin for the macros already in this template.
 '
 '   StationkeeperMacros        opens the menu (search, sort, read, run)
@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "0.8.0"
+Public Const SK_VERSION As String = "0.9.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 
 Public SK_LastScanMethod As String

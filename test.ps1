@@ -299,7 +299,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(14 modules)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(15 modules)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -311,7 +311,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 53 tools arrive described, categorised and in the menu' (($tc -like '53 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 63 tools arrive described, categorised and in the menu' (($tc -like '63 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -558,7 +558,40 @@ try {
         $doc.Close([ref]0)
     }
 
-
+    # 14. 0.9.0: Excel tools on a workbook the test makes (handed to the tools directly).
+    [string]$book = Join-Path $work 'Book 0.9.xlsx'
+    [string]$bookCopy = Join-Path $work 'Book 0.9 - delivery.xlsx'
+    Remove-Item $book, $bookCopy -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        try {
+            $m = RunW $word 'SKW_Test.TW_MakeBook' $book
+            Check 'test workbook made' ((Test-Path $book) -and ($m -match 'sheets=3')) $m
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookFormulaErrors'
+            Check 'book formula errors: #DIV/0! and #N/A' (($r -like '2 cell(s) with an error*') -and ($r -match '#DIV/0!') -and ($r -match '#N/A')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookBrokenNames'
+            Check 'book broken names: BadName' (($r -like '1 broken name*') -and ($r -match 'BadName')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookExternalLinks'
+            Check 'book external links: none' ($r -like '0 linked workbook(s), 0 cell(s)*') ($r.Substring(0, [Math]::Min(200, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookHiddenContent'
+            Check 'book hidden content: the hidden sheet and the hidden row' ($r -like 'Hidden sheets 1, sheets with hidden rows or columns 1,*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookLeftovers'
+            Check 'book leftovers: the note and the TBD cell' ($r -like 'Notes and comments 1, placeholders 1*') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookBannedPhrases'
+            Check 'book banned phrases: utilize in A2' (($r -like '1 banned phrase*') -and ($r -match '\| Pricing \| A2 \| utilize \| use \|')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookAcronymCheck'
+            Check 'book acronyms: RFP spelled out and on the team list' (($r -match 'text only') -and ($r -match '\| RFP \| 1 \| Pricing!A2 \| Yes \| Yes \| Request for Proposal \|')) ($r.Substring(0, [Math]::Min(400, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookFontAudit'
+            Check 'book fonts: Arial not allowed' ($r -match 'Not allowed \| Arial') ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookMergedCells'
+            Check 'book merged cells: A10:B10' (($r -like '1 merged area*') -and ($r -match 'A10:B10')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_BookCopy' $bookCopy
+            Check 'book delivery copy: note gone in the copy, still in the open workbook' ((Test-Path $bookCopy) -and ($r -match 'copyComments=0 openComments=1')) $r
+        }
+        finally { [void](RunW $word 'SKW_Test.TW_CloseBook') }
+        $doc.Close([ref]0)
+    }
 }
 catch {
     Check 'test run' $false ($_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber)

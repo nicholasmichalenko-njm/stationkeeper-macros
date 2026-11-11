@@ -4,6 +4,7 @@ Attribute VB_Name = "SKW_Test"
 Option Explicit
 Private mPP As Object
 Private mPPMine As Boolean
+Private mXL As Object
 
 Private Function ReportText() As String
     If SKW_LastReport Is Nothing Then ReportText = "(no report)": Exit Function
@@ -743,4 +744,66 @@ Public Function TW_NoDeck() As String
     Set SKP_TestDeck = Nothing
     TW_NoDeck = "quiet entry: " & IIf(GetSetting("Stationkeeper Tools", "Run", "quiet", "") = "1", "flag", "noflag")
     Set SKP_TestDeck = keep
+End Function
+
+' ---------------------------------------------------------------------
+' 0.9.0: Excel. The test makes its own hidden workbook and hands it to the
+' tools directly (SKX_TestBook), so a person's open workbooks are never touched.
+' ---------------------------------------------------------------------
+
+Public Function TW_MakeBook(ByVal path As String) As String
+    Dim wb As Object, ws As Object
+    Set mXL = CreateObject("Excel.Application")
+    mXL.Visible = False
+    mXL.DisplayAlerts = False
+    Set wb = mXL.Workbooks.Add
+    Do While wb.Worksheets.Count < 3
+        wb.Worksheets.Add After:=wb.Worksheets(wb.Worksheets.Count)
+    Loop
+    Set ws = wb.Worksheets(1)
+    ws.Name = "Pricing"
+    ws.Range("A1").Value = "Item"
+    ws.Range("B1").Formula = "=1/0"
+    ws.Range("B2").Formula = "=NA()"
+    ws.Range("A2").Value = "We utilize the Request for Proposal (RFP) rates."
+    ws.Range("A3").Value = "Rate TBD"
+    ws.Range("A4").Value = "Arial cell"
+    ws.Range("A4").Font.Name = "Arial"
+    ws.Range("A1").AddComment "Check this"
+    ws.Range("A10:B10").Merge
+    ws.Range("A10").Value = "Merged heading"
+    ws.Rows(6).Hidden = True
+    wb.Names.Add Name:="BadName", RefersTo:="=#REF!"
+    wb.Worksheets(2).Name = "Notes"
+    wb.Worksheets(3).Name = "Secret"
+    wb.Worksheets(3).Visible = 0
+    wb.SaveAs path, 51
+    Set SKX_TestBook = wb
+    TW_MakeBook = "sheets=" & wb.Worksheets.Count
+End Function
+
+Public Function TW_Book(ByVal fn As String) As String
+    Dim s As String
+    SKW_Quiet = True
+    s = Application.Run(fn) & " ## " & ReportText()
+    CloseReport
+    TW_Book = s
+End Function
+
+Public Function TW_BookCopy(ByVal target As String) As String
+    Dim s As String, c As Object, n As Long
+    s = Replace(SKX_BookDeliveryCopy(target), vbCr, " / ")
+    Set c = mXL.Workbooks.Open(target, 0, True)
+    n = c.Worksheets("Pricing").Comments.Count
+    c.Close False
+    TW_BookCopy = s & " ## copyComments=" & n & " openComments=" & SKX_TestBook.Worksheets("Pricing").Comments.Count
+End Function
+
+Public Function TW_CloseBook() As String
+    On Error Resume Next
+    SKX_TestBook.Close False
+    Set SKX_TestBook = Nothing
+    mXL.Quit
+    Set mXL = Nothing
+    TW_CloseBook = "closed"
 End Function
