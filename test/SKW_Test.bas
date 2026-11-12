@@ -1158,3 +1158,11 @@ Public Function TW_Inspect3(ByVal path As String) As String
     c.Close
     TW_Inspect3 = s
 End Function
+
+' 1.6.0: the Stationkeeper look on the Deck Media List (on the open test deck).
+Public Function TW_MediaBrand() As String
+    SKW_Quiet = True
+    Load frmSKPMedia
+    TW_MediaBrand = frmSKPMedia.TestBrand()
+    Unload frmSKPMedia
+End Function

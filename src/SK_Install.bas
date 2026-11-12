@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Install"
 ' =====================================================================
-' Stationkeeper Macros kit installer 1.5.0
+' Stationkeeper Macros kit installer 1.6.0
 ' Lives only in "Stationkeeper Macros Kit.dotm". It copies the menu and
 ' the admin into a template you pick, with Word's Organizer. No VBA
 ' editor needed. Your own macros are not touched.
@@ -9,12 +9,16 @@ Attribute VB_Name = "SK_Install"
 '   StationkeeperMacrosRemove    take the kit back out of a template
 '   StationkeeperToolsInstall    add (or update) Stationkeeper Tools in a template
 '   StationkeeperToolsRemove     take Stationkeeper Tools back out
+'   StationkeeperRibbonInstall   put the Stationkeeper tab on Word's ribbon (this PC)
+'   StationkeeperRibbonRemove    take the tab back off
 ' The tools work on their own; with the menu they arrive described.
 ' =====================================================================
 Option Explicit
 
-Private Const KIT_ITEMS As String = "SK_Macros|frmSKMenu|frmSKAdmin"
-Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output|SKW_Utils|SKP_Deck|SKP_Fix|SKP_Tidy|frmSKPMedia|SKX_Book"
+Private Const KIT_ITEMS As String = "SK_Macros|frmSKMenu|frmSKAdmin|frmSKBrand"
+Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output|SKW_Utils|SKP_Deck|SKP_Fix|SKP_Tidy|frmSKPMedia|frmSKWBrand|SKX_Book"
+Private Const RIBBON_FILE As String = "Stationkeeper Ribbon.dotm"
+Public SK_RibbonStartup As String   ' tests: a stand-in for Word's Startup folder
 
 Public Sub StationkeeperMacrosInstall()
     Dim p As String
@@ -227,4 +231,76 @@ Private Function SK_DeleteItems(ByVal target As String, ByVal items As String, B
     If Not d Is Nothing Then d.Save
     SK_DeleteItems = "Removed " & n & " kit item(s) from " & Mid$(target, InStrRev(target, "\") + 1) & "." & _
         IIf(Len(bak) > 0, vbCr & "Backup: " & bak, "")
+End Function
+
+' ---------------------------------------------------------------------
+' The Stationkeeper tab on Word's ribbon (1.6.0). A small add-in of its own,
+' "Stationkeeper Ribbon.dotm", in Word's Startup folder: its buttons open the
+' menu and the admin of whichever template has Stationkeeper Macros. Leave it
+' out (a SCIF, a locked-down PC) and nothing else changes.
+' ---------------------------------------------------------------------
+Public Sub StationkeeperRibbonInstall()
+    MsgBox SK_RibbonInstall(), vbInformation, "Stationkeeper Macros"
+End Sub
+
+Public Sub StationkeeperRibbonRemove()
+    If MsgBox("Take the Stationkeeper tab off Word's ribbon on this PC?" & vbCr & _
+              "The menu and admin stay in your templates; open them from View > Macros.", vbYesNo + vbQuestion, "Stationkeeper Macros") <> vbYes Then Exit Sub
+    MsgBox SK_RibbonRemove(), vbInformation, "Stationkeeper Macros"
+End Sub
+
+Private Function RibbonDir() As String
+    If Len(SK_RibbonStartup) > 0 Then RibbonDir = SK_RibbonStartup Else RibbonDir = Application.StartupPath
+End Function
+
+Private Sub UnloadRibbon()
+    Dim a As Object
+    On Error Resume Next
+    For Each a In AddIns
+        If LCase$(a.Name) = LCase$(RIBBON_FILE) Then
+            a.Installed = False
+            a.Delete
+            Exit For
+        End If
+    Next
+End Sub
+
+Public Function SK_RibbonInstall() As String
+    Dim src As String, dst As String
+    src = ThisDocument.Path & "\" & RIBBON_FILE
+    If Len(Dir$(src)) = 0 Then
+        SK_RibbonInstall = "The ribbon add-in is not beside the kit:" & vbCr & src & vbCr & vbCr & _
+            "It comes in the release folder with Stationkeeper Macros Kit.dotm. Keep them together and try again."
+        Exit Function
+    End If
+    If Len(RibbonDir()) = 0 Then
+        SK_RibbonInstall = "Word has no Startup folder set (File > Options > Advanced > File Locations > Startup). Set one and try again."
+        Exit Function
+    End If
+    dst = RibbonDir() & "\" & RIBBON_FILE
+    UnloadRibbon
+    On Error GoTo Fail
+    FileCopy src, dst
+    AddIns.Add FileName:=dst, Install:=True
+    SK_RibbonInstall = "The Stationkeeper tab is on Word's ribbon, after View. Word loads it every time it starts, from:" & vbCr & dst & vbCr & vbCr & _
+        "Turn it off for now: File > Options > Add-ins > Manage: Templates > Go, untick Stationkeeper Ribbon.dotm (Developer > Word Add-ins opens the same list)." & vbCr & _
+        "Take it off for good: run StationkeeperRibbonRemove, or close Word and delete that file."
+    Exit Function
+Fail:
+    SK_RibbonInstall = "Could not add the Stationkeeper tab: " & Err.Description & vbCr & _
+        "Your PC may not allow add-ins in Word's Startup folder. The menu still opens from View > Macros > StationkeeperMacros."
+End Function
+
+Public Function SK_RibbonRemove() As String
+    Dim dst As String
+    dst = RibbonDir() & "\" & RIBBON_FILE
+    UnloadRibbon
+    On Error Resume Next
+    If Len(Dir$(dst)) > 0 Then Kill dst
+    On Error GoTo 0
+    If Len(Dir$(dst)) > 0 Then
+        SK_RibbonRemove = "The tab is off for now, but Word still holds the file. Close Word and delete:" & vbCr & dst
+    Else
+        SK_RibbonRemove = "The Stationkeeper tab is off Word's ribbon on this PC. The menu and admin still open from View > Macros."
+    End If
 End Function

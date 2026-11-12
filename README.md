@@ -12,7 +12,8 @@ It works with whatever macros are already in the template: one module or many. I
 | File | What it is |
 |---|---|
 | `Stationkeeper Macros Kit.dotm` | The kit, plus installers that copy the menu and admin, and the Stationkeeper Tools, into any template |
-| `Import files/` | The same three pieces as files (`SK_Macros.bas`, `frmSKMenu.frm/.frx`, `frmSKAdmin.frm/.frx`) for importing in the VBA editor, and `Stationkeeper Tools/` with the tool modules |
+| `Stationkeeper Ribbon.dotm` | Optional (1.6.0): a small add-in that puts a **Stationkeeper** tab on Word's ribbon. Leave it out where add-ins are not allowed |
+| `Import files/` | The same pieces as files (`SK_Macros.bas`, `frmSKMenu.frm/.frx`, `frmSKAdmin.frm/.frx`, `frmSKBrand.frm/.frx`) for importing in the VBA editor, and `Stationkeeper Tools/` with the tool modules and forms |
 | `Read me first.txt` | Short version of this page |
 
 ## Add it to a template
@@ -23,11 +24,22 @@ It works with whatever macros are already in the template: one module or many. I
 1. Save `Stationkeeper Macros Kit.dotm` somewhere Word trusts for macros. If it came from email, Teams or the web, right-click it > Properties > tick **Unblock** > OK first.
 2. In Word: File > Open the kit. Enable macros if asked.
 3. View > Macros > `StationkeeperMacrosInstall` > Run. Pick your template (it must be closed, or open and saved).
-4. The kit adds three items to the template: module `SK_Macros` and forms `frmSKMenu` and `frmSKAdmin`. Running it again updates them. `StationkeeperMacrosRemove` takes them back out.
+4. The kit adds four items to the template: module `SK_Macros` and forms `frmSKMenu`, `frmSKAdmin` and `frmSKBrand` (the Stationkeeper look). Running it again updates them. `StationkeeperMacrosRemove` takes them back out.
 
-The kit's own menu (open the kit, then `StationkeeperMacros`) lists the four installers and **Add Macros From Template**, described, under the category **Install and add**.
+The kit's own menu (open the kit, then `StationkeeperMacros`) lists the installers and **Add Macros From Template**, described, under the category **Install and add**.
 
-**Way 2, VBA editor:** open the template, Alt+F11, File > Import File, and import the three files from `Import files/`. Keep each `.frx` beside its `.frm`. Save the template.
+**Way 2, VBA editor:** open the template, Alt+F11, File > Import File, and import the four files from `Import files/`. Keep each `.frx` beside its `.frm`. Save the template.
+
+## The Stationkeeper look and the ribbon tab (1.6.0)
+
+**The look.** The menu, the admin and the Deck Media List open with a navy band carrying the Stationkeeper satellite and the form's name, an amber line under it, a light page, and navy main buttons (Run, Save to template, Rename). The satellite is also in each window's title bar. The pictures are stored inside the forms (`frmSKBrand` for the menu and admin, `frmSKWBrand` for the tools), so nothing extra goes on a PC. Windows keeps its own title bar color and list highlight, and message boxes stay Windows' standard ones.
+
+**The ribbon tab (optional).** `Stationkeeper Ribbon.dotm` adds a **Stationkeeper** tab after View, with **Macro menu**, **Admin** and **About and removal**. Its buttons open the menu and admin of the template your document is based on; it holds no other code.
+
+- **Add it:** keep `Stationkeeper Ribbon.dotm` beside the kit, open the kit, and run `StationkeeperRibbonInstall` (in the kit's menu as **Add the Stationkeeper Tab to Word's Ribbon**). It copies the add-in into Word's Startup folder (File > Options > Advanced > File Locations > Startup), so Word loads it every time it starts. By hand: copy the file into that folder and restart Word.
+- **Turn it off for now:** File > Options > Add-ins > Manage: **Templates** > Go, and untick `Stationkeeper Ribbon.dotm` (Developer > Word Add-ins opens the same list). Tick it again to bring the tab back.
+- **Remove it:** run `StationkeeperRibbonRemove` from the kit (**Remove the Stationkeeper Tab from Word's Ribbon**), or close Word and delete `Stationkeeper Ribbon.dotm` from the Startup folder.
+- **SCIF or locked-down PCs:** don't install it. Nothing else depends on it; the menu still opens from View > Macros, Alt+Shift+M or the Add-ins tab button.
 
 ## First time in a template (the admin)
 
@@ -263,7 +275,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 232 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 240 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.

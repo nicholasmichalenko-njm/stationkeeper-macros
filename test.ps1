@@ -301,7 +301,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(17 modules and 1 form)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(17 modules and 2 forms)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -763,7 +763,7 @@ try {
         $ke = TR $word 'T_KitEntries'
         Check 'the kit''s menu lists its installers and Add Macros From Template, described' (($ke -match 'installer=True') -and ($ke -match 'SK_Install\.StationkeeperMacrosInstall\[Install the Menu and Admin in a Template/Install and add/1/True\]') -and ($ke -match 'SK_Install\.StationkeeperToolsRemove\[Remove Stationkeeper Tools from a Template/Install and add/1/True\]') -and ($ke -match 'SK_Macros\.AddMacrosFromTemplate\[Add Macros From Template/Install and add/1/True\]')) $ke
         $mc = TR1 $word 'T_MenuCat' 'Stationkeeper|Install and add'
-        Check 'kit menu: Stationkeeper + Install and add shows the five' (($mc -match '-> 5:') -and ($mc -match '\[Install Stationkeeper Tools in a Template\]')) $mc
+        Check 'kit menu: Stationkeeper + Install and add shows the seven (1.6.0 adds the ribbon tab pair)' (($mc -match '-> 7:') -and ($mc -match '\[Install Stationkeeper Tools in a Template\]')) $mc
         $k.Close([ref]0)
         # A source template: a module of its own with a catalog entry, and one named like the sample's Module1.
         $s = $word.Documents.Add()
@@ -917,10 +917,55 @@ try {
             Check 'table style fix: both tables in the team style' (($r -match '^1 table\(s\) restyled') -and ($i -match 'tables=\{5C22544A-7EE6-4342-B048-85BDC9FD1C3A\},\{5C22544A-7EE6-4342-B048-85BDC9FD1C3A\}')) "$(Short $r 200) ## $(Short $i 400)"
             $a = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckPictureCheck'
             $b = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTableStyleCheck'
+            $mb = RunW $word 'SKW_Test.TW_MediaBrand'
+            Check '1.6.0: the Deck Media List wears the Stationkeeper look (its own copy, frmSKWBrand)' (($mb -match '^band=603416 line=1CB8FF title=Deck Media List logo=True icon=3 page=FCF8F5') -and ($mb -match 'height=520 listTop=114')) $mb
             Check 'the open deck is unchanged by the fixes and the picture measuring' (($a -like '1 stretched, 1 enlarged, 1 cropped.*') -and ($b -like '2 table(s), 1 off style*')) "$(Short $a 100) ## $(Short $b 100)"
         }
         finally { [void](RunW $word 'SKW_Test.TW_CloseDeck') }
         $doc.Close([ref]0)
+    }
+
+
+    # 21. 1.6.0: the Stationkeeper look on the menu and admin; the ribbon tab add-in, added to and taken off a stand-in Startup folder.
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $d = OpenDoc $word $sample
+        $b = TR $word 'T_Brand'
+        Write-Output "BRAND: $b"
+        Check '1.6.0: the menu wears the Stationkeeper look: navy band, amber line, satellite, page color, controls moved under the band' (($b -match 'MENU band=603416 line=1CB8FF title=\S.* logo=True icon=3 page=FCF8F5 height=562 searchTop=72')) $b
+        Check '1.6.0: the admin too, pages under the band' ($b -match 'ADMIN band=603416 line=1CB8FF title=Stationkeeper Macros Admin logo=True icon=3 page=FCF8F5 height=602 pagesTop=74') $b
+        $d.Close([ref]0)
+    }
+    [string]$rib = Join-Path $Root 'build\Stationkeeper Ribbon.dotm'
+    Check '1.6.0: the ribbon add-in is built' (Test-Path $rib) $rib
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $zr = [IO.Compression.ZipFile]::OpenRead($rib)
+    try {
+        $names = @($zr.Entries | ForEach-Object { $_.FullName })
+        $rd = New-Object IO.StreamReader($zr.GetEntry('customUI/customUI14.xml').Open()); $cui = $rd.ReadToEnd(); $rd.Close()
+        $rd = New-Object IO.StreamReader($zr.GetEntry('_rels/.rels').Open()); $rr = $rd.ReadToEnd(); $rd.Close()
+        $rd = New-Object IO.StreamReader($zr.GetEntry('[Content_Types].xml').Open()); $ctx = $rd.ReadToEnd(); $rd.Close()
+    }
+    finally { $zr.Dispose() }
+    Check '1.6.0: the add-in holds the tab, its picture and the link to them' (($names -contains 'customUI/images/skIcon.png') -and ($cui -match 'label="Stationkeeper"') -and ($cui -match 'onAction="SKR_Menu"') -and ($cui -match 'onAction="SKR_Admin"') -and ($cui -match 'onAction="SKR_About"') -and ($rr -match 'ui/extensibility" Target="customUI/customUI14.xml"') -and ($ctx -match 'Extension="png"')) (($names -join ', ') + ' ## ' + $rr)
+    [string]$kitR = Join-Path $work 'Kit copy.dotm'
+    [string]$ribR = Join-Path $work 'Stationkeeper Ribbon.dotm'
+    [string]$fakeStart = Join-Path $work 'Startup stand-in'
+    Copy-Item $kit $kitR -Force
+    Copy-Item $rib $ribR -Force
+    Remove-Item $fakeStart -Recurse -Force -ErrorAction SilentlyContinue
+    [void](New-Item $fakeStart -ItemType Directory -Force)
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $k = OpenDoc $word $kitR
+        [void]$k.VBProject.VBComponents.Import([string](Join-Path $Root 'test\SK_Test.bas'))
+        $r = TR1 $word 'T_Ribbon' $fakeStart
+        Write-Output "RIBBON: $r"
+        Check '1.6.0: StationkeeperRibbonInstall puts the add-in in the Startup folder and Word loads it' (($r -match '^install: The Stationkeeper tab is on Word''s ribbon') -and ($r -match 'file=True addin=installed=True probe=Stationkeeper Ribbon 1\.6\.0')) $r
+        Check '1.6.0: StationkeeperRibbonRemove unloads it and deletes the file' (($r -match 'remove: The Stationkeeper tab is off') -and ($r -match 'after: file=False addin=none')) $r
+        $ke = TR $word 'T_KitEntries'
+        Check '1.6.0: the kit menu lists the ribbon pair' (($ke -match 'SK_Install\.StationkeeperRibbonInstall\[Add the Stationkeeper Tab to Word''s Ribbon/Install and add/1/True\]') -and ($ke -match 'SK_Install\.StationkeeperRibbonRemove\[')) $ke
+        $k.Close([ref]0)
     }
 
 }

@@ -259,12 +259,19 @@ Private Sub UserForm_Initialize()
 
     mBusy = False
     RefreshList
+    frmSKBrand.Dress Me, mModel("look")("menuTitle"), "Team macros and Stationkeeper Tools   |   " & ThisDocument.Name & "   |   " & SK_VERSION, "btnRun|btnAskRun"
 End Sub
 
 Private Sub UserForm_Activate()
     On Error Resume Next
+    frmSKBrand.SetIcon Me
     txtSearch.SetFocus
 End Sub
+
+' For the tests: what the Stationkeeper look put on this form.
+Public Function TestBrand() As String
+    TestBrand = frmSKBrand.Probe(Me) & " height=" & Me.Height & " searchTop=" & txtSearch.Top
+End Function
 
 ' ---------------------------------------------------------------------
 ' Search and sort

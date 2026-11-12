@@ -99,7 +99,18 @@ Private Sub UserForm_Initialize()
     Set mDeck = SKP_Deck.SKP_Deck()
     mBusy = False
     ReadItems
+    frmSKWBrand.Dress Me, "Deck Media List", "Stationkeeper Tools   |   pictures, video, charts and objects by slide   |   " & SKW_VERSION, "btnRename"
 End Sub
+
+Private Sub UserForm_Activate()
+    On Error Resume Next
+    frmSKWBrand.SetIcon Me
+End Sub
+
+' For the tests: what the Stationkeeper look put on this form.
+Public Function TestBrand() As String
+    TestBrand = frmSKWBrand.Probe(Me) & " height=" & Me.Height & " listTop=" & lstMedia.Top
+End Function
 
 Private Sub ReadItems()
     If mDeck Is Nothing Then

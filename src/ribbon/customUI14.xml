@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+  <ribbon>
+    <tabs>
+      <tab id="skTab" label="Stationkeeper" insertAfterMso="TabView">
+        <group id="skGroupMacros" label="Stationkeeper Macros">
+          <button id="skMenu" label="Macro menu" size="large" image="skIcon" onAction="SKR_Menu"
+                  screentip="Stationkeeper Macros" supertip="Search and run this template's macros and the Stationkeeper Tools."/>
+          <button id="skAdmin" label="Admin" size="large" imageMso="PropertySheet" onAction="SKR_Admin"
+                  screentip="Stationkeeper Macros Admin" supertip="Describe, sort, group and hide this template's macros."/>
+        </group>
+        <group id="skGroupAbout" label="This tab">
+          <button id="skAbout" label="About and removal" size="large" imageMso="Help" onAction="SKR_About"
+                  screentip="About this tab" supertip="What this tab is, and how to turn it off or remove it."/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

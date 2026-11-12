@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.5.0"
+Public Const SK_VERSION As String = "1.6.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -80,6 +80,12 @@ Public Function SK_KitList() As String
         s = s & "," & SK_KitRow("SK_Install.StationkeeperToolsRemove", "Remove Stationkeeper Tools from a Template", _
             "Takes the Stationkeeper Tools modules back out of a template you pick. Your own macros, the menu and the catalog stay.", _
             "remove; uninstall; tools", "Yes")
+        s = s & "," & SK_KitRow("SK_Install.StationkeeperRibbonInstall", "Add the Stationkeeper Tab to Word's Ribbon", _
+            "Puts a Stationkeeper tab on Word's ribbon on this PC, with buttons for the macro menu and the admin. It is a small add-in in Word's Startup folder; leave it out where add-ins are not allowed.", _
+            "ribbon; tab; toolbar; add-in; startup; button", "Yes")
+        s = s & "," & SK_KitRow("SK_Install.StationkeeperRibbonRemove", "Remove the Stationkeeper Tab from Word's Ribbon", _
+            "Takes the Stationkeeper tab off Word's ribbon on this PC. The menu and admin still open from View > Macros.", _
+            "ribbon; tab; remove; add-in; startup", "Yes")
     End If
     SK_KitList = s & "]"
 End Function
@@ -107,7 +113,8 @@ End Function
 Private Function SK_IsKitMacro(ByVal modName As String, ByVal nm As String) As Boolean
     Select Case LCase$(modName) & "." & LCase$(nm)
         Case "sk_macros.addmacrosfromtemplate", "sk_install.stationkeepermacrosinstall", "sk_install.stationkeepermacrosremove", _
-             "sk_install.stationkeepertoolsinstall", "sk_install.stationkeepertoolsremove"
+             "sk_install.stationkeepertoolsinstall", "sk_install.stationkeepertoolsremove", _
+             "sk_install.stationkeeperribboninstall", "sk_install.stationkeeperribbonremove"
             SK_IsKitMacro = True
     End Select
 End Function

@@ -134,6 +134,16 @@ Private Function Chk(ByVal parent As Object, ByVal nm As String, ByVal cap As St
     Set Chk = c
 End Function
 
+Private Sub UserForm_Activate()
+    On Error Resume Next
+    frmSKBrand.SetIcon Me
+End Sub
+
+' For the tests: what the Stationkeeper look put on this form.
+Public Function TestBrand() As String
+    TestBrand = frmSKBrand.Probe(Me) & " height=" & Me.Height & " pagesTop=" & mp.Top
+End Function
+
 Private Sub UserForm_Initialize()
     Dim pg As Object, v As Variant
 
@@ -375,6 +385,7 @@ Private Sub UserForm_Initialize()
     FillList
     UpdateHeader
     UpdatePending
+    frmSKBrand.Dress Me, "Stationkeeper Macros Admin", "Describe, sort and hide this template's macros   |   " & ThisDocument.Name & "   |   " & SK_VERSION, "btnSave"
     If Not mModel("scanAvailable") Then
         mp.Value = 3
         If Not SK_Quiet Then

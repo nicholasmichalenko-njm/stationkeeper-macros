@@ -22,10 +22,13 @@ Invoke-WordJob -Root $Root -Job {
         [void]$vbp.VBComponents.Import([string]$t.FullName)
     }
     Write-Host 'step: modules imported'
-    $forms = @('frmSKMenu', 'frmSKAdmin') | ForEach-Object { Join-Path $Root "src\$_.code.vba" }
+    $forms = @('frmSKMenu', 'frmSKAdmin', 'frmSKBrand') | ForEach-Object { Join-Path $Root "src\$_.code.vba" }
     $forms += @(Get-ChildItem (Join-Path $Root 'src\tools') -Filter 'frm*.code.vba' | Sort-Object Name | ForEach-Object { $_.FullName })
+    # The tools carry their own copy of the Stationkeeper look, so each half installs and removes alone.
+    $forms += @('frmSKWBrand=' + (Join-Path $Root 'src\frmSKBrand.code.vba'))
     foreach ($ff in $forms) {
         $f = (Split-Path $ff -Leaf) -replace '\.code\.vba$', ''
+        if ($ff -like '*=*') { $f = $ff.Split('=')[0]; $ff = $ff.Substring($f.Length + 1) }
         $c = $vbp.VBComponents.Add(3)
         $c.Name = $f
         $cm = $c.CodeModule
@@ -33,6 +36,15 @@ Invoke-WordJob -Root $Root -Job {
         $cm.AddFromString((Get-Content ([string]$ff) -Raw))
     }
     Write-Host 'step: forms added'
+    # The satellite pictures go into the look's forms (kept in the .frx, so no file is needed on a PC).
+    [string]$ico = Join-Path $Root 'src\brand\sk_icon.ico'
+    [string]$logo = Join-Path $Root 'src\brand\sk_logo.bmp'
+    $boot = $vbp.VBComponents.Add(1)
+    $boot.Name = 'SKBuild'
+    $boot.CodeModule.AddFromString("Public Function SKBuild_Brand(ByVal arg As String) As String`r`n    Dim d As Object, c As Object, a As Variant`r`n    On Error GoTo Fail`r`n    a = Split(arg, ""|"")`r`n    Set d = ThisDocument.VBProject.VBComponents(a(0)).Designer`r`n    Set c = d.Controls.Add(""Forms.Image.1"", ""imgLogo"")`r`n    c.Left = 0: c.Top = 0: c.Width = 37.5: c.Height = 37.5: c.PictureSizeMode = 1`r`n    Set c.Picture = LoadPicture(a(2))`r`n    Set c = d.Controls.Add(""Forms.Image.1"", ""imgIcon"")`r`n    c.Left = 44: c.Top = 0: c.Width = 24: c.Height = 24`r`n    Set c.Picture = LoadPicture(a(1))`r`n    Exit Function`r`nFail:`r`n    SKBuild_Brand = ""Error "" & Err.Number & "": "" & Err.Description`r`nEnd Function`r`n")
+    foreach ($bf in @('frmSKBrand', 'frmSKWBrand')) { $v = "$bf|$ico|$logo"; $e = $word.Run('SKBuild_Brand', [ref]$v); if ($e) { throw "Could not put the brand pictures in ${bf}: $e" } }
+    $vbp.VBComponents.Remove($boot)
+    Write-Host 'step: brand pictures in'
     # Compile. A compile error opens a dialog that would block forever, so a watchdog
     # reads the dialog, ends this Word after 25 seconds, and the build fails with the message.
     $wd = Start-Job -ScriptBlock { param($r) Start-Sleep 25; & (Join-Path $r 'tools\watch.ps1') -Root $r -Kill } -ArgumentList $Root
@@ -70,6 +82,7 @@ Invoke-WordJob -Root $Root -Job {
     $vbp.VBComponents.Item('SK_Macros').Export((Join-Path $imp 'SK_Macros.bas'))
     $vbp.VBComponents.Item('frmSKMenu').Export((Join-Path $imp 'frmSKMenu.frm'))
     $vbp.VBComponents.Item('frmSKAdmin').Export((Join-Path $imp 'frmSKAdmin.frm'))
+    $vbp.VBComponents.Item('frmSKBrand').Export((Join-Path $imp 'frmSKBrand.frm'))
     [string]$timp = Join-Path $imp 'Stationkeeper Tools'
     New-Item -ItemType Directory -Force $timp | Out-Null
     foreach ($c in @($vbp.VBComponents)) {
@@ -78,5 +91,34 @@ Invoke-WordJob -Root $Root -Job {
     }
     $doc.Close(0)
     Write-Output "Built $kit"
+
+    # The Stationkeeper tab: a separate small add-in with a ribbon part, so it can be left out.
+    Write-Host 'step: ribbon add-in'
+    $rd = $word.Documents.Add()
+    $rd.VBProject.Name = 'StationkeeperRibbon'
+    [void]$rd.VBProject.VBComponents.Import((Join-Path $Root 'src\ribbon\SKR_Ribbon.bas'))
+    $probe = $word.Run('SKR_Probe')
+    if ($probe -notlike 'Stationkeeper Ribbon *') { throw "The ribbon add-in's code does not run: $probe" }
+    [string]$rib = Join-Path $build 'Stationkeeper Ribbon.dotm'
+    if (Test-Path $rib) { Remove-Item $rib -Force }
+    $rd.SaveAs2($rib, 15)
+    $rd.Close(0)
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $z = [IO.Compression.ZipFile]::Open($rib, 'Update')
+    try {
+        function ZipText([string]$name) { $r = New-Object IO.StreamReader($z.GetEntry($name).Open()); $t = $r.ReadToEnd(); $r.Close(); $t }
+        function ZipPut([string]$name, [byte[]]$bytes) { $e = $z.GetEntry($name); if ($e) { $e.Delete() }; $st = $z.CreateEntry($name).Open(); $st.Write($bytes, 0, $bytes.Length); $st.Close() }
+        $ct = ZipText '[Content_Types].xml'
+        if ($ct -notmatch 'Extension="png"') { $ct = ([regex]'<Default ').Replace($ct, '<Default Extension="png" ContentType="image/png"/><Default ', 1) }
+        ZipPut '[Content_Types].xml' $utf8.GetBytes($ct)
+        $rels = (ZipText '_rels/.rels') -replace '</Relationships>', '<Relationship Id="skCustomUI" Type="http://schemas.microsoft.com/office/2007/relationships/ui/extensibility" Target="customUI/customUI14.xml"/></Relationships>'
+        ZipPut '_rels/.rels' $utf8.GetBytes($rels)
+        ZipPut 'customUI/customUI14.xml' ([IO.File]::ReadAllBytes((Join-Path $Root 'src\ribbon\customUI14.xml')))
+        ZipPut 'customUI/_rels/customUI14.xml.rels' $utf8.GetBytes('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="skIcon" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="images/skIcon.png"/></Relationships>')
+        ZipPut 'customUI/images/skIcon.png' ([IO.File]::ReadAllBytes((Join-Path $Root 'src\brand\sk_ribbon.png')))
+    }
+    finally { $z.Dispose() }
+    Write-Output "Built $rib"
     Get-ChildItem $build -Recurse -File | ForEach-Object { "  {0}  {1:N0} bytes" -f $_.FullName.Substring($Root.Length + 1), $_.Length }
 }

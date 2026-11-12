@@ -1,11 +1,12 @@
-# Zips the built kit for handing out: kit, import files, read-me.
-# Usage: powershell -ExecutionPolicy Bypass -File package.ps1 -Version 0.8.0
-param([string]$Root = $PSScriptRoot, [string]$Version = '0.8.0')
+# Zips the built kit for handing out: kit, ribbon add-in, import files, read-me.
+# Usage: powershell -ExecutionPolicy Bypass -File package.ps1 -Version 0.3.0
+param([string]$Root = $PSScriptRoot, [string]$Version = '0.3.0')
 $ErrorActionPreference = 'Stop'
 $stage = Join-Path $Root "build\Stationkeeper Macros $Version"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item (Join-Path $Root 'build\Stationkeeper Macros Kit.dotm') $stage
+Copy-Item (Join-Path $Root 'build\Stationkeeper Ribbon.dotm') $stage
 Copy-Item (Join-Path $Root 'build\Import files') $stage -Recurse
 Copy-Item (Join-Path $Root 'release\Read me first.txt') $stage
 $zip = Join-Path $Root "build\StationkeeperMacros-$Version.zip"

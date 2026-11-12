@@ -497,3 +497,43 @@ Public Function T_AddFrom(ByVal arg As String) As String
     Next
     T_AddFrom = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.6.0: the Stationkeeper look and the ribbon tab
+' ---------------------------------------------------------------------
+Public Function T_Brand() As String
+    Dim s As String
+    SK_Quiet = True
+    Load frmSKMenu
+    s = "MENU " & frmSKMenu.TestBrand()
+    Unload frmSKMenu
+    Load frmSKAdmin
+    s = s & " || ADMIN " & frmSKAdmin.TestBrand()
+    Unload frmSKAdmin
+    T_Brand = s
+End Function
+
+' arg = a stand-in Startup folder. Adds the tab there, checks Word loaded it, takes it off again.
+Public Function T_Ribbon(ByVal folder As String) As String
+    Dim s As String, a As Object, f As String, found As String
+    SK_RibbonStartup = folder
+    f = folder & "\Stationkeeper Ribbon.dotm"
+    s = "install: " & Replace(SK_RibbonInstall(), vbCr, " / ")
+    s = s & " || file=" & (Len(Dir$(f)) > 0)
+    found = "none"
+    For Each a In AddIns
+        If LCase$(a.Name) = "stationkeeper ribbon.dotm" Then found = "installed=" & a.Installed
+    Next
+    s = s & " addin=" & found
+    On Error Resume Next
+    s = s & " probe=" & Application.Run("SKR_Probe")
+    On Error GoTo 0
+    s = s & " || remove: " & Replace(SK_RibbonRemove(), vbCr, " / ")
+    found = "none"
+    For Each a In AddIns
+        If LCase$(a.Name) = "stationkeeper ribbon.dotm" Then found = "installed=" & a.Installed
+    Next
+    s = s & " || after: file=" & (Len(Dir$(f)) > 0) & " addin=" & found
+    SK_RibbonStartup = ""
+    T_Ribbon = s
+End Function

@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.5.0
+STATIONKEEPER MACROS 1.6.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -8,8 +8,15 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
      > Properties > tick Unblock > OK.
    - Word: File > Open "Stationkeeper Macros Kit.dotm". Enable macros if asked.
    - View > Macros > StationkeeperMacrosInstall > Run. Pick your template (closed, or open and saved).
-   - Or in the VBA editor: File > Import File, the three files in "Import files"
+   - Or in the VBA editor: File > Import File, the four files in "Import files"
      (keep each .frx beside its .frm).
+
+   - Optional: the Stationkeeper tab on Word's ribbon. Keep "Stationkeeper Ribbon.dotm"
+     beside the kit and run StationkeeperRibbonInstall from the kit. It goes in Word's
+     Startup folder and loads each time Word starts.
+     Turn it off: File > Options > Add-ins > Manage: Templates > Go, untick it.
+     Remove it: run StationkeeperRibbonRemove, or close Word and delete the file from
+     the Startup folder. Leave it out on a SCIF or locked-down PC: nothing needs it.
 
 3. DESCRIBE YOUR MACROS (the admin)
    - Open your template itself (File > Open the .dotm).
