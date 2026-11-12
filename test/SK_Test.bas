@@ -281,7 +281,7 @@ Public Function T_SkKinds() As String
     Dim m As Object, s As String, k As Variant, e As Object
     Set m = SK_LoadModel()
     For Each k In Array("ShowHiddenText", "WriteTestMarker", "UpdateAllFields", "FitTablesToMargins", _
-                        "SKW_Styles.StyleInspector", "SKW_Fields.ToggleFieldCodes", "SKX_Book.BookFontAudit", "SKP_Deck.DeckDeliveryCopy")
+                        "SKW_Styles.StyleInspector", "SKW_Utils.FitAllTables", "SKX_Book.BookCheck", "SKP_Deck.DeckDeliveryCopy")
         Set e = SK_FindEntry(m, CStr(k))
         If e Is Nothing Then s = s & " " & k & "=missing" Else s = s & " " & SK_NamePart(e("run")) & "=" & e("stationkeeper") & ";"
     Next

@@ -7,6 +7,11 @@ Attribute VB_Name = "SKW_Review"
 ' =====================================================================
 Option Explicit
 
+' Runs the document's checks in one go and makes one report: leftovers, broken references, tables of contents, styles, fonts, direct formatting, tables, captions, keep with next, breaks, page limits, graphics, typed lists, acronyms and typography. Leave checks out with the DeliveryCheckSkip setting. Changes nothing.
+Public Sub DeliveryCheck()
+    SKW_Show SKW_DeliveryCheck()
+End Sub
+
 ' Lists what should not go out with the document: comments, tracked changes, hidden text, highlighting, placeholder text (TBD, XXX, [insert ...]) and the author and company saved in the file. Changes nothing.
 Public Sub PreDeliveryLeftovers()
     SKW_Show SKW_PreDeliveryLeftovers()
@@ -212,4 +217,18 @@ Private Function FormatRanges(ByVal story As Object, ByVal what As String) As Co
     Loop
 Done:
     Set FormatRanges = c
+End Function
+
+' ---------------------------------------------------------------------
+' The document's checks in one run and one report (1.7.0).
+' ---------------------------------------------------------------------
+Public Function SKW_DeliveryCheck() As String
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_DeliveryCheck = "Open a document first.": Exit Function
+    SKW_DeliveryCheck = SKW_RunSet("Delivery Check", "", Array( _
+        "SKW_PreDeliveryLeftovers|Leftovers", "SKW_FindBrokenReferences|Broken references", "SKW_TOCCheck|Tables of contents", _
+        "SKW_NonAllowedStyleReport|Styles", "SKW_FontNotAllowed|Fonts", "SKW_DirectFormattingReport|Direct formatting", _
+        "SKW_TableStandardsAudit|Tables", "SKW_CaptionAudit|Captions", "SKW_KeepWithNextAudit|Keep with next", _
+        "SKW_BreakHygiene|Breaks and spacing", "SKW_PageLimitCounter|Page limits", "SKW_GraphicsAudit|Graphics", _
+        "SKW_TypedListsFinder|Typed lists", "SKW_AcronymQuickCheck|Acronyms", "SKW_TypographySweep|Typography"), True)
 End Function

@@ -19,22 +19,37 @@ Public Sub DeckTextLeftovers()
     SKW_Show SKP_DeckTextLeftovers()
 End Sub
 
-' Lists the team's banned phrases found in the slides and notes of the open deck, with the suggested replacement. Changes nothing.
+' Runs every deck check in one go and makes one report: leftovers, banned phrases, acronyms, fonts, small text, alt text, off-slide shapes, titles, empty placeholders, template, overlaps, slide numbers, marking, overflow, layout drift, pictures, colors, language, links and table style. Leave checks out with the DeliveryCheckSkip setting. Changes nothing.
+Public Sub DeckDeliveryCheck()
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    SKW_Show SKP_DeckDeliveryCheck()
+End Sub
+
+' Lists the team's banned phrases in the deck, with slide and shape. When it finds any, it offers to fix a copy: phrases with a replacement are replaced (a capital at the start of a sentence is kept) and each changed slide gets a comment. The open deck is not changed.
 Public Sub DeckBannedPhrases()
     If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
-    SKW_Show SKP_DeckBannedPhrases()
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckBannedPhrases()
+    If SKW_OfferFix(s, "The fix replaces each phrase that has a replacement and leaves a comment on every slide it changes.") Then SKW_Show SKP_DeckBannedPhrasesFix("")
 End Sub
 
-' Lists the acronyms in the open deck's slide text with their uses, the first slide that spells them out, and the team meaning. Text only: pictures are not read. Changes nothing.
+' Lists the acronyms in the deck's text and whether each is spelled out. When some are not, it offers to fix a copy: each team acronym is spelled out at its first use in body text, with a slide comment. The open deck is not changed.
 Public Sub DeckAcronymCheck()
     If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
-    SKW_Show SKP_DeckAcronymCheck()
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckAcronymCheck()
+    If SKW_OfferFix(s, "The fix spells out each team acronym at its first use in body text and leaves a comment on every slide it changes. Titles stay short.") Then SKW_Show SKP_DeckAcronymFirstUseFix("")
 End Sub
 
-' Lists every font in the open deck (slides, notes, layouts, masters, bullets and the East Asian and complex-script slots) and flags the ones not on the team's Fonts sheet. Changes nothing.
+' Lists every font in the deck (slides, notes, masters, layouts, SmartArt) and flags the ones not on the team's Fonts sheet. When it finds any, it offers to fix a copy: that text goes back to the theme's fonts. The open deck is not changed.
 Public Sub DeckFontAudit()
     If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
-    SKW_Show SKP_DeckFontAudit()
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckFontAudit()
+    If SKW_OfferFix(s, "The fix sets text in fonts not on the team's list back to the theme's heading or body font.") Then SKW_Show SKP_DeckFontFix("")
 End Sub
 
 ' Lists text in the open deck smaller than the team minimum (setting DeckMinFontSize, 10 pt unless set). Changes nothing.
@@ -223,6 +238,7 @@ Public Function SKP_DeckBannedPhrases() As String
     SKW_Status ""
     SKW_ReportFor "Deck Banned Phrases", n & " finding(s) against " & SKW_BannedPhrases().Count & " banned phrase(s). PowerPoint has no tracked changes, so this lists them to fix by hand. Changes nothing.", _
         Array("Slide", "Where", "Phrase", "Use instead", "Rule"), rows, DeckName(p)
+    SKW_Fixable = n
     SKP_DeckBannedPhrases = n & " banned phrase finding(s)."
 End Function
 
@@ -265,6 +281,7 @@ Public Function SKP_DeckAcronymCheck() As String
     SKW_Status ""
     SKW_ReportFor "Deck Acronym Check (text only)", "Text only: pictures and images are not scanned. " & info.Count & " acronym(s); " & nNot & _
         " never spelled out as Words (ACR) on a slide. Changes nothing.", Array("Acronym", "Uses", "First slide", "Spelled out", "On the team list", "Team meaning"), rows, DeckName(p)
+    SKW_Fixable = nNot
     SKP_DeckAcronymCheck = info.Count & " acronym(s), " & nNot & " not spelled out (text only)."
 End Function
 
@@ -311,6 +328,7 @@ Public Function SKP_DeckFontAudit() As String
         ". Reads slides, speaker notes, layouts and masters, tables, groups and SmartArt, bullet fonts, and the East Asian and complex-script font slots " & _
         "(listed only when not allowed). Theme fonts show by their real names. Deck Font Fix sets the ones not allowed back to the theme font. Changes nothing.", _
         Array("Rule", "Font", "Text runs", "First place", "Text", "Slot"), rows, DeckName(p)
+    SKW_Fixable = nBad
     SKP_DeckFontAudit = rows.Count & " font(s) found, " & nBad & " not allowed."
 End Function
 
@@ -488,4 +506,22 @@ Fail:
     SKP_DeckDeliveryCopy = "The delivery copy could not be made: " & Err.Description
     On Error Resume Next
     If Not c Is Nothing Then c.Close
+End Function
+
+' ---------------------------------------------------------------------
+' Every deck check in one run and one report (1.7.0).
+' ---------------------------------------------------------------------
+Public Function SKP_DeckDeliveryCheck() As String
+    Dim p As Object
+    Set SKW_LastReport = Nothing
+    Set p = SKP_Deck()
+    If p Is Nothing Then SKP_DeckDeliveryCheck = SKP_Why(): Exit Function
+    SKP_DeckDeliveryCheck = SKW_RunSet("Deck Delivery Check", p.Name, Array( _
+        "SKP_DeckTextLeftovers|Leftovers", "SKP_DeckBannedPhrases|Banned phrases", "SKP_DeckAcronymCheck|Acronyms", _
+        "SKP_DeckFontAudit|Fonts", "SKP_DeckSmallText|Small text", "SKP_DeckAltTextAudit|Alt text", _
+        "SKP_DeckOffSlideObjects|Off-slide shapes", "SKP_DeckTitlesCheck|Titles", "SKP_DeckEmptyPlaceholders|Empty placeholders", _
+        "SKP_DeckTemplateCheck|Template", "SKP_DeckOverlapCheck|Overlaps|-", "SKP_DeckSlideNumberCheck|Slide numbers", _
+        "SKP_DeckMarkingCheck|Marking", "SKP_DeckTextOverflowCheck|Text overflow", "SKP_DeckLayoutDriftCheck|Layout drift", _
+        "SKP_DeckPictureCheck|Pictures", "SKP_DeckColorCheck|Colors", "SKP_DeckLanguageCheck|Language", _
+        "SKP_DeckLinksCheck|Links", "SKP_DeckTableStyleCheck|Table style"), True)
 End Function

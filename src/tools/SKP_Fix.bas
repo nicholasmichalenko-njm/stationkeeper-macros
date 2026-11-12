@@ -27,28 +27,22 @@ Public Sub DeckMediaList()
     frmSKPMedia.Show vbModeless
 End Sub
 
-' Compares the open deck's masters and layouts with the team's PowerPoint template (setting DeckTemplate): foreign masters, "1_" orphan layouts, unused layouts and template layouts that went missing. Changes nothing.
+' Lists every master and layout against the team template: copies pasted in from other decks, foreign masters, unused ones, template layouts gone missing. When it finds any, it offers to fix a copy: move slides onto the template's layouts and remove what is unused, or only remove unused layouts and masters. The open deck is not changed.
 Public Sub DeckTemplateCheck()
     If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckTemplateCheck()
-End Sub
-
-' On a copy of the open deck: moves slides off foreign and "1_" layouts onto the matching template layout, then deletes the foreign layouts and masters nobody uses. Template layouts are never deleted.
-Public Sub DeckConformToTemplate()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckConformToTemplate("")
-End Sub
-
-' On a copy of the open deck: deletes layouts and masters that no slide uses and that are not part of the template. Usage is counted first; nothing in use is touched.
-Public Sub DeckRemoveUnusedLayouts()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckRemoveUnusedLayouts("")
-End Sub
-
-' On a copy of the open deck: text in a font not on the team's Fonts sheet goes back to the theme's heading or body font, so it follows the template again.
-Public Sub DeckFontFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckFontFix("")
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckTemplateCheck()
+    If SKW_Fixable <= 0 Or SKW_LastReport Is Nothing Then SKW_Show s: Exit Sub
+    On Error Resume Next
+    SKW_LastReport.Activate
+    On Error GoTo 0
+    Select Case MsgBox(Split(s & vbCr, vbCr)(0) & vbCr & vbCr & "Fix a copy now? The report stays open." & vbCr & vbCr & _
+            "Yes: move slides onto the template's layouts, then remove layouts and masters no slide uses." & vbCr & _
+            "No: only remove layouts and masters no slide uses." & vbCr & "Cancel: change nothing.", vbYesNoCancel + vbQuestion, SKW_APP)
+        Case vbYes: SKW_Show SKP_DeckConformToTemplate("")
+        Case vbNo: SKW_Show SKP_DeckRemoveUnusedLayouts("")
+    End Select
 End Sub
 
 ' Lists slide content that covers template elements: the slide number, footer, date, a classification or CUI banner, logos and other layout graphics, and the title area. Saves a copy with each overlap outlined in red. The open deck is not changed.
@@ -57,22 +51,13 @@ Public Sub DeckOverlapCheck()
     SKW_Show SKP_DeckOverlapCheck("")
 End Sub
 
-' Checks slide numbers: slides without one, layouts missing the number placeholder, numbers typed in as plain text, numbers moved or restyled away from the layout, and the starting number. Changes nothing.
+' Lists slides with no number, layouts with no number placeholder, numbers typed as text and numbers moved or restyled. When it finds any, it offers to fix a copy. The open deck is not changed.
 Public Sub DeckSlideNumberCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckSlideNumberCheck()
-End Sub
-
-' On a copy of the open deck: puts the slide number placeholder back on the master and layouts, turns numbers on (off on title slides unless the team numbers them), removes typed numbers and resets position and font from the layout.
-Public Sub DeckSlideNumberFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckSlideNumberFix("")
-End Sub
-
-' On a copy of the open deck: replaces the team's banned phrases that have a replacement and leaves a slide comment for each change (PowerPoint has no tracked changes). Phrases with no replacement get a comment to reword them.
-Public Sub DeckBannedPhrasesFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckBannedPhrasesFix("")
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckSlideNumberCheck()
+    If SKW_OfferFix(s, "The fix puts the number placeholder back, turns numbers on (off on title slides), removes typed numbers and puts moved numbers back where the layout has them.") Then SKW_Show SKP_DeckSlideNumberFix("")
 End Sub
 
 ' ---------------------------------------------------------------------
@@ -291,6 +276,7 @@ Public Function SKP_DeckTemplateCheck() As String
         nForeign & " other layout(s) not in the template, " & nUnused & " of them unused; " & nMissing & " template layout(s) missing. Compared with " & src & _
         ". Matching is by layout name and placeholders, the way PowerPoint matches when slides are pasted. Changes nothing.", _
         Array("Master", "Layout", "Status", "Slides", "What to do"), rows, p.Name
+    SKW_Fixable = nForeignM + nOrphan + nForeign + nUnused
     SKP_DeckTemplateCheck = p.Designs.Count & " master(s), " & nForeignM & " foreign; " & nOrphan & " copy layout(s), " & nForeign & " not in the template, " & _
         nUnused & " unused; " & nMissing & " missing."
 End Function
@@ -816,6 +802,7 @@ Public Function SKP_DeckSlideNumberCheck() As String
     SKW_ReportFor "Deck Slide Number Check", nMissing & " slide(s) without a number, " & nLay & " layout(s) with no number placeholder, " & nTyped & " typed number(s), " & _
         nDrift & " number(s) moved or restyled. Starts at " & p.PageSetup.FirstSlideNumber & ". Team rules: start at " & first & "; title slides " & IIf(onTitle, "numbered", "not numbered") & _
         "; hidden slides count but need no number. Changes nothing.", Array("Slide", "Title or layout", "Finding", "Detail", ""), rows, p.Name
+    SKW_Fixable = nMissing + nLay + nTyped + nDrift
     SKP_DeckSlideNumberCheck = nMissing & " slide(s) without a number, " & nLay & " layout(s) without the placeholder, " & nTyped & " typed, " & nDrift & " moved or restyled."
 End Function
 

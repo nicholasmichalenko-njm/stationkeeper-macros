@@ -69,7 +69,7 @@ The menu is a general macro menu. Each macro is one of three kinds (the admin's 
 
 | Kind | Badge | What Run does |
 |---|---|---|
-| Not related | none | Runs. Your own macros, and general tools such as Toggle Field Codes. |
+| Not related | none | Runs. Your own macros, and general tools such as Fit All Tables. |
 | Built for Stationkeeper | ◇ SK | Runs on its own. If no effort folder is linked, it asks first: "This is built for Stationkeeper but is still functional. Would you like to run it?" with **Run it**, **Link a folder...**, **Cancel** and **Don't ask again**. |
 | Needs Stationkeeper data | ◆ SK | Runs only when the linked effort has the data it needs (the effort rules, template or dictionary). If not, it says "This macro is used with the Stationkeeper application. Please point to the Stationkeeper data folder for your effort.", names the files it needs and where Stationkeeper writes them, says what is wrong right now, and offers **Point to the folder...**. |
 
@@ -129,11 +129,11 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 86 tools in 1.5.0)
+## Stationkeeper Tools (0.4.0 and later; 62 tools in 1.7.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
-**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies seventeen modules and one form (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKP_Fix`, `SKP_Tidy`, `frmSKPMedia`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies seventeen modules and two forms (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKP_Fix`, `SKP_Tidy`, `frmSKPMedia`, `frmSKWBrand`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
@@ -143,8 +143,9 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 | Find Broken References | Cross-references to bookmarks that are gone, fields showing Error!, internal links that go nowhere, included files that are missing | No, report |
 | Field Code Report | Every field: type, code, result, where, page, locked | No, report |
 | Pre-Delivery Leftovers | Comments, tracked changes, hidden text, highlighting, placeholders (TBD, XXX, [insert...), author and company saved in the file | No, report |
+| Delivery Check | Category Before delivery (1.7.0). Runs 15 document checks in one go and makes one report: a summary table (Check, Result, Findings), then each check's part. The 15: Leftovers, Broken references, Tables of contents, Styles, Fonts, Direct formatting, Tables, Captions, Keep with next, Breaks and spacing, Page limits, Graphics, Typed lists, Acronyms, Typography. Banned Phrases Review is not part of it (it has its own review flow) | No, report |
 | Style Inspector | The paragraph and character style at the cursor and anything formatted by hand on top; several paragraphs make a report | No |
-| Non-Allowed Style Report | Styles in use that are not on the team list, required styles that are missing. Without a list: custom styles | No, report |
+| Styles and Fonts Check | One report with two parts. Styles: styles in use that are not on the team list, required styles that are missing (without a list: custom styles). Fonts: every font used, flagging ones not on the Fonts sheet | No, report |
 | Direct Formatting Report | Paragraphs whose font or spacing was set by hand. Bold, italic, superscript and subscript count as emphasis (setting `KeepOnClear`). In tables only font and size are checked, since table styles set the rest | No, report |
 | Clear Direct Formatting (Selection) | Clears hand formatting in the selection; keeps emphasis and list numbering | Yes, one Ctrl+Z |
 | Table Standards Audit | Each table against the team table types: style, repeating header row, rows breaking across pages, width, floating or nested tables, cell styles, a caption above or below | No, report |
@@ -154,23 +155,18 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 | Caption Audit | Tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side (settings TableCaptionPosition, FigureCaptionPosition), repeated captions | No, report |
 | Import Team Styles | Brings the style definitions in from the team template (setting StyleSource, else the attached template) and lists which changed | Yes, one Ctrl+Z |
 | Remap Style | Changes every use of one style to another, or every pair on the Style map sheet | Yes, one Ctrl+Z |
-| Keep-With-Next Audit | Headings and captions above tables that can be stranded at a page bottom, long kept chains | No, report |
-| Break Hygiene | Manual page and column breaks, empty paragraphs used as spacing, line breaks ending paragraphs, body text starting a new page | No, report |
+| Pagination Check | One report with two parts. Keep with next: headings and captions above tables that can be stranded at a page bottom, long kept chains. Breaks and spacing: manual page and column breaks, empty paragraphs used as spacing, line breaks ending paragraphs, body text starting a new page | No, report |
 | Typed Lists Finder | Paragraphs starting with a typed bullet or number instead of a real list | No, report |
-| Toggle Field Codes | Shows or hides field codes (Alt+F9) | View only |
 | TOC Check | Headings missing from the contents, entries whose heading changed, page numbers out of date | No, report |
 | Acronym Quick Check (text only) | Acronyms in the typed text: uses, first use in running text (not tables or headings), spelled out there as "Words (ACR)" or not, team meaning from the Acronyms sheet or the Stationkeeper app's export (setting AcronymList). Pictures are not scanned and the report says so; the app does the full check | No, report |
 | Typography Sweep | Double spaces, space before punctuation, straight quotes, double or spaced hyphens, three dots, spaces at paragraph ends | No, report |
 | Load Team Dictionaries | Adds the dictionaries on the Dictionaries sheet to Word on this PC | Word settings only |
-| Check Selection Spelling | Word's spelling and grammar issues in the selection, with its first suggestion | No, report |
-| Font Not Allowed | Every font used, flagging ones not on the Fonts sheet | No, report |
 | Page Limit Counter | Pages per top-level part and in total against the Page limits sheet and PageLimitTotal | No, report |
 | Graphics Audit | Pictures, charts and shapes: inline or floating, size, too wide, scaled up, no alt text, missing linked file | No, report |
 | Metadata Clean Copy | Saves "<name> - clean.docx" beside the document without author, company, template path, variables and personal details | No, saves a copy |
 | PDF with Bookmarks | Saves a tagged PDF with heading bookmarks, without file details | No, saves a PDF |
 | Remove Unused Custom Styles | Deletes custom styles not applied anywhere, not on the team list and not depended on | Yes, one Ctrl+Z |
-| Unlink / Lock / Unlock Fields (Selection) | Fields in the selection to plain text, locked, or unlocked (contents and indexes are never unlinked) | Yes, one Ctrl+Z |
-| Restart Numbering / Continue Numbering | The list at the cursor starts again at 1, or continues the numbered list before it | Yes, one Ctrl+Z |
+| Unlink Fields (Selection) / Lock or Unlock Fields (Selection) | Unlink Fields turns the fields in the selection to plain text (contents and indexes are never unlinked). Lock or Unlock Fields locks the fields in the selection; when every field there is already locked, it unlocks them | Yes, one Ctrl+Z |
 | Convert to Team List | Selected typed bullets and numbers become the team list styles (BulletStyle, NumberStyle); the typed markers go | Yes, one Ctrl+Z |
 | Fit All Tables | Tables wider than the margins fit the page width (or only those in the selection) | Yes, one Ctrl+Z |
 | Go to Next Finding | Selects the next finding of the last report in the document it checked | View only |
@@ -180,74 +176,70 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 
 **PowerPoint (0.8.0).** These check the deck open in PowerPoint. They never start PowerPoint or open a file on their own, and their reports open in Word.
 
+**A check offers its fix (1.7.0).** After the report opens, a message shows the result and asks "Fix a copy now? The report stays open." **Yes** runs the fix on a copy saved beside the deck ("<name> - fixed <date> <time>.pptx"); the open deck is never changed. The offer appears only when the check found something its fix can put right. The fixes are no longer separate menu entries: each is reached from its check.
+
 | Tool | What it does | Changes the deck? |
 |---|---|---|
 | Deck Leftovers | Speaker notes, comments, hidden slides, placeholder text | No, report |
-| Deck Banned Phrases | Banned phrases in slides and notes, with replacements | No, report |
-| Deck Acronym Check (text only) | Acronyms, first slide, spelled out or not, team meaning | No, report |
-| Deck Font Audit | Fonts used, flagged against the Fonts sheet | No, report |
+| Deck Banned Phrases | Banned phrases in slides and notes, with replacements. When it finds any, it offers to fix a copy: replaces banned phrases that have a replacement (a capital at the start of a sentence is kept), and adds a comment on each changed slide listing what changed. Phrases with no replacement are flagged in the comment | No, report; the fix goes to a copy |
+| Deck Acronym Check (text only) | Acronyms, first slide, spelled out or not, team meaning. When it finds any, it offers to fix a copy: spells out each team acronym at its first use in body text ("Request for Proposal (RFP)"), with a comment on each changed slide. Titles stay short; acronyms used only in titles are listed | No, report; the fix goes to a copy |
+| Deck Font Audit | Fonts used, flagged against the Fonts sheet. When it finds any, it offers to fix a copy: text in fonts not on the Fonts sheet goes back to the theme's heading or body font (and its East Asian and complex script slots) | No, report; the fix goes to a copy |
 | Deck Small Text | Text under DeckMinFontSize (10 pt) | No, report |
 | Deck Alt Text Audit | Graphics without alt text (Decorative ones pass) | No, report |
 | Deck Off-Slide Objects | Shapes partly or wholly off the slide | No, report |
 | Deck Titles Check | Slides without a title, slides sharing one | No, report |
 | Deck Empty Placeholders | Empty placeholders left on slides | No, report |
+| Deck Delivery Check | (1.7.0) Runs all 20 deck checks in one go and makes one report: Leftovers, Banned phrases, Acronyms, Fonts, Small text, Alt text, Off-slide shapes, Titles, Empty placeholders, Template, Overlaps, Slide numbers, Marking, Text overflow, Layout drift, Pictures, Colors, Language, Links, Table style | No, report |
 | Deck Delivery Copy | "<name> - delivery.pptx" without notes, comments, hidden slides or personal details | No, saves a copy |
 
-**PowerPoint fixes (1.4.0).** The team template is the `DeckTemplate` setting (a .potx or .pptx on the Settings sheet). Without it, the master most slides use stands in. Fixes never touch the open deck: they save "<name> - <what>.pptx" next to it and open that, with a report of every change.
+**PowerPoint fixes (1.4.0).** The team template is the `DeckTemplate` setting (a .potx or .pptx on the Settings sheet). Without it, the master most slides use stands in. Fixes never touch the open deck: they save "<name> - fixed <date> <time>.pptx" next to it and open that, with a report of every change.
 
 | Tool | What it does | Changes the deck? |
 |---|---|---|
 | Deck Media List | A window listing every picture, icon, video, audio clip, chart, SmartArt and embedded or linked object, by slide, with its name and alt text. Filter by kind, "No alt text" or "Default names"; find; rename (names stay unique on a slide); suggest a name from the alt text; name every "Picture 3" from its alt text at once; go to it in PowerPoint | Names only, in the open deck (save it in PowerPoint) |
-| Deck Template Check | Every master and layout: the template's, pasted-in copies ("1_Title and Content"), foreign masters from other decks, unused ones, template layouts gone missing | No, report |
-| Deck Conform to Template | Moves each slide on a copy or foreign layout onto the template layout with the same name (or the same placeholders), then deletes the unused layouts and masters | No, saves a copy |
-| Deck Remove Unused Layouts | Deletes layouts no slide uses that are not in the template, and masters no slide uses. Template layouts stay | No, saves a copy |
-| Deck Font Fix | Text in fonts not on the Fonts sheet goes back to the theme's heading or body font (and its East Asian and complex script slots) | No, saves a copy |
+| Deck Template Check | Every master and layout: the template's, pasted-in copies ("1_Title and Content"), foreign masters from other decks, unused ones, template layouts gone missing. When it finds any, it offers to fix a copy, with three answers. **Yes** moves each slide on a copy or foreign layout onto the template layout with the same name (or the same placeholders), then deletes the layouts and masters no slide uses. **No** only deletes layouts no slide uses that are not in the template, and masters no slide uses; template layouts stay. **Cancel** changes nothing | No, report; the fix goes to a copy |
 | Deck Overlap Check | Slide shapes sitting on the template's slide number, footer, date, title area, markings (CUI, Proprietary...) or master graphics such as a logo. High for number, footer and markings. Also saves a copy with each overlap outlined in red | No, report and a marked copy |
-| Deck Slide Number Check | Slides with no number, layouts with no number placeholder, numbers typed as text, numbers moved or restyled, numbering that does not start at 1 | No, report |
-| Deck Slide Number Fix | Puts the number placeholder back on masters and layouts, turns numbers on (off on title slides), removes typed numbers, puts each number where the layout has it in its font | No, saves a copy |
-| Deck Banned Phrases Fix | Replaces banned phrases that have a replacement (a capital at the start of a sentence is kept), and adds a comment on each changed slide listing what changed. Phrases with no replacement are flagged in the comment | No, saves a copy |
+| Deck Slide Number Check | Slides with no number, layouts with no number placeholder, numbers typed as text, numbers moved or restyled, numbering that does not start at 1. When it finds any, it offers to fix a copy: puts the number placeholder back on masters and layouts, turns numbers on (off on title slides), removes typed numbers, puts each number where the layout has it in its font | No, report; the fix goes to a copy |
 
 Settings for the slide numbers: `DeckFirstSlideNumber` (1) and `DeckNumberTitleSlide` (No). Hidden slides count but need no number.
 
-**PowerPoint tidy-up (1.5.0).** Same rule: checks change nothing, fixes save a copy. New settings: `DeckFooterText`, `DeckMarking`, `DeckLanguage` (en-US), `DeckTableStyle`, `DeckExtraColors`. A linked Stationkeeper effort can set them too.
+**PowerPoint tidy-up (1.5.0).** Same rule: checks change nothing, fixes save a copy. New settings: `DeckFooterText`, `DeckMarking`, `DeckLanguage` (en-US), `DeckTableStyle`, `DeckExtraColors`. A linked Stationkeeper effort can set them too. `DeliveryCheckSkip` (1.7.0, blank by default) lists checks the delivery checks leave out (see Delivery checks).
 
 | Tool | What it does | Changes the deck? |
 |---|---|---|
-| Deck Acronym First Use Fix | Spells out each team acronym at its first use in body text ("Request for Proposal (RFP)"), with a comment on each changed slide. Titles stay short; acronyms used only in titles are listed | No, saves a copy |
-| Deck Marking Check | Slides without the team footer (`DeckFooterText`) or the marking (`DeckMarking`, such as CUI) in their text, footer, layout or master. Hidden slides count | No, report |
-| Deck Marking Fix | Puts the footer placeholder back on masters and layouts and shows the team footer on every slide | No, saves a copy |
+| Deck Marking Check | Slides without the team footer (`DeckFooterText`) or the marking (`DeckMarking`, such as CUI) in their text, footer, layout or master. Hidden slides count. When it finds any, it offers to fix a copy: puts the footer placeholder back on masters and layouts and shows the team footer on every slide | No, report; the fix goes to a copy |
 | Deck Text Overflow Check | Text running past the bottom of its box or off the slide; tables running off the slide | No, report |
-| Deck Layout Drift Check | Titles and other placeholders moved, resized or restyled away from their layout | No, report |
-| Deck Reset Placeholders | Moves and resizes them back; titles back to the layout's font and size | No, saves a copy |
-| Deck Picture Check | Stretched pictures, pictures enlarged past 150 percent, cropped pictures whose cut-off parts still travel in the file. Measured on a scratch copy | No, report |
-| Deck Picture Aspect Fix | Gives stretched pictures their own shape back, fitted inside the box they had | No, saves a copy |
+| Deck Layout Drift Check | Titles and other placeholders moved, resized or restyled away from their layout. When it finds any, it offers to fix a copy: moves and resizes them back; titles back to the layout's font and size | No, report; the fix goes to a copy |
+| Deck Picture Check | Stretched pictures, pictures enlarged past 150 percent, cropped pictures whose cut-off parts still travel in the file. Measured on a scratch copy. When it finds stretched pictures, it offers to fix a copy: gives them their own shape back, fitted inside the box they had. Only stretched pictures are fixed | No, report; the fix goes to a copy |
 | Deck Color Check | Fill, line and text colors that are not theme colors (or `DeckExtraColors`), with the nearest theme color | No, report |
-| Deck Language Check | Text marked with a proofing language other than `DeckLanguage` | No, report |
-| Deck Language Fix | Marks all text (slides, notes, masters, layouts, SmartArt) and the deck default with the team language | No, saves a copy |
+| Deck Language Check | Text marked with a proofing language other than `DeckLanguage`. When it finds any, it offers to fix a copy: marks all text (slides, notes, masters, layouts, SmartArt) and the deck default with the team language | No, report; the fix goes to a copy |
 | Deck Links Check | Linked pictures, objects and media, hyperlinks and embedded objects: missing files, links into one computer or someone's own folders, embedded files carrying their data | No, report |
-| Deck Table Style Check | Tables not in the team style (`DeckTableStyle`) and tables with no header row | No, report |
-| Deck Table Style Fix | Applies the team table style to every table | No, saves a copy |
+| Deck Table Style Check | Tables not in the team style (`DeckTableStyle`) and tables with no header row. When it finds any, it offers to fix a copy: applies the team table style to every table | No, report; the fix goes to a copy |
 
 **Excel (0.9.0).** These check the workbook open in Excel (the active one, or the only one open). They never start Excel or open a file on their own, and their reports open in Word. On very large sheets they read the first 20,000 text cells of each sheet.
 
 | Tool | What it does | Changes the workbook? |
 |---|---|---|
-| Book Formula Errors | Cells showing #DIV/0!, #N/A, #REF!, #VALUE! and the rest, with the formula | No, report |
-| Book Broken Names | Defined names that point at #REF!, at nothing, or at another file | No, report |
-| Book External Links | Other workbooks this one links to, and the cells that use them | No, report |
-| Book Hidden Content | Hidden and very hidden sheets, hidden rows and columns, hidden names | No, report |
-| Book Leftovers | Notes, comments and placeholder text (TBD, XXX, [insert) | No, report |
-| Book Banned Phrases | Banned phrases in cell text, with replacements | No, report |
-| Book Acronym Check (text only) | Acronyms, first cell, spelled out or not, team meaning | No, report |
-| Book Font Audit | Fonts used, flagged against the Fonts sheet | No, report |
-| Book Merged Cells | Merged areas (they break sorting, filtering and screen readers) | No, report |
-| Book Delivery Copy | "<name> - delivery.xlsx" without notes, comments, links to other workbooks (kept as values) or personal details. Hidden sheets stay; Book Hidden Content lists them | No, saves a copy |
+| Book Check | (1.7.0) One report with nine parts: formula errors (cells showing #DIV/0!, #N/A, #REF!, #VALUE! and the rest, with the formula), broken names (defined names that point at #REF!, at nothing, or at another file), external links (other workbooks this one links to, and the cells that use them), hidden content (hidden and very hidden sheets, hidden rows and columns, hidden names), leftovers (notes, comments and placeholder text such as TBD, XXX, [insert), banned phrases (in cell text, with replacements), acronyms (text only: first cell, spelled out or not, team meaning), fonts (flagged against the Fonts sheet) and merged cells (they break sorting, filtering and screen readers) | No, report |
+| Book Delivery Copy | "<name> - delivery.xlsx" without notes, comments, links to other workbooks (kept as values) or personal details. Hidden sheets stay; Book Check lists them | No, saves a copy |
 
 How they behave:
 - **Reports** open as a new Word document with one table and the standards used at the top. They change nothing in your document, not even its Undo list (the report is written as a web page and opened, so Word edits nothing while making it).
 - **Fixes** are one step on Undo, named "Stationkeeper: ...".
 - **Co-authored files:** on a SharePoint or OneDrive file with AutoSave on, the fixes do not run (to protect co-authors' edits); the reports still do.
 - **Test every macro** in the admin runs the report tools quietly and closes their reports; the setup tools wait for a person.
+
+## Delivery checks (1.7.0)
+
+Three tools run every check in one go, so one run before delivery covers the whole file:
+
+- **Delivery Check** (Word): 15 document checks.
+- **Deck Delivery Check** (PowerPoint): all 20 deck checks.
+- **Book Check** (Excel): nine workbook checks.
+
+Each makes one report: a summary table (Check, Result, Findings) at the top, then one part per check. They change nothing. Banned Phrases Review is not part of Delivery Check, because it has its own review flow.
+
+**Leave checks out:** `DeliveryCheckSkip` on the standards workbook's Settings sheet (blank by default) lists checks the three delivery checks leave out, by their name in the report, separated by semicolons, for example "Colors; Typography; Merged cells". The summary table shows a left-out check as "Left out (DeliveryCheckSkip)". New standards workbooks come with the row; add it by hand to an older one if you want it.
 
 ## "Trust access to the VBA project object model"
 
@@ -275,7 +267,7 @@ Needs Windows, Word, and "Trust access to the VBA project object model" on.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1   # makes build\ (kit + import files), compiles first
-powershell -ExecutionPolicy Bypass -File test.ps1    # 240 checks on a sample template; changes no settings
+powershell -ExecutionPolicy Bypass -File test.ps1    # 246 checks on a sample template; changes no settings
 ```
 
 `test.ps1` builds a sample template with all of its macros in one module (plus one in a second module), installs the kit, and checks scan, catalog save and reload, menu search, admin, CSV round trip, the shortcut and button, use from a document based on the template, macros that move between modules, updating the kit, and the no-access path; then installs the tools and runs each one on a document built with one of every defect. See `TESTING.md` for the checks run by hand.

@@ -25,9 +25,9 @@ Public Sub StyleInspector()
     End If
 End Sub
 
-' Lists styles used in the document that are not on the team's allowed list, and required styles that are not used. Without a standards workbook, lists custom styles. Changes nothing.
+' One report of what is off the team's lists: styles used that are not allowed, required styles not used, and every font used with the ones not on the Fonts sheet flagged. Without a standards workbook, lists custom styles and the fonts in use. Changes nothing.
 Public Sub NonAllowedStyleReport()
-    SKW_Show SKW_NonAllowedStyleReport()
+    SKW_Show SKW_RunSet("Styles and Fonts Check", "", Array("SKW_NonAllowedStyleReport|Styles", "SKW_FontNotAllowed|Fonts"), False)
 End Sub
 
 ' Lists paragraphs whose font or spacing was set by hand instead of by their style. Bold, italic, superscript and subscript are treated as normal emphasis (change this in the standards workbook). Changes nothing.
@@ -598,11 +598,6 @@ End Function
 ' ---------------------------------------------------------------------
 ' Fonts and unused styles
 ' ---------------------------------------------------------------------
-
-' Lists every font used in the text and flags the ones not on the team's Fonts sheet (Allowed = Yes). Without a list it shows which fonts are used and where. Changes nothing.
-Public Sub FontNotAllowed()
-    SKW_Show SKW_FontNotAllowed()
-End Sub
 
 ' Deletes custom styles nobody uses: not applied anywhere, not on the team's allowed list, and not the base or next style of another style. Lists what it deleted. One Ctrl+Z undoes it.
 Public Sub RemoveUnusedCustomStyles()

@@ -4,7 +4,6 @@ Attribute VB_Name = "SKW_Fields"
 '   SafeUpdateAllFields      updates every field, outside-file fields kept as they are
 '   FindBrokenReferences     report: references, links and included files that are broken
 '   FieldCodeReport          report: every field with its code and result
-'   ToggleFieldCodes         shows or hides field codes in the window
 ' Each macro calls a SKW_ function that does the work and returns a summary.
 ' =====================================================================
 Option Explicit
@@ -23,19 +22,6 @@ End Sub
 Public Sub FieldCodeReport()
     SKW_Show SKW_FieldCodeReport()
 End Sub
-
-' Switches the window between showing field codes ({ REF _Ref123 \h }) and their results. Changes only the view, not the document.
-Public Sub ToggleFieldCodes()
-    SKW_Status SKW_ToggleFieldCodes()
-End Sub
-
-Public Function SKW_ToggleFieldCodes() As String
-    Dim v As Object
-    If Documents.Count = 0 Then SKW_ToggleFieldCodes = "Open a document first.": Exit Function
-    Set v = ActiveDocument.ActiveWindow.View
-    v.ShowFieldCodes = Not v.ShowFieldCodes
-    SKW_ToggleFieldCodes = IIf(v.ShowFieldCodes, "Field codes shown. Run again (or Alt+F9) to show results.", "Field results shown.")
-End Function
 
 ' ---------------------------------------------------------------------
 Private Function IsOutsideFile(ByVal t As Long) As Boolean

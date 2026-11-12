@@ -20,22 +20,13 @@ Private Const TPH_TITLE As Long = 1, TPH_BODY As Long = 2, TPH_CTITLE As Long = 
 Private Const TPH_OBJECT As Long = 7, TPH_NUMBER As Long = 13, TPH_FOOTER As Long = 15, TPH_DATE As Long = 16
 Private Const NEAR_PT As Single = 2   ' points: closer than this counts as the same place
 
-' Spells out each team acronym at its first use in the deck ("Request for Proposal (RFP)"), on a copy, with a slide comment for each change. Acronyms already spelled out are left alone.
-Public Sub DeckAcronymFirstUseFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckAcronymFirstUseFix("")
-End Sub
-
-' Checks that every slide shows the team footer (setting DeckFooterText) and the marking (setting DeckMarking, such as CUI or Proprietary) in its text, footer, layout or master. Changes nothing.
+' Checks that every slide shows the team footer (DeckFooterText) and the marking (DeckMarking, such as CUI or Proprietary). When some do not, it offers to fix a copy: the team footer goes on every slide. The open deck is not changed.
 Public Sub DeckMarkingCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckMarkingCheck()
-End Sub
-
-' On a copy: puts the footer placeholder back on masters and layouts and turns the footer on every slide with the team's footer text (or the marking).
-Public Sub DeckMarkingFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckMarkingFix("")
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckMarkingCheck()
+    If SKW_OfferFix(s, "The fix puts the footer placeholder back on masters and layouts and shows the team footer on every slide.") Then SKW_Show SKP_DeckMarkingFix("")
 End Sub
 
 ' Lists text that runs past the bottom of its box or off the slide, and tables that run off the slide. Changes nothing.
@@ -44,28 +35,22 @@ Public Sub DeckTextOverflowCheck()
     SKW_Show SKP_DeckTextOverflowCheck()
 End Sub
 
-' Lists titles and other placeholders moved, resized or restyled away from their layout. Changes nothing.
+' Lists titles and other placeholders moved, resized or restyled away from their layout. When it finds any, it offers to fix a copy: they go back where the layout has them. The open deck is not changed.
 Public Sub DeckLayoutDriftCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckLayoutDriftCheck()
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckLayoutDriftCheck()
+    If SKW_OfferFix(s, "The fix moves and resizes those placeholders back to their layout, and titles back to the layout's font and size.") Then SKW_Show SKP_DeckResetPlaceholders("")
 End Sub
 
-' On a copy: moves and resizes drifted placeholders back to their layout, and titles back to the layout's font and size.
-Public Sub DeckResetPlaceholders()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckResetPlaceholders("")
-End Sub
-
-' Lists stretched pictures, pictures enlarged past 150 percent, and cropped pictures whose cut-off parts still travel in the file. Changes nothing.
+' Lists stretched pictures, pictures enlarged past 150 percent, and cropped pictures whose cut-off parts still travel in the file. When some are stretched, it offers to fix a copy. The open deck is not changed.
 Public Sub DeckPictureCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckPictureCheck()
-End Sub
-
-' On a copy: gives stretched pictures back their own shape, fitted inside the box they had.
-Public Sub DeckPictureAspectFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckPictureAspectFix("")
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckPictureCheck()
+    If SKW_OfferFix(s, "The fix gives each stretched picture its own shape back, fitted inside the box it had. Enlarged and cropped pictures are for you to judge.") Then SKW_Show SKP_DeckPictureAspectFix("")
 End Sub
 
 ' Lists fill, line and text colors that are not the theme's colors (or DeckExtraColors), with the nearest theme color. Changes nothing.
@@ -74,16 +59,13 @@ Public Sub DeckColorCheck()
     SKW_Show SKP_DeckColorCheck()
 End Sub
 
-' Lists text marked with a proofing language other than the team's (setting DeckLanguage, en-US by default). Changes nothing.
+' Lists text marked with a proofing language other than the team's (DeckLanguage, en-US by default). When it finds any, it offers to fix a copy. The open deck is not changed.
 Public Sub DeckLanguageCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckLanguageCheck()
-End Sub
-
-' On a copy: marks all text (slides, notes, masters, layouts, SmartArt) with the team's proofing language.
-Public Sub DeckLanguageFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckLanguageFix("")
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckLanguageCheck()
+    If SKW_OfferFix(s, "The fix marks all text, and the deck's default, with the team's proofing language.") Then SKW_Show SKP_DeckLanguageFix("")
 End Sub
 
 ' Lists linked pictures, objects and media, hyperlinks and embedded objects: missing files, links into someone's own folders or drive, and embedded files that carry their data along. Changes nothing.
@@ -92,16 +74,13 @@ Public Sub DeckLinksCheck()
     SKW_Show SKP_DeckLinksCheck()
 End Sub
 
-' Lists tables not in the team's table style (setting DeckTableStyle) and tables with no header row. Changes nothing.
+' Lists tables not in the team's table style (DeckTableStyle) and tables with no header row. When some are off style, it offers to fix a copy. The open deck is not changed.
 Public Sub DeckTableStyleCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckTableStyleCheck()
-End Sub
-
-' On a copy: applies the team's table style (setting DeckTableStyle) to every table.
-Public Sub DeckTableStyleFix()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKP_DeckTableStyleFix("")
+    If SKW_IsQuiet() Then Exit Sub   ' tests run the SKP_ functions on their own deck
+    Dim s As String
+    SKW_Fixable = 0
+    s = SKP_DeckTableStyleCheck()
+    If SKW_OfferFix(s, "The fix applies the team table style to every table. Cell colors and borders set by hand are replaced by the style's.") Then SKW_Show SKP_DeckTableStyleFix("")
 End Sub
 
 ' ---------------------------------------------------------------------
@@ -305,6 +284,7 @@ Public Function SKP_DeckMarkingCheck() As String
     Next
     FinishReport "Deck Marking Check", p.Slides.Count & " slide(s): " & nNoFoot & " without a footer, " & nWrong & " with a different footer, " & nNoMark & " without the marking. " & _
         "Hidden slides count: they travel in the file. Changes nothing.", Array("Slide", "Title", "Problem", "Detail"), rows, p
+    SKW_Fixable = nNoFoot + nWrong
     SKP_DeckMarkingCheck = nNoFoot & " slide(s) without a footer, " & nWrong & " with a different footer, " & nNoMark & " without the marking."
 End Function
 
@@ -495,6 +475,7 @@ Public Function SKP_DeckLayoutDriftCheck() As String
     Next
     FinishReport "Deck Layout Drift Check", nDrift & " placeholder(s) moved, resized or restyled away from their layout, " & nTitle & " of them titles. " & _
         "Deck Reset Placeholders puts them back on a copy. Changes nothing.", Array("Slide", "Placeholder", "Drift", "Layout", "Text"), rows, p
+    SKW_Fixable = nDrift
     SKP_DeckLayoutDriftCheck = nDrift & " placeholder(s) drifted, " & nTitle & " title(s)."
 End Function
 
@@ -624,6 +605,7 @@ Public Function SKP_DeckPictureCheck() As String
     DropScratch c, tmp
     FinishReport "Deck Picture Check", nStretch & " stretched, " & nBig & " enlarged past 150 percent, " & nCrop & " cropped with the cut-off parts still in the file. " & _
         "Measured on a scratch copy; the open deck is not changed.", Array("Slide", "Picture", "Problem", "Detail", "Fix"), rows, p
+    SKW_Fixable = nStretch
     SKP_DeckPictureCheck = nStretch & " stretched, " & nBig & " enlarged, " & nCrop & " cropped."
 End Function
 
@@ -833,6 +815,7 @@ Public Function SKP_DeckLanguageCheck() As String
     n = LangRows(p, want, rows)
     FinishReport "Deck Language Check", n & " text run(s) marked with a language other than " & label & " (slides, notes, masters, layouts, SmartArt). " & _
         "Spelling is checked against the wrong dictionary there, or not at all. Changes nothing.", Array("Language", "Text runs", "First place", "Text"), rows, p
+    SKW_Fixable = n
     SKP_DeckLanguageCheck = n & " run(s) not in " & label & "."
 End Function
 
@@ -1005,6 +988,7 @@ Public Function SKP_DeckTableStyleCheck() As String
     End If
     FinishReport "Deck Table Style Check", nTables & " table(s): " & nOff & " not in the team style, " & nNoHead & " without a header row. Changes nothing.", _
         Array("Slide", "Table", "Found", "Detail"), rows, p
+    SKW_Fixable = nOff
     SKP_DeckTableStyleCheck = nTables & " table(s), " & nOff & " off style, " & nNoHead & " without a header row."
 End Function
 

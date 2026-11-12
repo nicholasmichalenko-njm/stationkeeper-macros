@@ -15,14 +15,9 @@ Public Sub SectionMap()
     SKW_Show SKW_SectionMap()
 End Sub
 
-' Lists headings that do not keep with the next paragraph, captions above tables that do not keep with the table, and long runs of kept paragraphs that can push big gaps onto a page. Changes nothing.
+' One report of what moves text between pages: headings that do not keep with the next paragraph, captions that do not keep with their table, long runs of kept paragraphs, manual page and column breaks, empty paragraphs used for spacing, line breaks ending paragraphs and body text set to start a new page. Changes nothing.
 Public Sub KeepWithNextAudit()
-    SKW_Show SKW_KeepWithNextAudit()
-End Sub
-
-' Lists manual page and column breaks, runs of empty paragraphs used for spacing, line breaks at the end of paragraphs and body text set to start on a new page. Changes nothing.
-Public Sub BreakHygiene()
-    SKW_Show SKW_BreakHygiene()
+    SKW_Show SKW_RunSet("Pagination Check", "", Array("SKW_KeepWithNextAudit|Keep with next", "SKW_BreakHygiene|Breaks and spacing"), False)
 End Sub
 
 ' Compares each table of contents with the headings: headings missing from it, entries whose heading changed or went, and page numbers that are out of date. Changes nothing.
@@ -245,10 +240,18 @@ Private Function Clean(ByVal t As String) As String
     Clean = LCase$(Trim$(Clean))
 End Function
 
+' A range's text as it reads on the page: field results, even while the window shows field codes (Alt+F9).
+Private Function Shown(ByVal r As Object) As String
+    Dim x As Object
+    Set x = r.Duplicate
+    x.TextRetrievalMode.IncludeFieldCodes = False
+    Shown = x.Text
+End Function
+
 Public Function SKW_TOCCheck() As String
     Dim d As Object, msg As String, rows As New Collection, toc As Object, p As Object, ti As Long
     Dim entries As Object, heads As Object, txt As String, pg As String, lvl As Long, k As Variant, hp As String
-    Dim nMiss As Long, nGone As Long, nPage As Long, lo As Long, hi As Long, rng As Object
+    Dim nMiss As Long, nGone As Long, nPage As Long, lo As Long, hi As Long, rng As Object, codes As Boolean
     Set SKW_LastReport = Nothing
     msg = SKW_Begin("TOC check", False)
     If Len(msg) > 0 Then SKW_TOCCheck = msg: Exit Function
@@ -258,6 +261,11 @@ Public Function SKW_TOCCheck() As String
         SKW_TOCCheck = "This document has no table of contents."
         Exit Function
     End If
+    ' Read the contents as they show on the page: with field codes showing (Alt+F9) a table of contents is only its code.
+    On Error Resume Next
+    codes = d.ActiveWindow.View.ShowFieldCodes
+    If codes Then d.ActiveWindow.View.ShowFieldCodes = False
+    On Error GoTo 0
     For Each toc In d.TablesOfContents
         ti = ti + 1
         lo = toc.UpperHeadingLevel: hi = toc.LowerHeadingLevel
@@ -265,7 +273,7 @@ Public Function SKW_TOCCheck() As String
         If hi < lo Or hi > 9 Then hi = 9
         Set entries = CreateObject("Scripting.Dictionary")
         For Each p In toc.Range.Paragraphs
-            SplitEntry p.Range.Text, txt, pg
+            SplitEntry Shown(p.Range), txt, pg
             If Len(txt) > 0 Then entries(Clean(txt)) = pg
         Next
         Set heads = CreateObject("Scripting.Dictionary")
@@ -276,17 +284,17 @@ Public Function SKW_TOCCheck() As String
                 lvl = p.Format.OutlineLevel
                 On Error GoTo 0
                 If lvl >= lo And lvl <= hi Then
-                    txt = Clean(p.Range.Text)
+                    txt = Clean(Shown(p.Range))
                     If Len(txt) > 0 Then
                         hp = SKW_Page(p.Range)
                         heads(txt) = hp
                         If Not entries.Exists(txt) Then
                             nMiss = nMiss + 1
-                            rows.Add SKW_Row(ti, "Missing", "Heading (level " & lvl & ") is not in the contents", hp, p.Range.Text)
+                            rows.Add SKW_Row(ti, "Missing", "Heading (level " & lvl & ") is not in the contents", hp, Shown(p.Range))
                         ElseIf IsNumeric(entries(txt)) And IsNumeric(hp) Then
                             If CLng(entries(txt)) <> CLng(hp) Then
                                 nPage = nPage + 1
-                                rows.Add SKW_Row(ti, "Page number", "Contents says page " & entries(txt) & ", heading is on page " & hp, hp, p.Range.Text)
+                                rows.Add SKW_Row(ti, "Page number", "Contents says page " & entries(txt) & ", heading is on page " & hp, hp, Shown(p.Range))
                             End If
                         End If
                     End If
@@ -300,6 +308,9 @@ Public Function SKW_TOCCheck() As String
             End If
         Next
     Next
+    On Error Resume Next
+    If codes Then d.ActiveWindow.View.ShowFieldCodes = True
+    On Error GoTo 0
     SKW_Finish
     SKW_Report "TOC Check", d.TablesOfContents.Count & " table(s) of contents. Headings missing " & nMiss & ", entries with no heading " & nGone & _
         ", page numbers out of date " & nPage & ". Safe Update All Fields brings them up to date. Changes nothing.", _

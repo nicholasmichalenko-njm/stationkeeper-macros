@@ -14,58 +14,10 @@ Public SKX_TestBook As Object      ' tests: the workbook to check, so a person's
 Private mWhy As String
 Private Const MAXCELLS As Long = 20000
 
-' Lists cells showing an error (#REF!, #N/A, #DIV/0!, #VALUE! and the rest) in the workbook open in Excel. Changes nothing.
-Public Sub BookFormulaErrors()
+' Checks the workbook open in Excel in one go and makes one report: formula errors, broken names, links to other files, hidden sheets, rows and columns, leftovers (notes, comments, placeholders), banned phrases, acronyms, fonts and merged cells. Leave checks out with the DeliveryCheckSkip setting. Changes nothing.
+Public Sub BookCheck()
     If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookFormulaErrors()
-End Sub
-
-' Lists defined names that point at #REF! or at another file. Changes nothing.
-Public Sub BookBrokenNames()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookBrokenNames()
-End Sub
-
-' Lists links to other workbooks and the cells whose formulas use them. Changes nothing.
-Public Sub BookExternalLinks()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookExternalLinks()
-End Sub
-
-' Lists hidden and very hidden sheets, hidden rows and columns, and hidden names. They travel with the file. Changes nothing.
-Public Sub BookHiddenContent()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookHiddenContent()
-End Sub
-
-' Lists comments, notes and placeholder text (TBD, XXX, [insert) in the open workbook. Changes nothing.
-Public Sub BookLeftovers()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookLeftovers()
-End Sub
-
-' Lists the team's banned phrases in the open workbook's cell text, with the replacement. Changes nothing.
-Public Sub BookBannedPhrases()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookBannedPhrases()
-End Sub
-
-' Lists the acronyms in the open workbook's cell text with the team meaning. Text only. Changes nothing.
-Public Sub BookAcronymCheck()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookAcronymCheck()
-End Sub
-
-' Lists the fonts used in the open workbook's filled cells and flags ones not on the team's Fonts sheet. Changes nothing.
-Public Sub BookFontAudit()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookFontAudit()
-End Sub
-
-' Lists merged cells. They break sorting, filtering, copying and screen readers. Changes nothing.
-Public Sub BookMergedCells()
-    If SKW_IsQuiet() Then Exit Sub
-    SKW_Show SKX_BookMergedCells()
+    SKW_Show SKX_BookCheck()
 End Sub
 
 ' Saves a delivery copy of the open workbook beside it ("<name> - delivery.xlsx"): comments and notes out, links to other files turned into values, personal details out. The open workbook is not changed.
@@ -466,4 +418,18 @@ Fail:
     On Error Resume Next
     If Not c Is Nothing Then c.Close False
     xl.DisplayAlerts = alerts
+End Function
+
+' ---------------------------------------------------------------------
+' Every workbook check in one run and one report (1.7.0).
+' ---------------------------------------------------------------------
+Public Function SKX_BookCheck() As String
+    Dim wb As Object
+    Set SKW_LastReport = Nothing
+    Set wb = SKX_Book()
+    If wb Is Nothing Then SKX_BookCheck = mWhy: Exit Function
+    SKX_BookCheck = SKW_RunSet("Book Check", wb.Name, Array( _
+        "SKX_BookFormulaErrors|Formula errors", "SKX_BookBrokenNames|Broken names", "SKX_BookExternalLinks|Links to other files", _
+        "SKX_BookHiddenContent|Hidden content", "SKX_BookLeftovers|Leftovers", "SKX_BookBannedPhrases|Banned phrases", _
+        "SKX_BookAcronymCheck|Acronyms", "SKX_BookFontAudit|Fonts", "SKX_BookMergedCells|Merged cells"), True)
 End Function

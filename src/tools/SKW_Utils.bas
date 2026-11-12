@@ -1,8 +1,8 @@
 Attribute VB_Name = "SKW_Utils"
 ' =====================================================================
 ' Stationkeeper Tools: everyday utilities.
-'   UnlinkFieldsSelection, LockFieldsSelection, UnlockFieldsSelection
-'   RestartNumbering, ContinueNumbering, ConvertToTeamList
+'   UnlinkFieldsSelection, LockFieldsSelection (locks, or unlocks when all are locked)
+'   ConvertToTeamList
 '   FitAllTables, GoToNextFinding, InstallToolShortcuts
 '   InsertAcronymList, ResetParagraphToStyle
 ' =====================================================================
@@ -13,24 +13,9 @@ Public Sub UnlinkFieldsSelection()
     SKW_Show SKW_FieldsSelection("unlink")
 End Sub
 
-' Locks the fields in the selected text so updating fields leaves their results as they are. One Ctrl+Z undoes it.
+' Locks the fields in the selected text so updating fields leaves their results as they are. When every field there is already locked, it unlocks them. One Ctrl+Z undoes it.
 Public Sub LockFieldsSelection()
-    SKW_Show SKW_FieldsSelection("lock")
-End Sub
-
-' Unlocks the fields in the selected text so they update again. One Ctrl+Z undoes it.
-Public Sub UnlockFieldsSelection()
-    SKW_Show SKW_FieldsSelection("unlock")
-End Sub
-
-' Starts the numbered list at the cursor again from 1. One Ctrl+Z undoes it.
-Public Sub RestartNumbering()
-    SKW_Show SKW_Numbering(False)
-End Sub
-
-' Continues the numbered list at the cursor from the list before it. One Ctrl+Z undoes it.
-Public Sub ContinueNumbering()
-    SKW_Show SKW_Numbering(True)
+    SKW_Show SKW_FieldsSelection("toggle")
 End Sub
 
 ' Turns the selected paragraphs that start with a typed bullet or number into the team's list styles (BulletStyle and NumberStyle settings), taking the typed marker out. One Ctrl+Z undoes it.
@@ -79,6 +64,12 @@ Public Function SKW_FieldsSelection(ByVal what As String) As String
     Set r = Selection.Range.Duplicate
     On Error GoTo Fail
     n = r.Fields.Count
+    If what = "toggle" Then
+        what = "unlock"
+        For Each f In r.Fields
+            If Not f.Locked Then what = "lock": Exit For
+        Next
+    End If
     Select Case what
         Case "unlink"
             For i = r.Fields.Count To 1 Step -1
@@ -102,44 +93,6 @@ Fail:
     msg = Err.Description
     SKW_Finish
     SKW_FieldsSelection = "Stopped: " & msg
-End Function
-
-Public Function SKW_Numbering(ByVal continuePrevious As Boolean) As String
-    Dim msg As String, lf As Object, lt As Object, prev As Object
-    Set SKW_LastReport = Nothing
-    If Documents.Count > 0 Then
-        If Selection.Range.ListFormat.ListType <> wdListOutlineNumbering And Selection.Range.ListFormat.ListType <> wdListSimpleNumbering _
-           And Selection.Range.ListFormat.ListType <> wdListMixedNumbering Then
-            SKW_Numbering = "Put the cursor in a numbered list first.": Exit Function
-        End If
-    End If
-    msg = SKW_Begin(IIf(continuePrevious, "Continue numbering", "Restart numbering"), True)
-    If Len(msg) > 0 Then SKW_Numbering = msg: Exit Function
-    On Error GoTo Fail
-    Set lf = Selection.Range.ListFormat
-    If continuePrevious Then
-        ' Continue: join the numbered list before this one (Word continues only a list of the same template).
-        Set prev = PreviousList(Selection.Paragraphs(1))
-        If prev Is Nothing Then
-            SKW_Finish
-            SKW_Numbering = "There is no numbered list before this one to continue."
-            Exit Function
-        End If
-        lf.ApplyListTemplateWithLevel ListTemplate:=prev.Range.ListFormat.ListTemplate, ContinuePreviousList:=True, _
-            ApplyTo:=wdListApplyToWholeList, DefaultListBehavior:=wdWord10ListBehavior
-    Else
-        Set lt = lf.ListTemplate
-        lf.ApplyListTemplateWithLevel ListTemplate:=lt, ContinuePreviousList:=False, _
-            ApplyTo:=wdListApplyToThisPointForward, DefaultListBehavior:=wdWord10ListBehavior, ApplyLevel:=lf.ListLevelNumber
-    End If
-    SKW_Finish
-    SKW_Numbering = IIf(continuePrevious, "The list continues from the one before: this item is now " & Selection.Range.ListFormat.ListString, _
-        "The list starts again here: " & Selection.Range.ListFormat.ListString) & " One Ctrl+Z undoes it."
-    Exit Function
-Fail:
-    msg = Err.Description
-    SKW_Finish
-    SKW_Numbering = "Stopped: " & msg
 End Function
 
 ' The nearest numbered paragraph before p that belongs to another list.

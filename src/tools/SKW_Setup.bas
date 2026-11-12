@@ -87,7 +87,8 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("DeckMarking", "", "A marking every slide must show somewhere, such as CUI or Proprietary (Deck Marking Check and Fix)."), _
         Array("DeckLanguage", "en-US", "The proofing language for slide text: en-US, en-GB or a number such as 1033 (Deck Language Check and Fix)."), _
         Array("DeckTableStyle", "", "The team's table style: an id such as {5C22544A-7EE6-4342-B048-85BDC9FD1C3A}, or the name of a style a table in the deck uses (Deck Table Style Check and Fix)."), _
-        Array("DeckExtraColors", "", "Colors allowed besides the theme's, such as #003366; #C00000 (Deck Color Check)."))
+        Array("DeckExtraColors", "", "Colors allowed besides the theme's, such as #003366; #C00000 (Deck Color Check)."), _
+        Array("DeliveryCheckSkip", "", "Checks the Delivery Checks leave out, by their name in the report, such as Colors; Typography; Merged cells."))
     Sheet wb, 2, "Settings", JoinRows(Array( _
         Array("Setting", "Value", "What it does"), _
         Array("StylePrefix", "", "Styles whose names start with this (for example AA) count as team styles and are allowed."), _
@@ -234,9 +235,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Styles.StyleInspector", "Style Inspector", "Styles", _
         "Shows the paragraph and character style at the cursor and any formatting applied by hand on top. With several paragraphs selected, makes a report. Changes nothing.", _
         "style, inspect, formatting, what style", "Styles", "Cursor position", "No, it only reports")
-    s = s & "," & T("SKW_Styles.NonAllowedStyleReport", "Non-Allowed Style Report", "Styles", _
-        "Report of styles used that are not on the team's allowed list, and required styles that are missing. Without a standards workbook it lists custom styles. Changes nothing.", _
-        "styles, allowed, compliance, custom styles", "Styles", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Styles.NonAllowedStyleReport", "Styles and Fonts Check", "Styles", _
+        "One report of what is off the team's lists: styles used that are not allowed, required styles not used, and every font used with the ones not on the Fonts sheet flagged. Changes nothing.", _
+        "styles, fonts, allowed, approved, typeface, audit, required", "Styles", "Whole document", "No, it only reports")
     s = s & "," & T("SKW_Styles.DirectFormattingReport", "Direct Formatting Report", "Styles", _
         "Report of paragraphs whose font or spacing was set by hand instead of by style. Bold, italic, superscript and subscript count as normal emphasis. Changes nothing.", _
         "direct formatting, manual formatting, font, spacing", "Styles, Text", "Whole document", "No, it only reports")
@@ -264,18 +265,12 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Styles.RemapStyle", "Remap Style", "Styles", _
         "Changes every use of one style to another, or applies every pair on the Style map sheet. One Ctrl+Z undoes it.", _
         "styles, replace style, remap, convert, style map", "Styles", "Whole document", "Yes")
-    s = s & "," & T("SKW_Layout.KeepWithNextAudit", "Keep-With-Next Audit", "Layout", _
-        "Report of headings that do not keep with the next paragraph, captions above tables that do not keep with the table, and long runs of kept paragraphs. Changes nothing.", _
-        "keep with next, orphan headings, pagination, widow", "Pages and sections, Styles", "Whole document", "No, it only reports")
-    s = s & "," & T("SKW_Layout.BreakHygiene", "Break Hygiene", "Layout", _
-        "Report of manual page and column breaks, runs of empty paragraphs used as spacing, line breaks ending paragraphs and body text set to start a new page. Changes nothing.", _
-        "page breaks, empty paragraphs, line breaks, spacing, pagination", "Pages and sections, Text", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Layout.KeepWithNextAudit", "Pagination Check", "Layout", _
+        "One report of what moves text between pages: headings and captions that do not keep with what follows, long kept runs, manual page and column breaks, empty paragraphs used as spacing and line breaks ending paragraphs. Changes nothing.", _
+        "pagination, keep with next, breaks, page break, empty paragraphs, widow, orphan, spacing", "Pages and sections, Styles", "Whole document", "No, it only reports")
     s = s & "," & T("SKW_Lists.TypedListsFinder", "Typed Lists Finder", "Lists", _
         "Report of paragraphs that start with a typed bullet or number instead of a real Word list. Changes nothing.", _
         "lists, bullets, numbering, typed, manual numbers", "Lists", "Whole document", "No, it only reports")
-    s = s & "," & T("SKW_Fields.ToggleFieldCodes", "Toggle Field Codes", "Fields", _
-        "Switches the window between field codes and their results (like Alt+F9). Changes only the view.", _
-        "field codes, alt+f9, show codes", "Fields", "Whole document", "No, it only changes the view")
     s = s & "," & T("SKW_Layout.TOCCheck", "TOC Check", "Fields", _
         "Report comparing the table of contents with the headings: headings missing, entries with no heading, page numbers out of date. Changes nothing.", _
         "toc, contents, headings, page numbers", "Fields, Pages and sections", "Whole document", "No, it only reports")
@@ -288,12 +283,6 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Text.LoadTeamDictionaries", "Load Team Dictionaries", "Tools setup", _
         "Adds the team's custom dictionaries (Dictionaries sheet) to Word on this PC, so team words are not marked as misspelled.", _
         "dictionary, spelling, custom dictionary, proofing", "Template", "Template", "No, it changes Word's dictionary list")
-    s = s & "," & T("SKW_Text.CheckSelectionSpelling", "Check Selection Spelling", "Text", _
-        "Report of the spelling and grammar issues Word finds in the selected text, with Word's first suggestion. Changes nothing.", _
-        "spelling, grammar, proofing, check", "Text", "Selection", "No, it only reports")
-    s = s & "," & T("SKW_Styles.FontNotAllowed", "Font Not Allowed", "Styles", _
-        "Report of every font used in the text, flagging the ones not on the team's Fonts sheet. Changes nothing.", _
-        "fonts, typeface, allowed, compliance", "Styles, Text", "Whole document", "No, it only reports")
     s = s & "," & T("SKW_Layout.PageLimitCounter", "Page Limit Counter", "Layout", _
         "Report of the pages in each top-level part and the whole document against the team's page limits. Changes nothing.", _
         "page limit, page count, volumes, pages", "Pages and sections", "Whole document", "No, it only reports")
@@ -312,18 +301,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Utils.UnlinkFieldsSelection", "Unlink Fields (Selection)", "Fields", _
         "Turns the fields in the selected text into plain text, so they never update again. Tables of contents and indexes stay fields. One Ctrl+Z undoes it.", _
         "unlink, fields, plain text, freeze", "Fields", "Selection", "Yes")
-    s = s & "," & T("SKW_Utils.LockFieldsSelection", "Lock Fields (Selection)", "Fields", _
-        "Locks the fields in the selected text so updating fields leaves them as they are. One Ctrl+Z undoes it.", _
+    s = s & "," & T("SKW_Utils.LockFieldsSelection", "Lock or Unlock Fields (Selection)", "Fields", _
+        "Locks the fields in the selected text so updating fields leaves them as they are. When every field there is already locked, it unlocks them. One Ctrl+Z undoes it.", _
         "lock, fields, freeze, ctrl+f11", "Fields", "Selection", "Yes")
-    s = s & "," & T("SKW_Utils.UnlockFieldsSelection", "Unlock Fields (Selection)", "Fields", _
-        "Unlocks the fields in the selected text so they update again. One Ctrl+Z undoes it.", _
-        "unlock, fields, ctrl+shift+f11", "Fields", "Selection", "Yes")
-    s = s & "," & T("SKW_Utils.RestartNumbering", "Restart Numbering", "Lists", _
-        "Starts the numbered list at the cursor again from 1. One Ctrl+Z undoes it.", _
-        "restart, numbering, list, start at 1", "Lists", "List at the cursor", "Yes")
-    s = s & "," & T("SKW_Utils.ContinueNumbering", "Continue Numbering", "Lists", _
-        "Continues the numbered list at the cursor from the list before it. One Ctrl+Z undoes it.", _
-        "continue, numbering, list", "Lists", "List at the cursor", "Yes")
     s = s & "," & T("SKW_Utils.ConvertToTeamList", "Convert to Team List", "Lists", _
         "Turns selected paragraphs that start with a typed bullet or number into the team list styles and takes the typed marker out. One Ctrl+Z undoes it.", _
         "lists, bullets, numbering, convert, typed", "Lists", "Selection", "Yes")
@@ -346,14 +326,14 @@ Public Function SKW_ToolList() As String
         "Report of speaker notes, comments, hidden slides and placeholder text in the deck open in PowerPoint. Changes nothing.", _
         "powerpoint, deck, notes, comments, hidden slides, placeholders, delivery", "Comments and tracking, Text", "Whole document", "No, it only reports")
     s = s & "," & T("SKP_Deck.DeckBannedPhrases", "Deck Banned Phrases", "PowerPoint", _
-        "Report of the team's banned phrases in the slides and notes of the open deck, with the replacement. Changes nothing.", _
-        "powerpoint, deck, banned, phrases, plain language", "Text", "Whole document", "No, it only reports")
+        "Report of the team's banned phrases in the deck. When it finds any, it offers to fix a copy: phrases with a replacement are replaced and each changed slide gets a comment. The open deck is not changed.", _
+        "powerpoint, deck, banned, phrases, plain language", "Text", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Deck.DeckAcronymCheck", "Deck Acronym Check (text only)", "PowerPoint", _
-        "Report of acronyms in the open deck's slide text: uses, first slide, spelled out or not, team meaning. Pictures are not scanned. Changes nothing.", _
-        "powerpoint, deck, acronyms", "Acronyms, Text", "Whole document", "No, it only reports")
+        "Report of the acronyms in the deck's text and whether each is spelled out. When some are not, it offers to fix a copy: each is spelled out at its first use in body text, with a slide comment. The open deck is not changed.", _
+        "powerpoint, deck, acronyms", "Acronyms, Text", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Deck.DeckFontAudit", "Deck Font Audit", "PowerPoint", _
-        "Report of every font in the open deck (slides, notes, layouts, masters, bullets, East Asian and complex-script slots), flagging ones not on the team's Fonts sheet. Changes nothing.", _
-        "powerpoint, deck, fonts", "Text", "Whole document", "No, it only reports")
+        "Report of every font in the deck (slides, notes, masters, layouts, SmartArt), flagging ones not on the Fonts sheet. When it finds any, it offers to fix a copy: that text goes back to the theme fonts. The open deck is not changed.", _
+        "powerpoint, deck, fonts", "Text", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Deck.DeckSmallText", "Deck Small Text", "PowerPoint", _
         "Report of slide text smaller than the team minimum (DeckMinFontSize). Changes nothing.", _
         "powerpoint, deck, font size, readability", "Text", "Whole document", "No, it only reports")
@@ -376,98 +356,47 @@ Public Function SKW_ToolList() As String
         "Lists every picture, video, audio, chart, SmartArt, icon and embedded or linked object in the open deck by slide. Rename them (the Selection Pane shows the names), name them from their alt text, and jump to them.", _
         "powerpoint, deck, media, pictures, video, audio, rename, selection pane, images", "Figures", "Whole document", "Only shape names, when you rename")
     s = s & "," & T("SKP_Fix.DeckTemplateCheck", "Deck Template Check", "PowerPoint", _
-        "Report comparing the deck's masters and layouts with the team template (DeckTemplate): foreign masters, pasted-in 1_ copies, unused layouts, template layouts gone missing. Changes nothing.", _
-        "powerpoint, deck, master, layouts, template, bloat, pasted slides", "Whole document", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Fix.DeckConformToTemplate", "Deck Conform to Template", "PowerPoint", _
-        "On a copy: moves slides off foreign and 1_ layouts onto the matching template layout, then deletes unused foreign layouts and masters. The open deck is not changed.", _
-        "powerpoint, deck, master, layouts, template, conform, fix, bloat", "Whole document", "Whole document", "No, it fixes a copy")
-    s = s & "," & T("SKP_Fix.DeckRemoveUnusedLayouts", "Deck Remove Unused Layouts", "PowerPoint", _
-        "On a copy: deletes layouts and masters no slide uses that are not part of the template. Template layouts stay. The open deck is not changed.", _
-        "powerpoint, deck, layouts, masters, unused, file size, bloat", "Whole document", "Whole document", "No, it fixes a copy")
-    s = s & "," & T("SKP_Fix.DeckFontFix", "Deck Font Fix", "PowerPoint", _
-        "On a copy: text in fonts not on the team's Fonts sheet goes back to the theme's heading or body font. The open deck is not changed.", _
-        "powerpoint, deck, fonts, theme, fix", "Text", "Whole document", "No, it fixes a copy")
+        "Report of every master and layout against the team template: pasted-in copies, foreign masters, unused ones, missing template layouts. When it finds any, it offers to fix a copy: move slides onto the template layouts and remove what is unused, or only remove unused layouts. The open deck is not changed.", _
+        "powerpoint, deck, master, layouts, template, bloat, pasted slides", "Whole document", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Fix.DeckOverlapCheck", "Deck Overlap Check", "PowerPoint", _
         "Report of slide content covering template elements (slide number, footer, date, marking banner, logos, title area), plus a copy with each overlap outlined in red. The open deck is not changed.", _
         "powerpoint, deck, overlap, covers, logo, footer, marking, banner", "Figures", "Whole document", "No, it reports and marks a copy")
     s = s & "," & T("SKP_Fix.DeckSlideNumberCheck", "Deck Slide Number Check", "PowerPoint", _
-        "Report of slides without a number, layouts missing the number placeholder, typed numbers, numbers moved or restyled, and the starting number. Changes nothing.", _
-        "powerpoint, deck, slide numbers, page numbers, footer", "Page numbers", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Fix.DeckSlideNumberFix", "Deck Slide Number Fix", "PowerPoint", _
-        "On a copy: puts the number placeholder back on masters and layouts, turns numbers on (off on title slides unless the team numbers them), removes typed numbers, resets position and font. The open deck is not changed.", _
-        "powerpoint, deck, slide numbers, page numbers, fix", "Page numbers", "Whole document", "No, it fixes a copy")
-    s = s & "," & T("SKP_Fix.DeckBannedPhrasesFix", "Deck Banned Phrases Fix", "PowerPoint", _
-        "On a copy: replaces the team's banned phrases that have a replacement and leaves a slide comment for each change; flags the rest to reword. The open deck is not changed.", _
-        "powerpoint, deck, banned phrases, plain language, replace, comments", "Text", "Whole document", "No, it fixes a copy")
-    s = s & "," & T("SKP_Tidy.DeckAcronymFirstUseFix", "Deck Acronym First Use Fix", "PowerPoint", _
-        "On a copy: spells out each team acronym at its first use in body text, such as Request for Proposal (RFP), with a slide comment for each change. Titles stay short. The open deck is not changed.", _
-        "powerpoint, deck, acronyms, first use, spell out, define", "Acronyms", "Whole document", "No, it fixes a copy")
+        "Report of slides with no number, layouts with no number placeholder, numbers typed as text and numbers moved or restyled. When it finds any, it offers to fix a copy. The open deck is not changed.", _
+        "powerpoint, deck, slide numbers, page numbers, footer", "Page numbers", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Tidy.DeckMarkingCheck", "Deck Marking Check", "PowerPoint", _
-        "Report of slides without the team footer (DeckFooterText) or the marking (DeckMarking, such as CUI or Proprietary) in their text, footer, layout or master. Hidden slides count. Changes nothing.", _
-        "powerpoint, deck, marking, cui, proprietary, footer, banner, classification", "Headers and footers", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Tidy.DeckMarkingFix", "Deck Marking Fix", "PowerPoint", _
-        "On a copy: puts the footer placeholder back on masters and layouts and shows the team footer on every slide. The open deck is not changed.", _
-        "powerpoint, deck, marking, cui, proprietary, footer, fix", "Headers and footers", "Whole document", "No, it fixes a copy")
+        "Report of slides without the team footer (DeckFooterText) or the marking (DeckMarking, such as CUI or Proprietary). When some lack the footer, it offers to fix a copy: the team footer goes on every slide. The open deck is not changed.", _
+        "powerpoint, deck, marking, cui, proprietary, footer, banner, classification", "Headers and footers", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Tidy.DeckTextOverflowCheck", "Deck Text Overflow Check", "PowerPoint", _
         "Report of text running past the bottom of its box or off the slide, and tables running off the slide. Changes nothing.", _
         "powerpoint, deck, overflow, text, fit, off slide", "Text", "Whole document", "No, it only reports")
     s = s & "," & T("SKP_Tidy.DeckLayoutDriftCheck", "Deck Layout Drift Check", "PowerPoint", _
-        "Report of titles and other placeholders moved, resized or restyled away from their layout. Changes nothing.", _
-        "powerpoint, deck, layout, title, drift, moved, placeholder, reset", "Layout", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Tidy.DeckResetPlaceholders", "Deck Reset Placeholders", "PowerPoint", _
-        "On a copy: moves and resizes drifted placeholders back to their layout, titles back to the layout font and size. The open deck is not changed.", _
-        "powerpoint, deck, layout, title, drift, reset, placeholder, fix", "Layout", "Whole document", "No, it fixes a copy")
+        "Report of titles and other placeholders moved, resized or restyled away from their layout. When it finds any, it offers to fix a copy: they go back where the layout has them. The open deck is not changed.", _
+        "powerpoint, deck, layout, title, drift, moved, placeholder, reset", "Layout", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Tidy.DeckPictureCheck", "Deck Picture Check", "PowerPoint", _
-        "Report of stretched pictures, pictures enlarged past 150 percent, and cropped pictures whose cut-off parts still travel in the file. Changes nothing.", _
-        "powerpoint, deck, pictures, images, stretched, distorted, cropped, resolution", "Figures", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Tidy.DeckPictureAspectFix", "Deck Picture Aspect Fix", "PowerPoint", _
-        "On a copy: gives stretched pictures their own shape back, fitted inside the box they had. The open deck is not changed.", _
-        "powerpoint, deck, pictures, images, stretched, distorted, aspect ratio, fix", "Figures", "Whole document", "No, it fixes a copy")
+        "Report of stretched pictures, pictures enlarged past 150 percent, and cropped pictures whose cut-off parts still travel in the file. When some are stretched, it offers to fix a copy. The open deck is not changed.", _
+        "powerpoint, deck, pictures, images, stretched, distorted, cropped, resolution", "Figures", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Tidy.DeckColorCheck", "Deck Color Check", "PowerPoint", _
         "Report of fill, line and text colors that are not the theme colors (or DeckExtraColors), with the nearest theme color. Changes nothing.", _
         "powerpoint, deck, colors, theme, brand, palette", "Whole document", "Whole document", "No, it only reports")
     s = s & "," & T("SKP_Tidy.DeckLanguageCheck", "Deck Language Check", "PowerPoint", _
-        "Report of text marked with a proofing language other than the team language (DeckLanguage, en-US by default). Changes nothing.", _
-        "powerpoint, deck, language, proofing, spelling, dictionary", "Text", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Tidy.DeckLanguageFix", "Deck Language Fix", "PowerPoint", _
-        "On a copy: marks all slide, notes, master, layout and SmartArt text with the team proofing language. The open deck is not changed.", _
-        "powerpoint, deck, language, proofing, spelling, fix", "Text", "Whole document", "No, it fixes a copy")
+        "Report of text marked with a proofing language other than the team language (DeckLanguage, en-US by default). When it finds any, it offers to fix a copy. The open deck is not changed.", _
+        "powerpoint, deck, language, proofing, spelling, dictionary", "Text", "Whole document", "No, it reports; a fix goes to a copy")
     s = s & "," & T("SKP_Tidy.DeckLinksCheck", "Deck Links Check", "PowerPoint", _
         "Report of linked pictures, objects and media, hyperlinks and embedded objects: missing files, links into one computer or someone's own folders, embedded files carrying their data. Changes nothing.", _
         "powerpoint, deck, links, hyperlinks, embedded, ole, broken, delivery", "Whole document", "Whole document", "No, it only reports")
     s = s & "," & T("SKP_Tidy.DeckTableStyleCheck", "Deck Table Style Check", "PowerPoint", _
-        "Report of tables not in the team table style (DeckTableStyle) and tables with no header row. Changes nothing.", _
-        "powerpoint, deck, tables, table style, header row", "Tables", "Whole document", "No, it only reports")
-    s = s & "," & T("SKP_Tidy.DeckTableStyleFix", "Deck Table Style Fix", "PowerPoint", _
-        "On a copy: applies the team table style (DeckTableStyle) to every table. The open deck is not changed.", _
-        "powerpoint, deck, tables, table style, fix", "Tables", "Whole document", "No, it fixes a copy")
-    s = s & "," & T("SKX_Book.BookFormulaErrors", "Book Formula Errors", "Excel", _
-        "Report of cells showing an error (#REF!, #N/A, #DIV/0! and the rest) in the workbook open in Excel. Changes nothing.", _
-        "excel, workbook, errors, ref, formulas", "Whole document", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookBrokenNames", "Book Broken Names", "Excel", _
-        "Report of defined names pointing at #REF! or at another file. Changes nothing.", _
-        "excel, workbook, names, ref, broken", "Whole document", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookExternalLinks", "Book External Links", "Excel", _
-        "Report of links to other workbooks and the cells using them. Changes nothing.", _
-        "excel, workbook, links, external, other files", "Whole document", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookHiddenContent", "Book Hidden Content", "Excel", _
-        "Report of hidden and very hidden sheets, hidden rows and columns, and hidden names. Changes nothing.", _
-        "excel, workbook, hidden sheets, hidden rows, delivery", "Hidden text", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookLeftovers", "Book Leftovers", "Excel", _
-        "Report of notes, comments and placeholder text (TBD, XXX) in the open workbook. Changes nothing.", _
-        "excel, workbook, comments, notes, placeholders, delivery", "Comments and tracking, Text", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookBannedPhrases", "Book Banned Phrases", "Excel", _
-        "Report of the team's banned phrases in the workbook's cell text, with the replacement. Changes nothing.", _
-        "excel, workbook, banned, phrases", "Text", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookAcronymCheck", "Book Acronym Check (text only)", "Excel", _
-        "Report of acronyms in the workbook's cell text with the team meaning. Charts and pictures are not read. Changes nothing.", _
-        "excel, workbook, acronyms", "Acronyms, Text", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookFontAudit", "Book Font Audit", "Excel", _
-        "Report of fonts used in filled cells, flagging ones not on the team's Fonts sheet. Changes nothing.", _
-        "excel, workbook, fonts", "Text", "Whole document", "No, it only reports")
-    s = s & "," & T("SKX_Book.BookMergedCells", "Book Merged Cells", "Excel", _
-        "Report of merged cells, which break sorting, filtering and screen readers. Changes nothing.", _
-        "excel, workbook, merged cells, accessibility", "Tables", "Whole document", "No, it only reports")
+        "Report of tables not in the team table style (DeckTableStyle) and tables with no header row. When some are off style, it offers to fix a copy. The open deck is not changed.", _
+        "powerpoint, deck, tables, table style, header row", "Tables", "Whole document", "No, it reports; a fix goes to a copy")
+    s = s & "," & T("SKW_Review.DeliveryCheck", "Delivery Check", "Before delivery", _
+        "Runs the document's checks in one go and makes one report: leftovers, broken references, tables of contents, styles, fonts, direct formatting, tables, captions, pagination, page limits, graphics, typed lists, acronyms and typography. Leave checks out with the DeliveryCheckSkip setting. Changes nothing.", _
+        "delivery, final, check, all, preflight, review, before delivery", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKP_Deck.DeckDeliveryCheck", "Deck Delivery Check", "PowerPoint", _
+        "Runs every deck check in one go and makes one report, from leftovers and banned phrases to template, slide numbers, marking, pictures and table style. Leave checks out with the DeliveryCheckSkip setting. Changes nothing.", _
+        "powerpoint, deck, delivery, final, check, all, preflight", "Whole document", "Whole document", "No, it only reports")
+    s = s & "," & T("SKX_Book.BookCheck", "Book Check", "Excel", _
+        "One report on the workbook open in Excel: formula errors, broken names, links to other files, hidden sheets, rows and columns, leftovers, banned phrases, acronyms, fonts and merged cells. Changes nothing.", _
+        "excel, workbook, check, delivery, errors, names, links, hidden, comments, banned, acronyms, fonts, merged", "Whole document", "Whole document", "No, it only reports")
     s = s & "," & T("SKX_Book.BookDeliveryCopy", "Book Delivery Copy", "Excel", _
         "Saves a copy of the open workbook beside it with notes and comments out, links to other files turned into values, and personal details out. The open workbook is not changed.", _
         "excel, workbook, delivery, clean, comments, links, metadata", "Whole document", "Whole document", "No, it saves a clean copy")
@@ -488,11 +417,10 @@ Private Function SkKind(ByVal run As String) As String
     Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|PreDeliveryLeftovers|StyleInspector|" & _
         "NonAllowedStyleReport|DirectFormattingReport|ClearDirectFormattingSelection|TableStandardsAudit|" & _
         "ApplyTeamTableType|BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
-        "AcronymQuickCheck|LoadTeamDictionaries|FontNotAllowed|PageLimitCounter|RemoveUnusedCustomStyles|" & _
-        "ConvertToTeamList|InsertAcronymList|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
-        "DeckSmallText|DeckTemplateCheck|DeckConformToTemplate|DeckRemoveUnusedLayouts|DeckFontFix|DeckSlideNumberCheck|DeckSlideNumberFix|DeckBannedPhrasesFix|" & _
-        "DeckAcronymFirstUseFix|DeckMarkingCheck|DeckMarkingFix|DeckLanguageCheck|DeckLanguageFix|DeckTableStyleCheck|DeckTableStyleFix|DeckColorCheck|" & _
-        "BookLeftovers|BookBannedPhrases|BookAcronymCheck|BookFontAudit|"
+        "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|" & _
+        "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
+        "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
+        "DeckDeliveryCheck|BookCheck|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else

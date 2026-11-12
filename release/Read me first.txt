@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.6.0
+STATIONKEEPER MACROS 1.7.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -69,9 +69,12 @@ STATIONKEEPER TOOLS (checks and fixes for Word documents)
      your team's allowed styles, table types and placeholders in Excel.
    - Reports open as a new document and change nothing. Fixes are one Ctrl+Z.
    - On SharePoint/OneDrive files with AutoSave on, fixes wait; reports run.
-   - PowerPoint fixes (Deck Conform to Template, Font Fix, Slide Number Fix, Banned
-     Phrases Fix, Remove Unused Layouts) never change the open deck: they save a copy
-     beside it. Set DeckTemplate on the Settings sheet to your team's .potx first.
+   - Each PowerPoint check offers its fix when it finds something to put right. The fix
+     saves a copy beside the deck and never changes the open deck. Set DeckTemplate on
+     the Settings sheet to your team's .potx first.
+   - Delivery Check (Word), Deck Delivery Check (PowerPoint) and Book Check (Excel) run
+     every check in one go and make one report. DeliveryCheckSkip on the Settings sheet
+     leaves checks out.
    - Deck Media List lists pictures, videos, charts and SmartArt by slide and renames them.
    - 1.5.0 adds checks and fixes for acronyms at first use, the footer and marking (CUI),
      text that does not fit, titles that moved, pictures, colors, proofing language, links

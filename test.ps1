@@ -313,7 +313,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 86 tools arrive described, categorised and in the menu' (($tc -like '86 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 62 tools arrive described, categorised and in the menu' (($tc -like '62 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -406,8 +406,6 @@ try {
         $r = RunW $word 'SKW_Test.TW_Report' 'SKW_TOCCheck'
         Write-Output "TOC: $($r.Substring(0, [Math]::Min(600, $r.Length)))"
         Check 'TOC check: the two headings added later are missing' (($r -like 'Missing 2, no heading 0, old page numbers 0*') -and ($r -match 'Heading added later') -and ($r -match 'Loose heading')) ''
-        $r = RunW $word 'SKW_Test.TW_Toggle'
-        Check 'toggle field codes on and back off' ($r -match '^Field codes shown.* / Field results shown\. / now=False') $r
         $r = RunW $word 'SKW_Test.TW_Banned'
         Write-Output "BANNED: $r"
         Check 'banned phrases: two replaced as tracked changes, one flagged, a comment each, tracking put back' (($r -match 'Changed 2 as tracked changes and flagged 1') -and ($r -match 'comments\+3') -and ($r -match 'track=False')) ''
@@ -451,12 +449,22 @@ try {
         Check 'acronym quick check: labelled text only, RFP spelled out and on the list, SOW spelled out only later' (($r -match 'text only') -and ($r -match 'pictures and images are not scanned') -and ($r -match '\| RFP \| 1 \| \d+ \| Yes \| Yes \| Request for Proposal \|') -and ($r -match '\| SOW \| 2 \| \d+ \| No \(spelled out later\) \| No \|')) ''
         $r = RunW $word 'SKW_Test.TW_Report' 'SKW_TypographySweep'
         Check 'typography sweep: double space, space before punctuation, straight quotes, double hyphen, three dots, space at paragraph end' (($r -match 'Double space [1-9]') -and ($r -match 'Space before punctuation [1-9]') -and ($r -match 'Straight quote [1-9]') -and ($r -match 'Double hyphen [1-9]') -and ($r -match 'Three dots [1-9]') -and ($r -match 'Space at paragraph end [1-9]')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
-        $r = RunW $word 'SKW_Test.TW_Spelling'
-        Check 'check selection spelling: the two misspellings with suggestions' (($r -match '^Spelling [2-9]') -and ($r -match 'recieve \| receive')) ($r.Substring(0, [Math]::Min(400, $r.Length)))
         $r = RunW $word 'SKW_Test.TW_Dictionaries'
         Check 'team dictionaries: says the list is empty' ($r -match 'lists no dictionaries') $r
         $r = RunW $word 'SKW_Test.TW_Report' 'SKW_FontNotAllowed'
         Check 'fonts: Arial and Courier New not allowed' (($r -match 'Not allowed \| Arial') -and ($r -match 'Not allowed \| Courier New')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Entry' 'NonAllowedStyleReport'
+        Check '1.7.0: Styles and Fonts Check is one report with both parts' (($r -match '## Styles and Fonts Check / ') -and ($r -match '2 check\(s\) run') -and ($r -match '\| Styles \|') -and ($r -match '\| Fonts \|') -and ($r -match 'Not allowed \| Arial')) ($r.Substring(0, [Math]::Min(500, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Entry' 'KeepWithNextAudit'
+        Check '1.7.0: Pagination Check holds keep with next and the breaks' (($r -match '## Pagination Check / ') -and ($r -match '\| Keep with next \|') -and ($r -match '\| Breaks and spacing \| Page breaks')) ($r.Substring(0, [Math]::Min(500, $r.Length)))
+        $r = RunW $word 'SKW_Test.TW_Entry' 'DeliveryCheck'
+        Check '1.7.0: Delivery Check runs the 15 document checks into one report' (($r -match '## Delivery Check / ') -and ($r -match '15 check\(s\) run, [1-9]\d* with findings') -and ($r -match '\| Leftovers \|') -and ($r -match '\| Typography \|') -and ($r -notmatch 'Could not run')) ($r.Substring(0, [Math]::Min(900, $r.Length)))
+        $sk = RunW $word 'SKW_Test.TW_SetSetting' 'DeliveryCheckSkip|Typography; Graphics'
+        $r = RunW $word 'SKW_Test.TW_Entry' 'DeliveryCheck'
+        Check '1.7.0: DeliveryCheckSkip leaves checks out and says so' (($r -match '13 check\(s\) run') -and ($r -match '\| Typography \| Left out \(DeliveryCheckSkip\)') -and ($r -match '\| Graphics \| Left out')) "$sk ## $($r.Substring(0, [Math]::Min(600, $r.Length)))"
+        [void](RunW $word 'SKW_Test.TW_SetSetting' 'DeliveryCheckSkip|')
+        $r = RunW $word 'SKW_Test.TW_Offer'
+        Check '1.7.0: the fix is never offered while tests run' ($r -eq 'quiet=False') $r
         $r = RunW $word 'SKW_Test.TW_Report' 'SKW_PageLimitCounter'
         Check 'page limit counter: parts by top-level heading and the whole document' (($r -match 'page\(s\), 0 over the limit') -and ($r -match '\| Introduction \| 1 \|') -and ($r -match '\| Heading added later \|') -and ($r -match '\| Whole document \| 1 \|')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
         $r = RunW $word 'SKW_Test.TW_Report' 'SKW_GraphicsAudit'
@@ -484,15 +492,17 @@ try {
         [void](RunW $word 'SKW_Test.TW_BuildDefects2')
         [void](RunW $word 'SKW_Test.TW_BuildDefects3' $d7)
         $b = RunW $word 'SKW_Test.TW_BuildLists'
-        $r = RunW $word 'SKW_Test.TW_Numbering'
-        Write-Output "NUMBERING: $b ## $r"
-        Check 'continue numbering makes B1 3; restart at B2 makes it 1' (($r -match 'continue: .* B1=3\. B2=4\.') -and ($r -match 'restart: .* B1=3\. B2=1\.')) "$b ## $r"
         $r = RunW $word 'SKW_Test.TW_Fields' 'lock'
         $lk = RunW $word 'SKW_Test.TW_FieldLocks'
         Check 'lock fields in the selection' (($r -match '^2 field\(s\) locked.*before=2 after=2') -and ($lk -eq 'LL')) "$r ## $lk"
+        $r = RunW $word 'SKW_Test.TW_Fields' 'toggle'
+        $lk = RunW $word 'SKW_Test.TW_FieldLocks'
+        Check '1.7.0: Lock or Unlock Fields unlocks when every field there is locked' (($r -match '^2 field\(s\) unlocked') -and ($lk -eq 'uu')) "$r ## $lk"
+        $r = RunW $word 'SKW_Test.TW_Fields' 'toggle'
+        $lk = RunW $word 'SKW_Test.TW_FieldLocks'
+        Check '1.7.0: and locks again when one is not' (($r -match '^2 field\(s\) locked') -and ($lk -eq 'LL')) "$r ## $lk"
         $r = RunW $word 'SKW_Test.TW_Fields' 'unlock'
         $lk = RunW $word 'SKW_Test.TW_FieldLocks'
-        Check 'unlock fields in the selection' (($r -match '^2 field\(s\) unlocked') -and ($lk -eq 'uu')) "$r ## $lk"
         $r = RunW $word 'SKW_Test.TW_Fields' 'unlink'
         Check 'unlink fields: the two fields become plain text' ($r -match '^2 field\(s\) turned into plain text.*before=2 after=0') $r
         $u = 1; [void]$doc.Undo([ref]$u)
@@ -588,6 +598,8 @@ try {
             Check 'book fonts: Arial not allowed' ($r -match 'Not allowed \| Arial') ($r.Substring(0, [Math]::Min(300, $r.Length)))
             $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookMergedCells'
             Check 'book merged cells: A10:B10' (($r -like '1 merged area*') -and ($r -match 'A10:B10')) ($r.Substring(0, [Math]::Min(300, $r.Length)))
+            $r = RunW $word 'SKW_Test.TW_Book' 'SKX_BookCheck'
+            Check '1.7.0: Book Check runs the nine workbook checks into one report' (($r -like '9 check(s) run, * with findings*') -and ($r -match '## Book Check / ') -and ($r -match '\| Formula errors \|') -and ($r -match '\| Merged cells \| 1 merged area') -and ($r -notmatch 'Could not run')) ($r.Substring(0, [Math]::Min(700, $r.Length)))
             $r = RunW $word 'SKW_Test.TW_BookCopy' $bookCopy
             Check 'book delivery copy: note gone in the copy, still in the open workbook' ((Test-Path $bookCopy) -and ($r -match 'copyComments=0 openComments=1')) $r
         }
@@ -604,7 +616,7 @@ try {
             $su = TR $word 'T_SkSetup'
             Check 'mark built, needs rules, needs template, not related; save' (($su -match 'built=Module1\.ShowHiddenText') -and ($su -match 'needs=Module2\.WriteTestMarker') -and ($su -match 'needsT=Module1\.UpdateAllFields') -and ($su -match '\| Saved to')) $su
             $k = TR $word 'T_SkKinds'
-            Check 'kinds kept in the catalog; tools prefilled (built or not related)' (($k -match 'ShowHiddenText=Built for Stationkeeper;') -and ($k -match 'WriteTestMarker=Needs Stationkeeper data: rules;') -and ($k -match 'StyleInspector=Built for Stationkeeper;') -and ($k -match 'ToggleFieldCodes=Not related;') -and ($k -match 'BookFontAudit=Built for Stationkeeper;') -and ($k -match 'DeckDeliveryCopy=Not related;') -and ($k -match 'xml has stationkeeper=True')) $k
+            Check 'kinds kept in the catalog; tools prefilled (built or not related)' (($k -match 'ShowHiddenText=Built for Stationkeeper;') -and ($k -match 'WriteTestMarker=Needs Stationkeeper data: rules;') -and ($k -match 'StyleInspector=Built for Stationkeeper;') -and ($k -match 'FitAllTables=Not related;') -and ($k -match 'BookCheck=Built for Stationkeeper;') -and ($k -match 'DeckDeliveryCopy=Not related;') -and ($k -match 'xml has stationkeeper=True')) $k
 
             $l = TR1 $word 'T_SkLink' ''
             Check 'link: not linked' ($l -like 'Not linked*') $l
@@ -613,7 +625,7 @@ try {
             Write-Output "MENU0: $mn"
             Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
             Check 'filter Needs effort data: the two, with the filled badge' ($mn -match 'NEEDS EFFORT DATA 2: \[[^\]]+ SK\+\] \[[^\]]+ SK\+\] \|\|') ''
-            Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Toggle Field Codes\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
+            Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Fit All Tables\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
             Check 'filter Other: own macros only' (($mn -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'OTHER \d+:[^|]*(SK-|SK\+|Style Inspector)')) ''
             Check 'filter Ready to run now: needs-data macros left out when not linked' (($mn -match 'READY TO RUN NOW \d+:') -and ($mn -notmatch 'READY TO RUN NOW [^|]*SK\+')) ''
             Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link a folder\.\.\., Cancel \| Don''t ask again') ''
@@ -917,6 +929,10 @@ try {
             Check 'table style fix: both tables in the team style' (($r -match '^1 table\(s\) restyled') -and ($i -match 'tables=\{5C22544A-7EE6-4342-B048-85BDC9FD1C3A\},\{5C22544A-7EE6-4342-B048-85BDC9FD1C3A\}')) "$(Short $r 200) ## $(Short $i 400)"
             $a = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckPictureCheck'
             $b = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckTableStyleCheck'
+            $r = RunW $word 'SKW_Test.TW_Deck' 'SKP_DeckDeliveryCheck'
+            Check '1.7.0: Deck Delivery Check runs the 20 deck checks into one report' (($r -like '20 check(s) run, * with findings*') -and ($r -match '## Deck Delivery Check / ') -and ($r -match '\| Pictures \| 1 stretched, 1 enlarged, 1 cropped') -and ($r -match '\| Table style \| 2 table\(s\), 1 off style') -and ($r -notmatch 'Could not run')) (Short $r 900)
+            $fx = @(); foreach ($fn in @('SKP_DeckPictureCheck', 'SKP_DeckTableStyleCheck', 'SKP_DeckLayoutDriftCheck', 'SKP_DeckLanguageCheck', 'SKP_DeckMarkingCheck', 'SKP_DeckTextOverflowCheck')) { $fx += RunW $word 'SKW_Test.TW_Fixable' $fn }
+            Check '1.7.0: each check says what its fix can put right (the offer rests on it)' (($fx -join ' ') -eq 'SKP_DeckPictureCheck=1 SKP_DeckTableStyleCheck=1 SKP_DeckLayoutDriftCheck=1 SKP_DeckLanguageCheck=1 SKP_DeckMarkingCheck=4 SKP_DeckTextOverflowCheck=-1') ($fx -join ' ')
             $mb = RunW $word 'SKW_Test.TW_MediaBrand'
             Check '1.6.0: the Deck Media List wears the Stationkeeper look (its own copy, frmSKWBrand)' (($mb -match '^band=603416 line=1CB8FF title=Deck Media List logo=True icon=3 page=FCF8F5') -and ($mb -match 'height=520 listTop=114')) $mb
             Check 'the open deck is unchanged by the fixes and the picture measuring' (($a -like '1 stretched, 1 enlarged, 1 cropped.*') -and ($b -like '2 table(s), 1 off style*')) "$(Short $a 100) ## $(Short $b 100)"

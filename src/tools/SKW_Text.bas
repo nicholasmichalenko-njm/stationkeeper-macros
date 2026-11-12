@@ -3,7 +3,6 @@ Attribute VB_Name = "SKW_Text"
 ' Stationkeeper Tools: text and proofing.
 '   TypographySweep          report: double spaces, straight quotes, double hyphens and more
 '   LoadTeamDictionaries     adds the team's custom dictionaries to Word
-'   CheckSelectionSpelling   report: spelling and grammar issues in the selection
 ' =====================================================================
 Option Explicit
 
@@ -15,11 +14,6 @@ End Sub
 ' Adds the team's custom dictionaries (Dictionaries sheet of the standards workbook) to Word's list on this PC, so team words are not marked as misspelled. Changes Word's settings, not the document.
 Public Sub LoadTeamDictionaries()
     SKW_Say SKW_LoadTeamDictionaries()
-End Sub
-
-' Lists the spelling and grammar issues Word finds in the selected text, with Word's first suggestion. Changes nothing.
-Public Sub CheckSelectionSpelling()
-    SKW_Show SKW_CheckSelectionSpelling()
 End Sub
 
 ' ---------------------------------------------------------------------
@@ -90,37 +84,6 @@ Public Function SKW_LoadTeamDictionaries() As String
     SKW_LoadTeamDictionaries = "Team dictionaries: " & added & " added, " & had & " already in Word." & _
         IIf(Len(missing) > 0, vbCr & "Not found or not added:" & missing, "") & vbCr & _
         "Word checks spelling against them from now on, on this PC. (File > Options > Proofing > Custom Dictionaries lists them.)"
-End Function
-
-Public Function SKW_CheckSelectionSpelling() As String
-    Dim d As Object, msg As String, rows As New Collection, sel As Object, e As Object, sug As String, ss As Object, nS As Long, nG As Long
-    Set SKW_LastReport = Nothing
-    If Documents.Count > 0 Then
-        If Selection.Type = wdSelectionIP Or Len(Selection.Range.Text) = 0 Then SKW_CheckSelectionSpelling = "Select the text to check first.": Exit Function
-    End If
-    msg = SKW_Begin("Check selection spelling", False)
-    If Len(msg) > 0 Then SKW_CheckSelectionSpelling = msg: Exit Function
-    Set d = ActiveDocument
-    Set sel = Selection.Range.Duplicate
-    For Each e In sel.SpellingErrors
-        nS = nS + 1
-        sug = ""
-        On Error Resume Next
-        Set ss = e.GetSpellingSuggestions
-        If ss.Count > 0 Then sug = ss(1).Name
-        On Error GoTo 0
-        If nS <= 500 Then rows.Add SKW_Row("Spelling", e.Text, IIf(Len(sug) > 0, sug, "(no suggestion)"), SKW_Page(e), SentenceOf(e))
-    Next
-    On Error Resume Next
-    For Each e In sel.GrammaticalErrors
-        nG = nG + 1
-        If nG <= 500 Then rows.Add SKW_Row("Grammar", e.Text, "", SKW_Page(e), SentenceOf(e))
-    Next
-    On Error GoTo 0
-    SKW_Finish
-    SKW_Report "Check Selection Spelling", "Spelling " & nS & ", grammar " & nG & " in the selection (" & sel.Words.Count & " words). " & _
-        "Uses Word's proofing language and the dictionaries loaded on this PC. Changes nothing.", Array("Kind", "Text", "Suggestion", "Page", "Sentence"), rows
-    SKW_CheckSelectionSpelling = "Spelling " & nS & ", grammar " & nG & "."
 End Function
 
 Private Function SentenceOf(ByVal r As Object) As String

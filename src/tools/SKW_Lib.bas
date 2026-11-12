@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.6.0"
+Public Const SKW_VERSION As String = "1.7.0"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -20,6 +20,8 @@ Public SKW_FindCol As Long                ' which column of those rows holds the
 Public SKW_FindDoc As String              ' the document that report checked
 Public SKW_FindTitle As String
 Public SKW_FindPos As Long
+Public SKW_Fixable As Long                ' what the last check found that its fix can put right
+Public SKW_Collect As Collection          ' not Nothing while a set runs: reports are gathered, not opened
 
 Private mUndo As Boolean
 Private mScreen As Boolean
@@ -185,6 +187,12 @@ Public Function SKW_ReportFor(ByVal title As String, ByVal intro As String, ByVa
     ' a hidden new document under the active one).
     Dim src As Object, d As Object, h As String, r As Variant, i As Long, tmp As String, v As Variant
     Dim parts() As String, one As String, n As Long, srcName As String
+    If Not SKW_Collect Is Nothing Then
+        ' A set is running: keep this report as one part of the set's report.
+        SKW_Collect.Add Array(title, intro, cols, rows)
+        SKW_LastRows = rows.Count
+        Exit Function
+    End If
     If Len(sourceName) = 0 Then
         Set src = ActiveDocument
         srcName = src.Name
@@ -246,6 +254,113 @@ Public Function SKW_ReportFor(ByVal title As String, ByVal intro As String, ByVa
     Set SKW_LastReport = d
     Set SKW_ReportFor = d
     If SKW_IsQuiet() And Not src Is Nothing Then src.Activate
+End Function
+
+' ---------------------------------------------------------------------
+' A set: several checks in one run and one report (1.7.0). checks holds
+' "Function name|Label" (and "|argument" for a check that takes one).
+' Labels listed in the DeliveryCheckSkip setting are left out.
+' ---------------------------------------------------------------------
+Public Function SKW_RunSet(ByVal title As String, ByVal sourceName As String, ByVal checks As Variant, ByVal skippable As Boolean) As String
+    Dim c As Variant, a As Variant, res As String, h As String, sumRows As String, body As String, part As Variant, r As Variant, v As Variant
+    Dim i As Long, nRun As Long, nFind As Long, nWith As Long, skip As String, tmp As String, d As Object, src As Object, before As Long, one As String
+    Dim labels As New Collection, nPart As Long
+    If Len(sourceName) = 0 Then
+        If Documents.Count = 0 Then SKW_RunSet = "Open a document first.": Exit Function
+        Set src = ActiveDocument
+        sourceName = src.Name
+    End If
+    If skippable Then skip = ";" & LCase$(Replace(SKW_Setting("DeliveryCheckSkip", ""), "; ", ";")) & ";"
+    Set SKW_Collect = New Collection
+    For Each c In checks
+        a = Split(CStr(c), "|")
+        If InStr(1, skip, ";" & LCase$(a(1)) & ";", vbTextCompare) = 0 Or Len(skip) < 3 Then
+            SKW_Status title & ": " & a(1) & "..."
+            before = SKW_Collect.Count
+            res = ""
+            On Error Resume Next
+            If UBound(a) >= 2 Then res = Application.Run(CStr(a(0)), CStr(a(2))) Else res = Application.Run(CStr(a(0)))
+            If Err.Number <> 0 Then res = "Could not run: " & Err.Description
+            Err.Clear
+            On Error GoTo 0
+            If Not src Is Nothing Then src.Activate
+            nRun = nRun + 1
+            i = 0
+            If SKW_Collect.Count > before Then
+                i = SKW_Collect(SKW_Collect.Count)(3).Count
+                labels.Add CStr(a(1))
+            End If
+            nFind = nFind + i
+            If i > 0 Then nWith = nWith + 1
+            sumRows = sumRows & "<tr><td>" & SKW_Html(CStr(a(1))) & "</td><td>" & SKW_Html(Split(res & vbCr, vbCr)(0)) & "</td><td>" & IIf(SKW_Collect.Count > before, CStr(i), "") & "</td></tr>"
+        Else
+            sumRows = sumRows & "<tr><td>" & SKW_Html(CStr(a(1))) & "</td><td>Left out (DeliveryCheckSkip)</td><td></td></tr>"
+        End If
+    Next
+    SKW_Finish
+    For Each part In SKW_Collect
+        nPart = nPart + 1
+        body = body & "<h2>" & SKW_Html(CStr(labels(nPart))) & "</h2><p>" & SKW_Html(CStr(part(1))) & "</p>"
+        If part(3).Count > 0 Then
+            body = body & "<table><thead><tr>"
+            For Each v In part(2)
+                body = body & "<th>" & SKW_Html(CStr(v)) & "</th>"
+            Next
+            body = body & "</tr></thead><tbody>"
+            For Each r In part(3)
+                one = "<tr>"
+                For i = LBound(r) To UBound(r)
+                    one = one & "<td>" & SKW_Html(SKW_Excerpt(CStr(r(i)), 400)) & "</td>"
+                Next
+                body = body & one & "</tr>"
+            Next
+            body = body & "</tbody></table>"
+        Else
+            body = body & "<p><b>No findings.</b></p>"
+        End If
+    Next
+    Set SKW_Collect = Nothing
+    h = "<html><head><meta charset=""utf-8""><style>body{font-family:Calibri,sans-serif;font-size:10pt}" & _
+        "h1{font-size:16pt}h2{font-size:12pt;margin-top:14pt}table{border-collapse:collapse}th,td{border:1px solid #999;padding:2pt 4pt;vertical-align:top;font-size:9pt}" & _
+        "th{background:#DDEBF7;text-align:left}</style></head><body>" & _
+        "<h1>" & SKW_Html(title) & "</h1><p>File: " & SKW_Html(sourceName) & " &nbsp; " & Format$(Now, "yyyy-mm-dd hh:nn") & " &nbsp; " & SKW_Html(SKW_StdNote()) & "</p>" & _
+        "<p>" & nRun & " check(s) run, " & nWith & " with findings, " & nFind & " finding(s) in all. Each check's part follows. Changes nothing.</p>" & _
+        "<table><thead><tr><th>Check</th><th>Result</th><th>Findings</th></tr></thead><tbody>" & sumRows & "</tbody></table>" & body & "</body></html>"
+    tmp = Environ$("TEMP") & "\Stationkeeper report " & Format$(Now, "hhnnss") & Int(Rnd() * 10000) & ".htm"
+    SKW_WriteUtf8 tmp, h
+    On Error Resume Next
+    Set d = Documents.Add(Template:=tmp, Visible:=Not SKW_IsQuiet())
+    If d Is Nothing Then
+        Err.Clear
+        Set d = Documents.Open(FileName:=tmp, AddToRecentFiles:=False, Visible:=Not SKW_IsQuiet())
+    End If
+    Kill tmp
+    On Error GoTo 0
+    If Not d Is Nothing Then d.Saved = True
+    SKW_LastRows = nFind
+    Set SKW_FindRows = New Collection
+    SKW_FindCol = -1
+    SKW_FindDoc = ""
+    SKW_FindTitle = title
+    Set SKW_LastReport = d
+    If SKW_IsQuiet() And Not src Is Nothing Then src.Activate
+    SKW_Status ""
+    SKW_RunSet = nRun & " check(s) run, " & nWith & " with findings, " & nFind & " finding(s) in all."
+End Function
+
+' After a check: shows its result and, when it found something its fix can put right, offers the fix.
+' True when the person says yes. offer says what the fix does, in one sentence.
+Public Function SKW_OfferFix(ByVal summary As String, ByVal offer As String) As Boolean
+    If SKW_IsQuiet() Then Exit Function
+    If SKW_Fixable <= 0 Or SKW_LastReport Is Nothing Then
+        SKW_Show summary
+        Exit Function
+    End If
+    On Error Resume Next
+    SKW_LastReport.Activate
+    On Error GoTo 0
+    SKW_OfferFix = (MsgBox(Split(summary & vbCr, vbCr)(0) & vbCr & vbCr & offer & vbCr & vbCr & _
+        "Fix a copy now? The report stays open.", vbYesNo + vbQuestion, SKW_APP) = vbYes)
 End Function
 
 Public Function SKW_Html(ByVal s As String) As String

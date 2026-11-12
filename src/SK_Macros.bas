@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.6.0"
+Public Const SK_VERSION As String = "1.7.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads

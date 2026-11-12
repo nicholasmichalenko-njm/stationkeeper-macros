@@ -436,11 +436,6 @@ Public Function TW_Banned() As String
     TW_Banned = s
 End Function
 
-Public Function TW_Toggle() As String
-    SKW_Quiet = True
-    TW_Toggle = SKW_ToggleFieldCodes() & " / " & SKW_ToggleFieldCodes() & " / now=" & ActiveDocument.ActiveWindow.View.ShowFieldCodes
-End Function
-
 Public Function TW_StyleCount(ByVal nm As String) As String
     TW_StyleCount = SKW_StyleRanges(ActiveDocument.Content, ActiveDocument.Styles(nm)).Count
 End Function
@@ -490,15 +485,6 @@ Public Function TW_BuildDefects3(ByVal savePath As String) As String
     d.SaveAs2 FileName:=savePath, FileFormat:=wdFormatXMLDocument
     d.Range(0, 0).Select
     TW_BuildDefects3 = "saved=" & d.FullName
-End Function
-
-Public Function TW_Spelling() As String
-    Dim s As String
-    SKW_Quiet = True
-    FindText(ActiveDocument, "We recieve teh data.").Select
-    s = SKW_CheckSelectionSpelling() & " ## " & ReportText()
-    CloseReport
-    TW_Spelling = s
 End Function
 
 Public Function TW_Dictionaries() As String
@@ -560,19 +546,6 @@ Public Function TW_BuildLists() As String
     r.MoveEnd wdCharacter, -4
     d.Fields.Add r, wdFieldEmpty, "QUOTE ""Bravo""", False
     TW_BuildLists = "B1=" & FindText(d, "Item B1").ListFormat.ListString
-End Function
-
-Public Function TW_Numbering() As String
-    Dim d As Object, s As String
-    SKW_Quiet = True
-    Set d = ActiveDocument
-    FindText(d, "Item B1").Select
-    Selection.Collapse wdCollapseStart
-    s = "continue: " & SKW_Numbering(True) & " B1=" & FindText(d, "Item B1").ListFormat.ListString & " B2=" & FindText(d, "Item B2").ListFormat.ListString
-    FindText(d, "Item B2").Select
-    Selection.Collapse wdCollapseStart
-    s = s & " ## restart: " & SKW_Numbering(False) & " B1=" & FindText(d, "Item B1").ListFormat.ListString & " B2=" & FindText(d, "Item B2").ListFormat.ListString
-    TW_Numbering = s
 End Function
 
 Public Function TW_Fields(ByVal what As String) As String
@@ -1165,4 +1138,33 @@ Public Function TW_MediaBrand() As String
     Load frmSKPMedia
     TW_MediaBrand = frmSKPMedia.TestBrand()
     Unload frmSKPMedia
+End Function
+
+' ---------------------------------------------------------------------
+' 1.7.0: sets, one tool for a check and its fix
+' ---------------------------------------------------------------------
+' Runs a tool the way the menu does (its macro, not its function) and returns the findings and the report.
+Public Function TW_Entry(ByVal macro As String) As String
+    Dim s As String
+    SKW_Quiet = True
+    Application.Run macro
+    s = "rows=" & SKW_LastRows & " ## " & ReportText()
+    CloseReport
+    TW_Entry = s
+End Function
+
+' Runs a check and returns what its fix could put right.
+Public Function TW_Fixable(ByVal fn As String) As String
+    SKW_Quiet = True
+    SKW_Fixable = -1
+    Application.Run fn
+    CloseReport
+    TW_Fixable = fn & "=" & SKW_Fixable
+End Function
+
+' The offer after a check is never made while tests run, and not when nothing can be fixed.
+Public Function TW_Offer() As String
+    SKW_Quiet = True
+    SKW_Fixable = 3
+    TW_Offer = "quiet=" & SKW_OfferFix("3 found.", "The fix does it.")
 End Function
