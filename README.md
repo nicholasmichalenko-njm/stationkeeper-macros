@@ -129,13 +129,43 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 67 tools in 1.8.1)
+## Stationkeeper Tools (0.4.0 and later; 69 tools in 1.9.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
 **Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies seventeen modules and three forms (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKP_Fix`, `SKP_Tidy`, `frmSKPMedia`, `frmSKWBrand`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
+
+### One workbook with the Stationkeeper app (1.9.0)
+
+Point the tools at the app's **Company Standards.xlsx** (`ChooseStandardsWorkbook`) and the table tools read it directly. No second workbook.
+
+| App sheet | What the tools take from it |
+|---|---|
+| Table looks | One look per row role: caption, header, header2, subhead, body, subtotal, total, note. Font, size, bold, italic, color, alignment, vertical alignment, spacing, indents, fill, every edge, the Tag style, and Repeat. |
+| Table types | Cell margins per side (points), width, the table's place on the page, the roles a type uses, and its overrides. |
+| Settings | Named values the other sheets point to with `=name`. |
+
+- Only **Approved** rows count.
+- A **Tag style** the document lacks is made from its look, so no style has to be made by hand.
+- A table's type is the first type unless its Alt Text says `type=` with the type's Name or its label.
+- The app keeps columns you add and never sends them to Word. The tools read these, and nothing else reads them: a **Recognize** column on Table looks (how many header rows, the words that start a total or subtotal row, the most words in a short cell), a **Tab stops** column, and looks named **number**, **short** and **keep**. Without a number or short look, those cells take the body look.
+- Every report names the workbook and when it was last changed.
+- The tools' own Table roles sheet is not read when the workbook has a Table looks sheet.
+
+### Assigned tables (1.9.0)
+
+A row's role is the paragraph style on it: the role's Tag style. That one fact makes a table easy to fix, review and keep right.
+
+- **Assign:** `Assign Table Role (Selected Rows)` sets the rows in the selection to Header, Header 2, Subhead, Body, Subtotal, Total, Note or Caption, and styles them.
+- **Fix:** `Table Roles Check` (a copy of the whole document) or `Apply Table Roles (Table at Cursor)` reads each row's role and applies its look.
+- **Review:** `Show Table Roles` opens Word's Draft view with the style area, so every row's style name shows at the left. Run it again to go back.
+- The first fix of a table suggests its roles from what it can see, then marks the table **assigned** with a hidden bookmark (`_SKA...`). The mark is not in the Alt Text, so accessibility text stays as it was.
+- An assigned table is read from its styles and never guessed again: a row set by hand stays set. A row with no role is read as body and named in the report.
+- In a table that is not assigned yet, a header, subhead, subtotal, total, note or caption style someone already set wins over a guess.
+- **Suggest again** (the last choice in Assign Table Role) forgets a table's roles and reads it afresh.
+- A table can be assigned only when the roles have styles: the Stationkeeper standards' Tag styles, or a paragraph style for the Header and Long text roles on the tools' own sheet.
 
 ### The progress window (1.8.1)
 

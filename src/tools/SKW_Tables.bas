@@ -43,6 +43,29 @@ Public Function SKW_TableTypes() As Collection
     keys = Array("type", "table style", "header row repeats", "rows may break across pages", "width percent", _
                  "header row style", "body style", "notes row style", "has notes row", "cell padding", _
                  "cell margins", "border style", "border width", "border color")
+    If SKW_AppStandards() Then
+        ' The Stationkeeper app's workbook: one row per table type, named by its Name column.
+        For Each r In SKW_Rows("Table types")
+            If AppApproved(r) And Len(AppVal(r, "name")) > 0 Then
+                Set d = CreateObject("Scripting.Dictionary")
+                For Each k In keys
+                    d(k) = ""
+                Next
+                d("type") = AppVal(r, "name")
+                d("label") = AppVal(r, "name (value)")
+                d("width percent") = AppVal(r, "width pct")
+                d("table align") = AppVal(r, "align")
+                d("margins pt") = AppVal(r, "cell margins: top") & ";" & AppVal(r, "cell margins: bottom") & ";" & _
+                    AppVal(r, "cell margins: left") & ";" & AppVal(r, "cell margins: right")
+                d("roles") = AppVal(r, "roles")
+                d("override") = AppVal(r, "override")
+                d("caption position") = AppVal(r, "caption position")
+                d("app") = "yes"
+                c.Add d
+            End If
+        Next
+        If c.Count > 0 Then Set SKW_TableTypes = c: Exit Function
+    End If
     For Each r In SKW_Rows("Table types")
         If r.Exists("type") Then
             If Len(r("type")) > 0 Then
@@ -329,6 +352,7 @@ End Sub
 ' The roles for one table type: built-in values, then the sheet's rows for every type, then the rows for this type.
 Public Function SKW_TableRoles(ByVal typeName As String) As Object
     Dim res As Object, r As Object, pass As Long, ty As String, role As String, k As Variant, d As Object
+    If SKW_AppStandards() Then Set SKW_TableRoles = AppRoles(typeName): Exit Function
     Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = 1
     AddRole res, "caption", "", "", "", "", "", ""
@@ -341,6 +365,9 @@ Public Function SKW_TableRoles(ByVal typeName As String) As Object
     AddRole res, "notes", "", "left", "top", "", "", "Note;Notes;Source;Sources"
     AddRole res, "keep", "", "", "", "", "", ""
     AddRole res, "figure caption", "", "", "", "", "", ""
+    AddRole res, "header2", "", "center", "center", "", "yes", ""
+    AddRole res, "subtotal", "", "", "center", "", "yes", ""
+    res("header2")("absent") = "yes"
     For pass = 1 To 2
         For Each r In SKW_Rows("Table roles")
             If r.Exists("role") Then
@@ -370,6 +397,7 @@ Private Sub AddRole(ByVal res As Object, ByVal role As String, ByVal sty As Stri
     d("paragraph style") = sty: d("align") = al: d("vertical") = vert
     d("shading") = shade: d("bold") = bld: d("recognize") = recog
     d("left indent") = "": d("tab stops") = ""
+    d("absent") = "": d("app") = "": d("repeat") = ""
     Set res(role) = d
 End Sub
 
@@ -421,6 +449,9 @@ Private Function TypeOfTable(ByVal t As Object, ByVal types As Collection, ByVal
         nm = Trim$(nm)
         For Each k In types
             If LCase$(k("type")) = nm Then Set TypeOfTable = k: Exit Function
+            If k.Exists("label") Then
+                If LCase$(k("label")) = nm And Len(nm) > 0 Then Set TypeOfTable = k: Exit Function
+            End If
         Next
     End If
     Set TypeOfTable = TypeFor(types, TableStyleName(t))
@@ -428,13 +459,75 @@ Private Function TypeOfTable(ByVal t As Object, ByVal types As Collection, ByVal
 End Function
 
 ' Reads one table: each row's role and each cell's kind. Changes nothing.
-Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As Collection) As Object
+' ---------------------------------------------------------------------
+' Assigned tables. A row's role is the paragraph style on it (the role's tag style). A table whose
+' roles have been set carries a hidden bookmark (_SKA...): from then on its rows are read from their
+' styles and never guessed again. The mark is not in the Alt Text, so accessibility text stays clean.
+' ---------------------------------------------------------------------
+Private Function TableAssigned(ByVal d As Object, ByVal t As Object) As Boolean
+    Dim b As Object, sh As Boolean, nm As String
+    On Error Resume Next
+    sh = d.Bookmarks.ShowHidden
+    d.Bookmarks.ShowHidden = True
+    For Each b In t.Range.Bookmarks
+        nm = ""
+        nm = b.Name
+        If Left$(nm, 4) = "_SKA" Then TableAssigned = True: Exit For
+    Next
+    d.Bookmarks.ShowHidden = sh
+End Function
+
+Private Sub MarkAssigned(ByVal d As Object, ByVal t As Object)
+    Dim nm As String
+    If TableAssigned(d, t) Then Exit Sub
+    On Error Resume Next
+    Randomize
+    nm = "_SKA" & Hex$(CLng(Rnd() * 16777215)) & Hex$(CLng(Rnd() * 16777215))
+    d.Bookmarks.Add nm, t.Range
+End Sub
+
+Private Sub ClearAssigned(ByVal d As Object, ByVal t As Object)
+    Dim b As Object, sh As Boolean, names As New Collection, v As Variant, nm As String
+    On Error Resume Next
+    sh = d.Bookmarks.ShowHidden
+    d.Bookmarks.ShowHidden = True
+    For Each b In t.Range.Bookmarks
+        nm = ""
+        nm = b.Name
+        If Left$(nm, 4) = "_SKA" Then names.Add nm
+    Next
+    For Each v In names
+        d.Bookmarks(CStr(v)).Delete
+    Next
+    d.Bookmarks.ShowHidden = sh
+End Sub
+
+' Tag style (lower case) to role. Body, number and short text styles all read as a body row.
+Private Function RolesByStyle(ByVal roles As Object) As Object
+    Dim res As Object, k As Variant, nm As String
+    Set res = CreateObject("Scripting.Dictionary")
+    For Each k In Array("caption", "header", "header2", "divider", "subtotal", "total", "notes")
+        nm = LCase$(Trim$(roles(k)("paragraph style")))
+        If Len(nm) > 0 And roles(k)("absent") <> "yes" Then res(nm) = CStr(k)
+    Next
+    For Each k In Array("number", "short text", "long text")
+        nm = LCase$(Trim$(roles(k)("paragraph style")))
+        If Len(nm) > 0 And roles(k)("absent") <> "yes" Then res(nm) = "body"
+    Next
+    Set RolesByStyle = res
+End Function
+
+' forced: row number to role, for rows a person is setting now. Nothing for a plain read.
+' fresh: read the table as if nobody had set a style on it (Suggest again).
+Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As Collection, Optional ByVal forced As Object = Nothing, _
+                           Optional ByVal fresh As Boolean = False) As Object
     Dim res As Object, n As Long, c As Object, rg As Object, i As Long, r As Long, maxRow As Long, maxCols As Long
     Dim ri() As Long, cs() As Long, ce() As Long, kind() As Long, txt() As String, tx As String, descr As String
     Dim rFirst() As Long, rLast() As Long, rRole() As String, rCells() As Long, rFilled() As Long, rText() As String
     Dim roles As Object, ty As Object, capRows As Long, hdrN As Long, f As Object, look As String, capStyle As String
     Dim divHow As String, totWords As String, numExtra As String, maxWords As Long
     Dim nCap As Long, nHdr As Long, nDiv As Long, nTot As Long, nBody As Long, nNum As Long, nShort As Long, nLong As Long, ft As Long, nNotes As Long
+    Dim byStyle As Object, assigned As Boolean, pre() As String, sn As String, nNoRole As Long, canMark As Boolean
     Set res = CreateObject("Scripting.Dictionary")
     On Error Resume Next
     descr = LCase$(t.Descr & ";" & t.Title)
@@ -505,13 +598,64 @@ Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As 
     numExtra = roles("number")("recognize")
     maxWords = 3
     If IsNumeric(roles("short text")("recognize")) Then maxWords = CLng(roles("short text")("recognize"))
+    ' Roles already on the rows. In an assigned table the styles are the roles. In any other table a
+    ' style someone set (header, subhead, total...) still wins over a guess; a body style does not.
+    Set byStyle = RolesByStyle(roles)
+    canMark = (Len(roles("header")("paragraph style")) > 0 And Len(Present(roles, "long text")("paragraph style")) > 0)
+    assigned = False
+    If canMark Then assigned = TableAssigned(d, t)
+    ReDim pre(1 To maxRow)
+    For r = 1 To maxRow
+        If rFirst(r) > 0 Then
+            sn = ""
+            If byStyle.Count > 0 Then
+                On Error Resume Next
+                sn = LCase$(SKW_ParaStyleName(d.Range(cs(rFirst(r)), cs(rFirst(r)))))
+                On Error GoTo 0
+            End If
+            If Not forced Is Nothing Then
+                If forced.Exists(r) Then pre(r) = forced(r)
+            End If
+            If Len(pre(r)) = 0 Then
+                If assigned Then
+                    If byStyle.Exists(sn) Then
+                        pre(r) = byStyle(sn)
+                    Else
+                        pre(r) = "body"
+                        nNoRole = nNoRole + 1
+                        look = look & "; row " & r & " has no role (its style is " & IIf(Len(sn) > 0, sn, "not read") & "), read as body"
+                    End If
+                ElseIf byStyle.Exists(sn) And Not fresh Then
+                    If byStyle(sn) <> "body" Then pre(r) = byStyle(sn)
+                End If
+            End If
+        End If
+    Next
+    If assigned Then
+        capRows = 0
+        For r = 1 To maxRow
+            If pre(r) <> "caption" Then Exit For
+            capRows = r
+        Next
+    End If
     For r = 1 To maxRow
         If rFirst(r) = 0 Then
             rRole(r) = ""
+        ElseIf Len(pre(r)) > 0 Then
+            rRole(r) = pre(r)
+            Select Case pre(r)
+                Case "caption": nCap = nCap + 1
+                Case "header", "header2": nHdr = nHdr + 1
+                Case "divider": nDiv = nDiv + 1
+                Case "total", "subtotal": nTot = nTot + 1
+                Case "notes": nNotes = nNotes + 1
+                Case Else: rRole(r) = "body": nBody = nBody + 1
+            End Select
         ElseIf r <= capRows Then
             rRole(r) = "caption": nCap = nCap + 1
         ElseIf r <= capRows + hdrN Then
-            rRole(r) = "header": nHdr = nHdr + 1
+            If r > capRows + 1 And roles("header2")("absent") <> "yes" Then rRole(r) = "header2" Else rRole(r) = "header"
+            nHdr = nHdr + 1
         ElseIf rCells(r) = 1 And maxCols > 1 And StartsWithWord(rText(r), roles("notes")("recognize")) Then
             rRole(r) = "notes": nNotes = nNotes + 1
         ElseIf rCells(r) = 1 And maxCols > 1 And InStr(divHow, "merged") > 0 Then
@@ -519,6 +663,8 @@ Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As 
         ElseIf rCells(r) > 1 And rFilled(r) = 1 And Len(rText(r)) > 0 And InStr(divHow, "first cell") > 0 And Not StartsWithWord(rText(r), totWords) Then
             rRole(r) = "divider": nDiv = nDiv + 1
             look = look & "; row " & r & " has text in its first cell only, read as a divider"
+        ElseIf StartsWithWord(rText(r), roles("subtotal")("recognize")) Then
+            rRole(r) = "subtotal": nTot = nTot + 1
         ElseIf StartsWithWord(rText(r), totWords) Then
             rRole(r) = "total": nTot = nTot + 1
         Else
@@ -526,9 +672,9 @@ Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As 
         End If
     Next
     If maxRow <= capRows Then look = look & "; no rows under the caption row"
-    If nHdr = 0 And hdrN > 0 Then look = look & "; no header row found"
+    If nHdr = 0 And hdrN > 0 And Not assigned Then look = look & "; no header row found"
     For i = 1 To n
-        If rRole(ri(i)) = "body" Or rRole(ri(i)) = "total" Then
+        If rRole(ri(i)) = "body" Or rRole(ri(i)) = "total" Or rRole(ri(i)) = "subtotal" Then
             tx = Trim$(txt(i))
             If Len(Replace(tx, vbCr, "")) = 0 Then
                 kind(i) = 0
@@ -551,6 +697,7 @@ Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As 
     res("rowsText") = IIf(nCap > 0, "Caption " & nCap & ", ", "") & "Header " & nHdr & ", Divider " & nDiv & ", Total " & nTot & ", Body " & nBody & IIf(nNotes > 0, ", Notes " & nNotes, "")
     res("cellsText") = "Number " & nNum & ", Short text " & nShort & ", Long text " & nLong
     res("look") = look
+    res("assigned") = assigned: res("canMark") = canMark: res("noRole") = nNoRole
     Set ScanTable = res
 End Function
 
@@ -650,16 +797,26 @@ Private Sub ApplyRole(ByVal d As Object, ByVal rg As Object, ByVal st As Object,
         nm = st("paragraph style")
         If Len(nm) > 0 Then
             Set so = SKW_GetStyle(d, nm)
+            ' A look from the Stationkeeper standards carries the style's values, so a missing style is made.
+            If so Is Nothing And st("app") = "yes" Then Set so = MakeLookStyle(d, nm, st, missing)
             If so Is Nothing Then
                 missing(nm) = True
             Else
                 StyleRange rg, so, keep
             End If
         End If
-        If LCase$(st("bold")) = "yes" Then rg.Font.Bold = True
-        If LCase$(st("bold")) = "no" Then rg.Font.Bold = False
-        v = ShadeValue(st("shading"))
-        If v <> -2 Then rg.Cells.Shading.BackgroundPatternColor = v
+        If st("app") = "yes" Then
+            ' With no tag style the look's font and spacing go on the text itself.
+            If so Is Nothing Then LookFormat rg.Font, rg.ParagraphFormat, st
+            v = ShadeValue(st("shading"))
+            If v = -2 Then v = -16777216
+            rg.Cells.Shading.BackgroundPatternColor = v
+        Else
+            If LCase$(st("bold")) = "yes" Then rg.Font.Bold = True
+            If LCase$(st("bold")) = "no" Then rg.Font.Bold = False
+            v = ShadeValue(st("shading"))
+            If v <> -2 Then rg.Cells.Shading.BackgroundPatternColor = v
+        End If
     End If
     v = AlignValue(st("align"))
     If v >= 0 Then rg.ParagraphFormat.Alignment = v
@@ -772,6 +929,29 @@ Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Ob
             End With
         Next
     End If
+    If ty("app") = "yes" Then
+        ' Stationkeeper standards: margins in points, the table's place on the page, and the rows whose look says Repeat.
+        mg = Split(ty("margins pt"), ";")
+        If UBound(mg) = 3 Then
+            If IsNumeric(mg(0)) And Len(mg(0)) > 0 Then t.TopPadding = CSng(mg(0))
+            If IsNumeric(mg(1)) And Len(mg(1)) > 0 Then t.BottomPadding = CSng(mg(1))
+            If IsNumeric(mg(2)) And Len(mg(2)) > 0 Then t.LeftPadding = CSng(mg(2))
+            If IsNumeric(mg(3)) And Len(mg(3)) > 0 Then t.RightPadding = CSng(mg(3))
+        End If
+        If AlignValue(ty("table align")) >= 0 Then t.Rows.Alignment = AlignValue(ty("table align"))
+        lastHead = 0
+        For r = 1 To sc("maxRow")
+            If Len(rRole(r)) = 0 Then Exit For
+            If Present(roles, rRole(r))("repeat") <> "yes" Then Exit For
+            lastHead = r
+        Next
+        If lastHead >= 1 Then
+            Err.Clear
+            d.Range(cs(rFirst(1)), ce(rLast(lastHead))).Rows.HeadingFormat = True
+            If Err.Number <> 0 Then skipped = skipped & "; repeating header rows (merged cells)"
+            Err.Clear
+        End If
+    End If
     ' Word repeats heading rows only from row 1 down, so the caption row repeats with the header row.
     If Len(ty("header row repeats")) > 0 Then
         lastHead = sc("capRows") + sc("hdrN")
@@ -789,12 +969,14 @@ Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Ob
         If Len(role) > 0 Then
             Set rg = d.Range(cs(rFirst(r)), ce(rLast(r)))
             Select Case role
-                Case "caption", "header", "divider", "notes"
-                    ApplyRole d, rg, roles(role), "all", missing, keep
-                Case "total"
-                    ApplyRole d, rg, roles("total"), "all", missing, keep
+                Case "caption", "header", "header2", "divider", "notes"
+                    ApplyRole d, rg, Present(roles, role), "all", missing, keep
+                    ApplyEdges rg, Present(roles, role)
+                Case "total", "subtotal"
+                    ApplyRole d, rg, Present(roles, role), "all", missing, keep
+                    ApplyEdges rg, Present(roles, role)
                     For i = rFirst(r) To rLast(r)
-                        If kind(i) = 1 Then ApplyRole d, d.Range(cs(i), ce(i)), roles("number"), "place", missing, keep
+                        If kind(i) = 1 And roles("number")("absent") <> "yes" Then ApplyRole d, d.Range(cs(i), ce(i)), roles("number"), "place", missing, keep
                     Next
                 Case "body"
                     i = rFirst(r)
@@ -806,9 +988,10 @@ Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Ob
                             If k <> kd Then Exit Do
                             j = j + 1
                         Loop
-                        ApplyRole d, d.Range(cs(i), ce(j)), roles(Choose(kd, "number", "short text", "long text")), "all", missing, keep
+                        ApplyRole d, d.Range(cs(i), ce(j)), Present(roles, Choose(kd, "number", "short text", "long text")), "all", missing, keep
                         i = j + 1
                     Loop
+                    ApplyEdges rg, roles("long text")
             End Select
         End If
     Next
@@ -817,15 +1000,277 @@ Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Ob
 End Function
 
 Private Function MissingText(ByVal missing As Object) As String
-    Dim k As Variant, s As String
+    Dim k As Variant, s As String, made As String
     For Each k In missing.Keys
-        s = s & IIf(Len(s) > 0, ", ", "") & k
+        If Left$(k, 5) = "made:" Then
+            made = made & IIf(Len(made) > 0, ", ", "") & Mid$(k, 6)
+        Else
+            s = s & IIf(Len(s) > 0, ", ", "") & k
+        End If
     Next
-    If Len(s) > 0 Then MissingText = "Not in this document, so not applied: " & s & ". Run Import Team Styles first."
+    If Len(made) > 0 Then MissingText = "Styles the document lacks, made from the standards: " & made & "."
+    If Len(s) > 0 Then MissingText = MissingText & IIf(Len(MissingText) > 0, " ", "") & "Not in this document, so not applied: " & s & ". Run Import Team Styles first."
 End Function
 
+' =====================================================================
+' The Stationkeeper app's standards (Company Standards.xlsx, format 2).
+' When the standards workbook the tools read has a Table looks sheet, the
+' table tools take every value from it: one look per row role (caption,
+' header, header2, subhead, body, subtotal, total, note) and the table
+' types with their cell margins, roles and overrides. The tools' own
+' Table roles sheet is not read then. Only Approved rows count. A value
+' that starts with = names a row of the Settings sheet.
+' Read by the macros only, and kept by the app: a Recognize column on
+' Table looks, and looks named number, short and keep.
+' =====================================================================
+Public Function SKW_AppStandards() As Boolean
+    SKW_AppStandards = (SKW_Rows("Table looks").Count > 0)
+End Function
+
+Private Function AppApproved(ByVal r As Object) As Boolean
+    Dim s As String
+    If r.Exists("status") Then s = LCase$(Trim$(r("status")))
+    AppApproved = (Len(s) = 0 Or s = "approved")
+End Function
+
+' A cell of an app sheet, with =name looked up on the Settings sheet.
+Private Function AppVal(ByVal r As Object, ByVal key As String) As String
+    Dim v As String
+    If r.Exists(key) Then v = Trim$(r(key))
+    If Left$(v, 1) = "=" Then v = SKW_Setting(Mid$(v, 2), "")
+    AppVal = v
+End Function
+
+Private Function YesNo(ByVal v As String) As String
+    Select Case LCase$(Trim$(v))
+        Case "true", "yes", "1": YesNo = "yes"
+        Case "false", "no", "0": YesNo = "no"
+    End Select
+End Function
+
+' The role to use: the one asked for, or the body look when the standards have no such look.
+Private Function Present(ByVal roles As Object, ByVal role As String) As Object
+    If roles.Exists(role) Then
+        If roles(role)("absent") <> "yes" Then Set Present = roles(role): Exit Function
+    End If
+    Set Present = roles("long text")
+End Function
+
+' One look as a role. Keys the older sheet used are filled too, so the same code styles from either.
+Private Sub AppLook(ByVal res As Object, ByVal role As String, ByVal r As Object, ByVal recog As String)
+    Dim d As Object, e As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    d("app") = "yes": d("absent") = ""
+    d("paragraph style") = AppVal(r, "tag style")
+    d("align") = AppVal(r, "align")
+    d("vertical") = AppVal(r, "valign")
+    d("shading") = AppVal(r, "fill")
+    d("bold") = YesNo(AppVal(r, "bold"))
+    d("italic") = YesNo(AppVal(r, "italic"))
+    d("font") = AppVal(r, "font")
+    d("size") = AppVal(r, "size (pt)")
+    d("color") = AppVal(r, "color (hex)")
+    d("before") = AppVal(r, "space before (pt)")
+    d("after") = AppVal(r, "space after (pt)")
+    d("left pt") = AppVal(r, "left indent (pt)")
+    d("right pt") = AppVal(r, "right indent (pt)")
+    d("repeat") = YesNo(AppVal(r, "repeat"))
+    For Each e In Array("top", "bottom", "left", "right", "inside v")
+        d("edge " & e) = AppVal(r, "edges: " & e)
+    Next
+    d("left indent") = "": d("tab stops") = ""
+    If r.Exists("tab stops") Then d("tab stops") = Trim$(r("tab stops"))
+    d("recognize") = recog
+    If r.Exists("recognize") Then
+        If Len(Trim$(r("recognize"))) > 0 Then d("recognize") = Trim$(r("recognize"))
+    End If
+    Set res(role) = d
+End Sub
+
+Private Sub AppAbsent(ByVal res As Object, ByVal role As String, ByVal recog As String)
+    Dim d As Object, k As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    For Each k In Array("paragraph style", "align", "vertical", "shading", "bold", "italic", "font", "size", "color", "before", "after", _
+                        "left pt", "right pt", "repeat", "edge top", "edge bottom", "edge left", "edge right", "edge inside v", "left indent", "tab stops")
+        d(k) = ""
+    Next
+    d("app") = "yes": d("absent") = "yes": d("recognize") = recog
+    Set res(role) = d
+End Sub
+
+' The roles for one table type from the app's Table looks, with the type's overrides laid over them.
+Private Function AppRoles(ByVal tyName As String) As Object
+    Dim res As Object, r As Object, nm As String, ty As Object, k As Object, ov As Object, used As Object, v As Variant
+    Dim role As Variant, key As Variant, o As Object, ed As Variant, names As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = 1
+    Set names = CreateObject("Scripting.Dictionary")
+    names.CompareMode = 1
+    names("caption") = "caption": names("header") = "header": names("header2") = "header2": names("subhead") = "divider"
+    names("body") = "long text": names("subtotal") = "subtotal": names("total") = "total": names("note") = "notes"
+    names("number") = "number": names("short") = "short text": names("keep") = "keep": names("figure caption") = "figure caption"
+    AppAbsent res, "caption", ""
+    AppAbsent res, "header", "1"
+    AppAbsent res, "header2", ""
+    AppAbsent res, "divider", "merged"
+    AppAbsent res, "subtotal", "Subtotal"
+    AppAbsent res, "total", "Total;Grand Total"
+    AppAbsent res, "notes", "Note;Notes;Source;Sources"
+    AppAbsent res, "number", "-"
+    AppAbsent res, "short text", "3"
+    AppAbsent res, "long text", ""
+    AppAbsent res, "keep", SKW_Setting("table_keep_styles", "")
+    AppAbsent res, "figure caption", ""
+    For Each k In SKW_TableTypes()
+        If LCase$(k("type")) = LCase$(tyName) Then Set ty = k
+    Next
+    ' Which looks this type uses. No list means all of them.
+    If Not ty Is Nothing Then
+        Set o = SKW_Json(ty("roles"))
+        If Not o Is Nothing Then
+            If TypeName(o) = "Collection" Then
+                Set used = CreateObject("Scripting.Dictionary")
+                used.CompareMode = 1
+                For Each v In o
+                    used(CStr(v)) = True
+                Next
+            End If
+        End If
+    End If
+    For Each r In SKW_Rows("Table looks")
+        nm = ""
+        If r.Exists("name") Then nm = LCase$(Trim$(r("name")))
+        If AppApproved(r) And names.Exists(nm) Then
+            ' number, short and keep are the macros' own looks: a type's list does not have to name them.
+            If used Is Nothing Then
+                AppLook res, names(nm), r, res(names(nm))("recognize")
+            ElseIf used.Exists(nm) Or nm = "number" Or nm = "short" Or nm = "keep" Or nm = "figure caption" Then
+                AppLook res, names(nm), r, res(names(nm))("recognize")
+            End If
+        End If
+    Next
+    ' The type's overrides: {"header": {"fill": "D9E2F3", "edges": {"top": null}}}
+    If Not ty Is Nothing Then
+        Set ov = SKW_Json(ty("override"))
+        If Not ov Is Nothing Then
+            If TypeName(ov) = "Dictionary" Then
+                For Each role In ov.Keys
+                    If names.Exists(CStr(role)) And IsObject(ov(role)) Then
+                        If res(names(CStr(role)))("absent") <> "yes" Then
+                            Set o = ov(role)
+                            For Each key In o.Keys
+                                Select Case LCase$(CStr(key))
+                                    Case "tag_style": res(names(CStr(role)))("paragraph style") = JText(o(key))
+                                    Case "fill": res(names(CStr(role)))("shading") = JText(o(key))
+                                    Case "valign": res(names(CStr(role)))("vertical") = JText(o(key))
+                                    Case "align", "font", "size", "color", "before", "after": res(names(CStr(role)))(LCase$(CStr(key))) = JText(o(key))
+                                    Case "bold", "italic", "repeat": res(names(CStr(role)))(LCase$(CStr(key))) = YesNo(JText(o(key)))
+                                    Case "left": res(names(CStr(role)))("left pt") = JText(o(key))
+                                    Case "right": res(names(CStr(role)))("right pt") = JText(o(key))
+                                    Case "edges"
+                                        If IsObject(o(key)) Then
+                                            For Each ed In o(key).Keys
+                                                res(names(CStr(role)))("edge " & Replace(LCase$(CStr(ed)), "_", " ")) = EdgeText(o(key)(ed))
+                                            Next
+                                        End If
+                                End Select
+                            Next
+                        End If
+                    End If
+                Next
+            End If
+        End If
+    End If
+    Set AppRoles = res
+End Function
+
+Private Function JText(ByVal v As Variant) As String
+    If IsObject(v) Then Exit Function
+    If IsNull(v) Then Exit Function
+    JText = CStr(v)
+End Function
+
+' An edge from an override: null means no line, a list is [width, "color"].
+Private Function EdgeText(ByVal v As Variant) As String
+    If IsObject(v) Then
+        If TypeName(v) = "Collection" Then
+            If v.Count >= 2 Then EdgeText = "[" & CStr(v(1)) & ", """ & CStr(v(2)) & """]"
+        End If
+    ElseIf IsNull(v) Then
+        EdgeText = ""
+    Else
+        EdgeText = CStr(v)
+    End If
+End Function
+
+' The font and spacing of a look, on a style or on text.
+Private Sub LookFormat(ByVal fnt As Object, ByVal pf As Object, ByVal st As Object)
+    Dim v As Long
+    On Error Resume Next
+    If Len(st("font")) > 0 Then fnt.Name = st("font")
+    If IsNumeric(st("size")) And Len(st("size")) > 0 Then fnt.Size = CSng(st("size"))
+    If st("bold") = "yes" Then fnt.Bold = True
+    If st("bold") = "no" Then fnt.Bold = False
+    If st("italic") = "yes" Then fnt.Italic = True
+    If st("italic") = "no" Then fnt.Italic = False
+    v = ShadeValue(st("color"))
+    If v <> -2 Then fnt.Color = v
+    If IsNumeric(st("before")) And Len(st("before")) > 0 Then pf.SpaceBefore = CSng(st("before"))
+    If IsNumeric(st("after")) And Len(st("after")) > 0 Then pf.SpaceAfter = CSng(st("after"))
+    If IsNumeric(st("left pt")) And Len(st("left pt")) > 0 Then pf.LeftIndent = CSng(st("left pt"))
+    If IsNumeric(st("right pt")) And Len(st("right pt")) > 0 Then pf.RightIndent = CSng(st("right pt"))
+    v = AlignValue(st("align"))
+    If v >= 0 Then pf.Alignment = v
+End Sub
+
+' Makes a look's tag style in the document from the look's values. Returns it, or Nothing.
+Private Function MakeLookStyle(ByVal d As Object, ByVal nm As String, ByVal st As Object, ByVal missing As Object) As Object
+    Dim so As Object
+    On Error Resume Next
+    Set so = d.Styles.Add(nm, wdStyleTypeParagraph)
+    If so Is Nothing Then Exit Function
+    so.BaseStyle = d.Styles(wdStyleNormal)
+    so.NextParagraphStyle = so
+    so.QuickStyle = False
+    LookFormat so.Font, so.ParagraphFormat, st
+    missing("made:" & nm) = True
+    Set MakeLookStyle = so
+End Function
+
+' One edge: "[1.0, ""1F3864""]" is a single line of that width and color; "" is no line.
+Private Sub OneEdge(ByVal b As Object, ByVal spec As String)
+    Dim o As Object, w As Long, c As Long
+    On Error Resume Next
+    If Len(Trim$(spec)) = 0 Then b.LineStyle = 0: Exit Sub
+    Set o = SKW_Json(spec)
+    If o Is Nothing Then Exit Sub
+    If TypeName(o) <> "Collection" Then Exit Sub
+    If o.Count < 2 Then Exit Sub
+    w = BorderWidthValue(CStr(o(1)))
+    c = ShadeValue(CStr(o(2)))
+    b.LineStyle = 1
+    If w > 0 Then b.LineWidth = w
+    If c <> -2 Then b.Color = c
+End Sub
+
+' The edges of a row from its look. Only looks from the Stationkeeper standards carry edges.
+Private Sub ApplyEdges(ByVal rg As Object, ByVal st As Object)
+    If st("app") <> "yes" Then Exit Sub
+    On Error Resume Next
+    With rg.Cells.Borders
+        OneEdge .Item(wdBorderTop), st("edge top")
+        OneEdge .Item(wdBorderBottom), st("edge bottom")
+        OneEdge .Item(wdBorderLeft), st("edge left")
+        OneEdge .Item(wdBorderRight), st("edge right")
+        If rg.Cells.Count > 1 Then OneEdge .Item(wdBorderVertical), st("edge inside v")
+    End With
+End Sub
+
 Private Function RolesSource() As String
-    If SKW_Rows("Table roles").Count > 0 Then
+    If SKW_AppStandards() Then
+        RolesSource = "The looks come from the Table looks sheet of the Stationkeeper standards" & IIf(Len(SKW_StdChanged()) > 0, " (" & SKW_StdChanged() & ").", ".") & _
+            " A tag style the document lacks is made from its look."
+    ElseIf SKW_Rows("Table roles").Count > 0 Then
         RolesSource = "The roles come from the Table roles sheet" & IIf(SKW_FromEffort("Table roles"), " of the linked effort.", " of the standards workbook.")
     Else
         RolesSource = "There is no Table roles sheet, so the built-in roles are used."
@@ -835,6 +1280,7 @@ End Function
 Public Function SKW_TableRolesCheck() As String
     Dim d As Object, msg As String, types As Collection, rows As New Collection, t As Object, i As Long, sc As Object
     Dim nLook As Long, nSkip As Long, nOk As Long, missing As Object, roles As Object, k As Variant, nm As String, role As Variant
+    Dim nAssigned As Long
     Set SKW_LastReport = Nothing
     SKW_Fixable = 0
     msg = SKW_Begin("Table roles check", False)
@@ -852,12 +1298,15 @@ Public Function SKW_TableRolesCheck() As String
         Else
             nOk = nOk + 1
             If Len(sc("look")) > 0 Then nLook = nLook + 1
-            rows.Add SKW_Row(i, SKW_Page(t.Range), sc("type")("type"), sc("rowsText"), sc("cellsText"), sc("look"), FirstCellText(t))
+            rows.Add SKW_Row(i, SKW_Page(t.Range), sc("type")("type") & IIf(sc("assigned"), ", assigned", ""), sc("rowsText"), sc("cellsText"), sc("look"), FirstCellText(t))
+            If sc("assigned") Then nAssigned = nAssigned + 1
             Set roles = sc("roles")
             For Each role In roles.Keys
                 nm = roles(role)("paragraph style")
                 If Len(nm) > 0 Then
-                    If SKW_GetStyle(d, nm) Is Nothing Then missing(nm) = True
+                    If SKW_GetStyle(d, nm) Is Nothing Then
+                        If roles(role)("app") = "yes" Then missing("made:" & nm) = True Else missing(nm) = True
+                    End If
                 End If
             Next
             nm = sc("type")("table style")
@@ -868,7 +1317,7 @@ Public Function SKW_TableRolesCheck() As String
     Next
     SKW_Finish
     SKW_Report "Table Roles Check", d.Tables.Count & " table(s) read, " & nLook & " with rows to look at, " & nSkip & " skipped. " & _
-        RolesSource() & " " & MissingText(missing) & " To leave a table alone, put skip in its Alt Text (Table Properties); " & _
+        RolesSource() & " " & nAssigned & " table(s) are assigned: their rows are read from their styles, not guessed. " & MissingText(missing) & " To leave a table alone, put skip in its Alt Text (Table Properties); " & _
         "to pick its table type, put type=Name there. Changes nothing.", _
         Array("Table", "Page", "Type", "Rows", "Cells", "Look at", "First cell"), rows
     SKW_Fixable = nOk
@@ -888,6 +1337,7 @@ Private Function StyleAllTables(ByVal d As Object, ByVal clearUndo As Boolean, B
             nSkip = nSkip + 1
         Else
             s = StyleTable(d, t, sc, missing)
+            If sc("canMark") Then MarkAssigned d, t
             nDone = nDone + 1
             If Len(s) > 0 Then notes = notes & IIf(Len(notes) > 0, "; ", "") & "table " & i & ": " & s
         End If
@@ -964,9 +1414,115 @@ Public Function SKW_ApplyTableRolesHere() As String
         Exit Function
     End If
     s = StyleTable(d, t, sc, missing)
+    If sc("canMark") Then MarkAssigned d, t
     SKW_Finish
-    SKW_ApplyTableRolesHere = "Table styled as " & sc("type")("type") & ". Rows: " & sc("rowsText") & ". Cells: " & sc("cellsText") & "." & _
+    SKW_ApplyTableRolesHere = "Table styled as " & sc("type")("type") & IIf(sc("assigned"), " (its rows were read from their styles)", IIf(sc("canMark"), " (roles suggested; the table is now assigned)", "")) & ". Rows: " & sc("rowsText") & ". Cells: " & sc("cellsText") & "." & _
         IIf(Len(sc("look")) > 0, vbCr & "Look at: " & sc("look") & ".", "") & _
         IIf(Len(s) > 0, vbCr & "Not set: " & s & ".", "") & _
         IIf(Len(MissingText(missing)) > 0, vbCr & MissingText(missing), "") & vbCr & "One Ctrl+Z undoes it."
+End Function
+
+' =====================================================================
+' Assigning by hand, and seeing the roles (1.9.0)
+' =====================================================================
+
+' Sets the rows in the selection to a role you pick (header, subhead, body, subtotal, total, note, caption) and styles them. The table is then assigned: its rows keep their roles on every later fix. One Ctrl+Z undoes it.
+Public Sub AssignTableRole()
+    Dim pick As String, keys As Variant, labels As Variant, s As String, i As Long
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    If Not Selection.Information(wdWithInTable) Then SKW_Say "Put the cursor in a table row first, or select the rows.": Exit Sub
+    If SKW_IsQuiet() Then Exit Sub
+    keys = Array("header", "header2", "divider", "body", "subtotal", "total", "notes", "caption", "suggest")
+    labels = Array("Header", "Header 2 (a second header row)", "Subhead (a row that divides the table)", "Body", "Subtotal", "Total", "Note", "Caption", _
+                   "Suggest again (forget this table's roles and read it afresh)")
+    For i = 0 To UBound(labels)
+        s = s & (i + 1) & "  " & labels(i) & vbCr
+    Next
+    pick = InputBox("Which role for the selected row(s)?" & vbCr & vbCr & s & vbCr & "Type the number.", "Assign Table Role", "4")
+    If Len(pick) = 0 Then Exit Sub
+    If Not IsNumeric(pick) Then SKW_Say "Type a number from the list.": Exit Sub
+    If CLng(pick) < 1 Or CLng(pick) > UBound(keys) + 1 Then SKW_Say "Type a number from the list.": Exit Sub
+    SKW_Show SKW_AssignTableRole(CStr(keys(CLng(pick) - 1)))
+End Sub
+
+' role: header, header2, divider, body, subtotal, total, notes, caption, or suggest.
+Public Function SKW_AssignTableRole(ByVal role As String) As String
+    Dim d As Object, msg As String, t As Object, sc As Object, missing As Object, s As String, forced As Object, c As Object, n As Long
+    Set SKW_LastReport = Nothing
+    If Documents.Count > 0 Then
+        If Not Selection.Information(wdWithInTable) Then SKW_AssignTableRole = "Put the cursor in a table row first, or select the rows.": Exit Function
+    End If
+    role = LCase$(Trim$(role))
+    msg = SKW_Begin("Assign table role", True)
+    If Len(msg) > 0 Then SKW_AssignTableRole = msg: Exit Function
+    Set d = ActiveDocument
+    Set t = Selection.Tables(1)
+    Set missing = CreateObject("Scripting.Dictionary")
+    Set forced = CreateObject("Scripting.Dictionary")
+    If role = "suggest" Then
+        ClearAssigned d, t
+    Else
+        On Error Resume Next
+        For Each c In Selection.Cells
+            forced(c.RowIndex) = role
+        Next
+        On Error GoTo 0
+        n = forced.Count
+        If n = 0 Then
+            SKW_Finish
+            SKW_AssignTableRole = "No row was selected. Nothing was changed."
+            Exit Function
+        End If
+    End If
+    Set sc = ScanTable(d, t, SKW_TableTypes(), forced, (role = "suggest"))
+    If sc("skip") Then
+        SKW_Finish
+        SKW_AssignTableRole = sc("look") & ". Nothing was changed."
+        Exit Function
+    End If
+    If Not sc("canMark") Then
+        SKW_Finish
+        SKW_AssignTableRole = "The standards give the roles no styles, so a role cannot be kept on a row. " & _
+            "Point the tools at the Stationkeeper standards workbook, or give the Header and Long text roles a paragraph style. Nothing was changed."
+        Exit Function
+    End If
+    s = StyleTable(d, t, sc, missing)
+    MarkAssigned d, t
+    SKW_Finish
+    If role = "suggest" Then
+        SKW_AssignTableRole = "The table was read afresh and is assigned again. Rows: " & sc("rowsText") & "."
+    Else
+        SKW_AssignTableRole = n & " row(s) set to " & IIf(role = "divider", "subhead", IIf(role = "notes", "note", role)) & ". Rows: " & sc("rowsText") & "." & _
+            IIf(sc("assigned"), "", vbCr & "The other rows were suggested. The table is now assigned: its rows keep their roles.")
+    End If
+    SKW_AssignTableRole = SKW_AssignTableRole & IIf(Len(sc("look")) > 0, vbCr & "Look at: " & sc("look") & ".", "") & _
+        IIf(Len(s) > 0, vbCr & "Not set: " & s & ".", "") & IIf(Len(MissingText(missing)) > 0, vbCr & MissingText(missing), "") & vbCr & "One Ctrl+Z undoes it."
+End Function
+
+' Shows each row's role beside it: Word's Draft view with the style area open, so every paragraph's style name sits at the left. Run it again to go back.
+Public Sub ShowTableRoles()
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    SKW_Say SKW_ShowTableRoles()
+End Sub
+
+Public Function SKW_ShowTableRoles() As String
+    Static wasView As Long, wasWidth As Single
+    Dim w As Object
+    On Error GoTo Fail
+    Set w = ActiveWindow
+    ' The style area shows only in Draft and Outline view, so "on" means both: that view and a width.
+    If w.StyleAreaWidth > 0 And w.View.Type = wdNormalView Then
+        w.StyleAreaWidth = wasWidth
+        If wasView > 0 Then w.View.Type = wasView Else w.View.Type = wdPrintView
+        SKW_ShowTableRoles = "Roles are hidden again."
+    Else
+        wasView = w.View.Type
+        wasWidth = w.StyleAreaWidth
+        w.View.Type = wdNormalView
+        If w.StyleAreaWidth < 100 Then w.StyleAreaWidth = 110
+        SKW_ShowTableRoles = "Each row's style shows at the left: that is its role. Select rows and run Assign Table Role to change one. Run Show Table Roles again to go back."
+    End If
+    Exit Function
+Fail:
+    SKW_ShowTableRoles = "The view could not be changed: " & Err.Description
 End Function

@@ -358,6 +358,12 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Tables.ApplyTableRolesHere", "Apply Table Roles (Table at Cursor)", "Tables", _
         "Styles the table at the cursor by role: caption row, header row, divider rows, total rows, number cells, short text and long text. One Ctrl+Z undoes it.", _
         "tables, roles, total row, divider row, numbers, alignment, format, fix", "Tables", "Table at the cursor", "Yes")
+    s = s & "," & T("SKW_Tables.AssignTableRole", "Assign Table Role (Selected Rows)", "Tables", _
+        "Sets the selected rows to a role you pick (header, subhead, body, subtotal, total, note, caption) and styles them. The table is then assigned: its rows keep their roles on every later fix. One Ctrl+Z undoes it.", _
+        "tables, roles, assign, header, total, subtotal, subhead, note, row", "Tables", "Table at the cursor", "Yes")
+    s = s & "," & T("SKW_Tables.ShowTableRoles", "Show Table Roles", "Tables", _
+        "Shows each row's role beside it: Word's Draft view with the style area open, so every paragraph's style name sits at the left. Run it again to go back.", _
+        "tables, roles, show, review, style area, draft view", "Tables", "Whole document", "No, it only changes the view")
     s = s & "," & T("SKW_Setup.AddTableRolesSheet", "Add the Table Roles Sheet", "Tools setup", _
         "Adds the Table roles sheet to your standards workbook: one row per role with its style, alignment, shading and how it is recognized.", _
         "tables, roles, standards workbook, sheet, setup", "Template", "Template", "No, it only reports")
@@ -528,7 +534,7 @@ Private Function SkKind(ByVal run As String) As String
         "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|DeleteUnusedStyles|" & _
         "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
-        "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AddTableRolesSheet|"
+        "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AddTableRolesSheet|AssignTableRole|ShowTableRoles|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else

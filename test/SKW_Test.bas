@@ -1480,3 +1480,101 @@ Public Function TW_DeleteUnused() As String
         HasStyle(d, "Intense Quote") & " " & HasStyle(d, "Title") & " " & HasStyle(d, "Normal") & " " & HasStyle(d, "Heading 1")
     TW_DeleteUnused = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.9.0: the Stationkeeper app's standards workbook (Company Standards.xlsx, format 2)
+' ---------------------------------------------------------------------
+Private Function EdgeState(ByVal c As Object, ByVal which As Long) As String
+    On Error Resume Next
+    EdgeState = "?"
+    With c.Borders(which)
+        EdgeState = .LineStyle & "/" & .LineWidth & "/" & Hex$(.Color)
+    End With
+End Function
+
+Private Function ParaStyleOf(ByVal c As Object) As String
+    On Error Resume Next
+    ParaStyleOf = c.Range.Paragraphs(1).Style.NameLocal
+End Function
+
+' Points the tools at the app's own workbook and styles a copy of the roles document from its Table looks and Table types.
+Public Function TW_AppStandards(ByVal path As String) As String
+    Dim prev As String, d As Object, c As Object, t As Object, s As String, st As Object, t3 As Object
+    SKW_Quiet = True
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath path
+    Set d = RolesDoc()
+    s = "app=" & SKW_AppStandards() & " types=" & SKW_TableTypes().Count & " first=" & SKW_TableTypes()(1)("type") & _
+        " font=" & SKW_Setting("table_font", "?") & " changed=" & (Len(SKW_StdChanged()) > 0)
+    s = s & " ## " & SKW_TableRolesCheck() & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    d.Save
+    s = s & " ## " & Replace(SKW_TableRolesFixCopy(""), vbCr, " / ")
+    Set c = ActiveDocument
+    Set t = c.Tables(1)
+    Set t3 = c.Tables(3)
+    s = s & " ## same=" & (c.FullName = d.FullName)
+    s = s & " cap=" & ParaStyleOf(t.Cell(1, 1)) & "|" & Replace(Replace(t.Cell(1, 1).Range.Text, Chr(13) & Chr(7), ""), vbCr, "") & "|fields=" & t.Cell(1, 1).Range.Fields.Count
+    s = s & " head=" & ParaStyleOf(t.Cell(2, 1)) & "|" & Hex$(t.Cell(2, 1).Shading.BackgroundPatternColor) & "|" & Hex$(t.Cell(2, 1).Range.Font.Color)
+    s = s & " div=" & ParaStyleOf(t.Cell(3, 1)) & "|" & Hex$(t.Cell(3, 1).Shading.BackgroundPatternColor)
+    s = s & " body=" & ParaStyleOf(t.Cell(5, 1)) & "|" & t.Cell(5, 1).Range.Font.Name & "|" & t.Cell(5, 1).Range.Font.Size & "|" & t.Cell(5, 1).VerticalAlignment
+    s = s & " total=" & ParaStyleOf(t.Cell(8, 1)) & "|" & Hex$(t.Cell(8, 1).Shading.BackgroundPatternColor) & "|top=" & EdgeState(t.Cell(8, 1), wdBorderTop)
+    s = s & " note=" & ParaStyleOf(t.Cell(9, 1))
+    s = s & " sub=" & ParaStyleOf(t3.Cell(3, 1)) & " pad=" & Format$(t.TopPadding, "0") & "/" & Format$(t.LeftPadding, "0") & " tblalign=" & t.Rows.Alignment
+    s = s & " bodyedge=" & EdgeState(t.Cell(5, 2), wdBorderLeft) & " rep2=" & t.Rows(2).HeadingFormat
+    Set st = Nothing
+    On Error Resume Next
+    Set st = c.Styles("PE Table Header")
+    On Error GoTo 0
+    If Not st Is Nothing Then s = s & " style=" & st.Font.Name & "|" & st.Font.Size & "|" & st.Font.Bold & "|" & st.ParagraphFormat.SpaceBefore
+    s = s & " ## source head=" & ParaStyleOf(d.Tables(1).Cell(2, 1))
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    SKW_SetStandardsPath prev
+    d.Activate
+    TW_AppStandards = s
+End Function
+
+' Assigning: the plain table of the roles document, read from the app's standards.
+' Suggest and mark; set a row by hand; fix again (the hand-set row stays); change a word a guess would
+' use (the role stays); add a row with no role (the check names it); suggest again (the guesses return).
+Public Function TW_Assign(ByVal path As String) As String
+    Dim prev As String, d As Object, t As Object, s As String, w0 As Single
+    SKW_Quiet = True
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath path
+    Set d = RolesDoc()
+    Set t = d.Tables(3)
+    t.Cell(2, 1).Range.Select
+    Selection.Collapse
+    s = "here: " & Replace(SKW_ApplyTableRolesHere(), vbCr, " / ")
+    s = s & " ## r=" & ParaStyleOf(t.Cell(1, 1)) & "," & ParaStyleOf(t.Cell(2, 1)) & "," & ParaStyleOf(t.Cell(3, 1))
+    t.Cell(2, 1).Range.Select
+    Selection.Collapse
+    s = s & " ## set: " & Replace(SKW_AssignTableRole("total"), vbCr, " / ")
+    t.Cell(3, 1).Range.Text = "Zeta"
+    t.Cell(1, 1).Range.Select
+    Selection.Collapse
+    s = s & " ## again: " & Replace(SKW_ApplyTableRolesHere(), vbCr, " / ")
+    s = s & " ## kept=" & ParaStyleOf(t.Cell(2, 1)) & "," & ParaStyleOf(t.Cell(3, 1))
+    t.Rows.Add
+    t.Cell(4, 1).Range.Text = "New row"
+    t.Cell(4, 1).Range.Style = d.Styles("Normal")
+    s = s & " ## check: " & SKW_TableRolesCheck() & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    t.Cell(2, 1).Range.Select
+    Selection.Collapse
+    s = s & " ## suggest: " & Replace(SKW_AssignTableRole("suggest"), vbCr, " / ")
+    s = s & " ## fresh=" & ParaStyleOf(t.Cell(2, 1)) & "," & ParaStyleOf(t.Cell(3, 1)) & "," & ParaStyleOf(t.Cell(4, 1))
+    On Error Resume Next
+    w0 = ActiveWindow.StyleAreaWidth
+    ActiveWindow.View.Type = wdPrintView
+    ActiveWindow.StyleAreaWidth = 0
+    s = s & " ## show: " & Left$(SKW_ShowTableRoles(), 22) & " width>0=" & (ActiveWindow.StyleAreaWidth > 0)
+    s = s & " hide: " & SKW_ShowTableRoles() & " width=" & ActiveWindow.StyleAreaWidth
+    ActiveWindow.StyleAreaWidth = w0
+    On Error GoTo 0
+    SKW_SetStandardsPath prev
+    TW_Assign = s
+End Function

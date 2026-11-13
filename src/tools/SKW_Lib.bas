@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.8.1"
+Public Const SKW_VERSION As String = "1.9.0"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -402,7 +402,7 @@ Public Function SKW_ReportFor(ByVal title As String, ByVal intro As String, ByVa
         "h1{font-size:16pt}table{border-collapse:collapse}th,td{border:1px solid #999;padding:2pt 4pt;vertical-align:top;font-size:9pt}" & _
         "th{background:#DDEBF7;text-align:left}</style></head><body>" & _
         "<h1>" & SKW_Html(title) & "</h1><p>" & IIf(Len(sourceName) > 0, "File: ", "Document: ") & SKW_Html(srcName) & " &nbsp; " & Format$(Now, "yyyy-mm-dd hh:nn") & _
-        " &nbsp; " & SKW_Html(SKW_StdNote()) & "</p><p>" & SKW_Html(intro) & "</p>"
+        " &nbsp; " & SKW_Html(SKW_StdNote()) & IIf(Len(SKW_StdChanged()) > 0, " &nbsp; (" & SKW_Html(SKW_StdChanged()) & ")", "") & "</p><p>" & SKW_Html(intro) & "</p>"
     If rows.Count > 0 Then
         h = h & "<table><thead><tr>"
         For Each v In cols
@@ -968,6 +968,19 @@ Private Function SKW_J(ByVal o As Variant, ByVal k As String) As String
     SKW_J = CStr(o(k))
 End Function
 
+' A JSON object or list as a Dictionary or Collection, or Nothing when the text is not JSON.
+Public Function SKW_Json(ByVal s As String) As Object
+    On Error Resume Next
+    Set SKW_Json = SKW_JParse(s)
+    If Err.Number <> 0 Then Set SKW_Json = Nothing
+End Function
+
+' When the standards workbook was last changed, for a report's first lines. "" with no workbook.
+Public Function SKW_StdChanged() As String
+    If SKW_Workbook() Is Nothing Then Exit Function
+    SKW_StdChanged = Mid$(mStdPath, InStrRev(mStdPath, "\") + 1) & " changed " & Format$(mStdStamp, "yyyy-mm-dd hh:nn")
+End Function
+
 Private Function SKW_JParse(ByVal s As String) As Object
     Dim pos As Long, v As Variant
     pos = 1
@@ -1117,11 +1130,17 @@ Public Function SKW_Rows(ByVal sheet As String) As Collection
 End Function
 
 Public Function SKW_Setting(ByVal key As String, ByVal dflt As String) As String
-    Dim r As Object
+    Dim r As Object, nm As String
     SKW_Setting = dflt
     For Each r In SKW_Rows("Settings")
-        If LCase$(r("setting")) = LCase$(key) Then
-            If Len(r("value")) > 0 Then SKW_Setting = r("value")
+        ' The tools' own workbook names the column Setting; the Stationkeeper app's workbook names it Name.
+        nm = ""
+        If r.Exists("setting") Then nm = r("setting")
+        If Len(nm) = 0 And r.Exists("name") Then nm = r("name")
+        If LCase$(nm) = LCase$(key) Then
+            If r.Exists("value") Then
+                If Len(r("value")) > 0 Then SKW_Setting = r("value")
+            End If
             Exit Function
         End If
     Next

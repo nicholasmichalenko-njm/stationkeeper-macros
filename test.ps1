@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 67 tools arrive described, categorised and in the menu' (($tc -like '67 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 69 tools arrive described, categorised and in the menu' (($tc -like '69 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -544,6 +544,9 @@ try {
     [string]$rolesCopy = Join-Path $work 'Roles 1.8 (tables styled).docx'
     [string]$rolesStd = Join-Path $work 'Roles standards 1.8.xlsx'
     [string]$reportsDir = Join-Path $work 'Reports 1.8.1'
+    [string]$appStd = Join-Path $work 'Company Standards (app format 2).xlsx'
+    Copy-Item (Join-Path $Root 'test\fixtures\Company Standards (app format 2).xlsx') $appStd -Force
+    Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 3.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $rolesStd, (Join-Path $work 'Roles 1.8 (tables styled) 2.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $rolesDoc, $rolesCopy -Force -ErrorAction SilentlyContinue
@@ -597,6 +600,23 @@ try {
         Check '1.8.1: Delete Unused Styles lists custom styles to delete and built-in styles to hide, and changes nothing' (($du -match '^\d+ custom style\(s\) to delete, \d+ built-in style\(s\) to hide') -and ($du -match 'fixable>0=True') -and ($du -match 'ZZ Unused B \| Custom \| Paragraph \| Delete') -and ($du -match 'ZZ Unused A \| Custom \| Paragraph \| Kept for now') -and ($du -match 'Intense Quote \| Built-in \| [^|]+ \| Hide from the Styles pane') -and ($du -match 'before: ZZ Unused A=shown ZZ Unused B=shown')) $du
         Check '1.8.1: it deletes unused custom styles, the style one was based on too, and keeps a style in use' (($du -match 'after: ZZ Unused A=gone ZZ Unused B=gone ZZ In Use=shown')) $du
         Check '1.8.1: an unused built-in style is hidden; one in use, Normal and Heading 1 stay' (($du -match 'Intense Quote=hidden Title=shown Normal=shown Heading 1=shown') -and ($du -match 'Deleted \d+ unused custom style\(s\) and hid \d+ unused built-in style\(s\)')) $du
+        $ap = RunW $word 'SKW_Test.TW_AppStandards' $appStd
+        Write-Output "APPSTD: $ap"
+        Check '1.9.0: the tools read the Stationkeeper app''s workbook: its table types, its settings and its changed date' ($ap -match '^app=True types=4 first=std font=Arial changed=True ##') $ap
+        Check '1.9.0: the check says the looks come from the app''s standards and names the styles it will make' (($ap -match 'The looks come from the Table looks sheet of the Stationkeeper standards \(Company Standards \(app format 2\)\.xlsx changed \d{4}') -and ($ap -match 'made from the standards: [^.]*PE Table Header')) $ap
+        Check '1.9.0: each row takes its look: tag style, fill and font color' (($ap -match 'head=PE Table Header\|64381F\|FFFFFF') -and ($ap -match 'div=PE Table Subhead\|D9D9D9') -and ($ap -match 'note=PE Table Note') -and ($ap -match 'sub=PE Table Subtotal')) $ap
+        Check '1.9.0: a tag style the document lacks is made from the look' (($ap -match 'style=Arial\|9\|-?1\|2') -and ($ap -match 'body=PE Table Text\|Arial\|9\|0')) $ap
+        Check '1.9.0: a total row takes its fill and its heavier top edge; body cells take the inside edges' (($ap -match 'total=PE Table Total\|F7EEE8\|top=1/12/64381F') -and ($ap -match 'bodyedge=1/4/DBA98E')) $ap
+        Check '1.9.0: cell margins, table alignment and repeating rows come from the table type and the looks' (($ap -match 'pad=2/5 tblalign=1') -and ($ap -match 'rep2=-?1|rep2=True')) $ap
+        Check '1.9.0: the caption row keeps its text and number field, and the source document is not changed' (($ap -match 'cap=PE Table Caption\|Table 1\. Costs by year\|fields=1') -and ($ap -match 'same=False') -and ($ap -match '## source head=Normal$')) $ap
+        $as = RunW $word 'SKW_Test.TW_Assign' $appStd
+        Write-Output "ASSIGN: $as"
+        Check '1.9.0: the first fix suggests the roles, styles the rows and marks the table assigned' (($as -match '^here: Table styled as std \(roles suggested; the table is now assigned\)') -and ($as -match '## r=PE Table Header,PE Table Text,PE Table Subtotal')) $as
+        Check '1.9.0: Assign Table Role sets the selected row' ($as -match '## set: 1 row\(s\) set to total\. Rows: Header 1, Divider 0, Total 2, Body 0\.') $as
+        Check '1.9.0: an assigned table is read from its styles: a hand-set row and a row whose words changed keep their roles' (($as -match '## again: Table styled as std \(its rows were read from their styles\)') -and ($as -match '## kept=PE Table Total,PE Table Subtotal')) $as
+        Check '1.9.0: the check names a row with no role and says which tables are assigned' (($as -match 'row 4 has no role \(its style is normal\), read as body') -and ($as -match '1 table\(s\) are assigned') -and ($as -match '\| std, assigned \|')) $as
+        Check '1.9.0: Suggest again forgets the roles and reads the table afresh' (($as -match '## suggest: The table was read afresh and is assigned again') -and ($as -match '## fresh=PE Table Text,PE Table Text,PE Table Text')) $as
+        Check '1.9.0: Show Table Roles opens the style area and closes it again' (($as -match 'show: Each row''s style shows width>0=True') -and ($as -match 'hide: Roles are hidden again\. width=0$')) $as
         [void](RunW $word 'SKW_Test.TW_RolesClose')
     }
 
