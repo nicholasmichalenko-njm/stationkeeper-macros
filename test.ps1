@@ -313,7 +313,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 62 tools arrive described, categorised and in the menu' (($tc -like '62 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 65 tools arrive described, categorised and in the menu' (($tc -like '65 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -534,6 +534,45 @@ try {
         $doc.Close([ref]0)
     }
 
+
+    # 12b. 1.8.0: table roles on three fictional tables.
+    [string]$rolesDoc = Join-Path $work 'Roles 1.8.docx'
+    [string]$rolesCopy = Join-Path $work 'Roles 1.8 (tables styled).docx'
+    [string]$rolesStd = Join-Path $work 'Roles standards 1.8.xlsx'
+    Remove-Item $rolesStd, (Join-Path $work 'Roles 1.8 (tables styled) 2.docx') -Force -ErrorAction SilentlyContinue
+    Remove-Item $rolesDoc, $rolesCopy -Force -ErrorAction SilentlyContinue
+    Invoke-WordJob -Root $Root -Job {
+        param($word)
+        $doc = NewFrom $word $sample
+        $b = RunW $word 'SKW_Test.TW_BuildRoles' $rolesDoc
+        Check '1.8.0: the roles test document is made with a caption number field in row 1' (($b -match 'tables=3 fields=1') -and ($b -match 'cap=Table 1\. Costs by year')) $b
+        $rr = RunW $word 'SKW_Test.TW_RolesRead'
+        Check '1.8.0: seven roles are read, with built-in values where the sheet says nothing' (($rr -match 'header=,center,center,yes,1 \|') -and ($rr -match 'number=,right,center,,- \|') -and ($rr -match 'short text=,center,center,,3 \|') -and ($rr -match 'long text=,left,top,, \|') -and ($rr -match 'total=,,center,yes,Total;Subtotal;Grand Total \|')) $rr
+        $r = RunW $word 'SKW_Test.TW_RolesCheck'
+        Check '1.8.0: Table Roles Check reads every row and cell by role and changes nothing' (($r -match '^3 table\(s\) read, 0 with rows to look at, 1 skipped\. ## fixable=2 ') -and ($r -match 'Caption 1, Header 1, Divider 2, Total 1, Body 3') -and ($r -match 'Number 7, Short text 6, Long text 2') -and ($r -match 'Skipped: its Alt Text says skip') -and ($r -match 'Header 1, Divider 0, Total 1, Body 1')) $r
+        $f = RunW $word 'SKW_Test.TW_RolesFix' $rolesCopy
+        Write-Output "ROLES: $f"
+        $copyPart = ($f -split ' ## SOURCE ')[0]
+        $srcPart = ($f -split ' ## SOURCE ')[1]
+        Check '1.8.0: the fix styles a copy and says so' (($f -match '^2 table\(s\) styled in a copy, 1 skipped: Roles 1\.8 \(tables styled\)\.docx\.') -and ($f -match 'same=False') -and (Test-Path $rolesCopy)) $f
+        Check '1.8.0: header and divider rows take their role' (($copyPart -match '2\.1=1/1/B') -and ($copyPart -match '3\.1=0/1/B')) $copyPart
+        Check '1.8.0: short text is centered both ways, long text is top left, numbers are right and centered' (($copyPart -match '4\.1=1/1/n') -and ($copyPart -match '4\.2=0/0/n') -and ($copyPart -match '4\.3=2/1/n') -and ($copyPart -match '5\.4=2/1/n') -and ($copyPart -match '7\.4=1/1/n')) $copyPart
+        Check '1.8.0: a total row is bold and its numbers stay right' (($copyPart -match '8\.1=0/1/B') -and ($copyPart -match '8\.3=2/1/B')) $copyPart
+        Check '1.8.0: the caption row keeps its text and number field and repeats with the header row' (($copyPart -match 'head=Y fields=1 cap=Table 1\. Costs by year')) $copyPart
+        Check '1.8.0: a table marked skip is left alone, and a table with no caption row starts at its header' (($copyPart -match '## skip 2\.2=0/0/n') -and ($copyPart -match '## plain 1\.1=1/1/B 2\.2=2/1/n 3\.1=0/1/B 3\.2=2/1/B')) $copyPart
+        Check '1.8.0: the document the copy came from is not changed' (($srcPart -match '2\.1=0/0/n') -and ($srcPart -match '4\.3=0/0/n') -and ($srcPart -match 'head=N') -and ($srcPart -match '## plain 1\.1=0/0/n')) $srcPart
+        $h = RunW $word 'SKW_Test.TW_RolesHere'
+        $hs = RunW $word 'SKW_Test.TW_RolesHereState'
+        Check '1.8.0: Apply Table Roles styles the table at the cursor and says what it read' (($h -match '^Table styled as \S.*Rows: Header 1, Divider 0, Total 1, Body 1\. Cells: Number 2, Short text 2, Long text 0\.') -and ($hs -eq '1.1=1/1/B 2.2=2/1/n 3.1=0/1/B 3.2=2/1/B')) "$h ## $hs"
+        $wbk = RunW $word 'SKW_Test.TW_RolesWorkbook' $rolesStd
+        Write-Output "ROLESWB: $wbk"
+        Check '1.8.0: a new standards workbook has the Table roles sheet, and the tools read it' (($wbk -match '^Made ## sheet rows=1\d ') -and ($wbk -match 'same=False') -and ($wbk -match 'skipped: Roles 1\.8 \(tables styled\) 2\.docx\.')) $wbk
+        Check '1.8.0: a role takes its paragraph style and fill from the sheet' (($wbk -match 'head=Heading 2 fill=F3E2D9') -and ($wbk -match 'p1=Body Text')) $wbk
+        Check '1.8.0: a kept style inside a cell is left as it is' ($wbk -match 'p2=List Bullet') $wbk
+        Check '1.8.0: borders and cell margins come from the table type' (($wbk -match 'border=1/8/FF ') -and ($wbk -match 'pad=3\.6/3\.6')) $wbk
+        Check '1.8.0: a merged row that starts with Note is a notes row, not a divider' ($wbk -match '9\.1=0/0/n') $wbk
+        [void](RunW $word 'SKW_Test.TW_RolesClose')
+    }
 
     # 13. 0.8.0: PowerPoint tools on a deck the test makes (handed to the tools directly).
     [string]$deck = Join-Path $work 'Deck 0.8.pptx'

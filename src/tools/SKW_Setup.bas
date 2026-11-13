@@ -42,6 +42,12 @@ Public Sub ChooseStandardsWorkbook()
     SKW_Say SKW_ChooseStandards(p)
 End Sub
 
+' Adds the Table roles sheet to your standards workbook: one row per role (caption, header, divider, total, number, short text, long text) with its style, alignment and shading, for Table Roles Check.
+Public Sub AddTableRolesSheet()
+    If SKW_IsQuiet() Then Exit Sub
+    SKW_Say SKW_AddTableRolesSheet()
+End Sub
+
 ' ---------------------------------------------------------------------
 Public Function SKW_ChooseStandards(ByVal p As String) As String
     If Len(Dir$(p)) = 0 Then SKW_ChooseStandards = "Not found: " & p: Exit Function
@@ -123,9 +129,10 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
         Array("Endnote Text", "", ""))
     Sheet wb, 4, "Table types", Array( _
         Array("Type", "Table style", "Header row repeats", "Rows may break across pages", "Width percent", _
-              "Header row style", "Body style", "Notes row style", "Has notes row", "Cell padding"), _
-        Array("Standard", "Table Grid", "Yes", "No", "100", "", "", "", "No", ""), _
-        Array("Compact", "Table Grid", "Yes", "No", "100", "", "", "", "No", "2"))
+              "Header row style", "Body style", "Notes row style", "Has notes row", "Cell padding", _
+              "Cell margins", "Border style", "Border width", "Border color"), _
+        Array("Standard", "Table Grid", "Yes", "No", "100", "", "", "", "No", "", "", "", "", ""), _
+        Array("Compact", "Table Grid", "Yes", "No", "100", "", "", "", "No", "2", "", "", "", ""))
     Sheet wb, 5, "Placeholders", Array( _
         Array("Text", "Notes"), Array("TBD", ""), Array("TBR", ""), Array("TBS", ""), Array("XXX", ""), _
         Array("[insert", "Matches [insert ...] and [Insert ...]"), Array("Lorem ipsum", ""), Array("<<", ""), Array(">>", ""), _
@@ -142,6 +149,7 @@ Public Function SKW_MakeStandardsWorkbook(ByVal p As String, ByVal openAfter As 
     Sheet wb, 10, "Dictionaries", Array(Array("Path", "Notes"), Array("", "Full path to a team custom dictionary (.dic)"))
     Sheet wb, 11, "Style map", Array(Array("From", "To", "Notes"), Array("", "", "Remap Style changes every use of From to To (for example an old style to the team style)"))
     Sheet wb, 12, "Page limits", Array(Array("Heading", "Max pages", "Notes"), Array("", "", "A top-level heading (or how it starts, for example Volume I) and its page limit"))
+    Sheet wb, 13, "Table roles", TableRolesRows()
     wb.Worksheets(1).Activate
     wb.SaveAs p, 51
     If openAfter And Not SKW_IsQuiet() Then
@@ -164,6 +172,64 @@ Fail:
     If Not wb Is Nothing Then wb.Close False
     If Not xl Is Nothing Then xl.Quit
     SKW_MakeStandardsWorkbook = "The workbook could not be made: " & ed
+End Function
+
+' The starting rows of the Table roles sheet: one row per role. A blank Type means every table type.
+Private Function TableRolesRows() As Variant
+    TableRolesRows = Array( _
+        Array("Type", "Role", "Paragraph style", "Align", "Vertical", "Shading", "Bold", "Recognize", "Notes"), _
+        Array("", "Caption", "", "", "", "", "", "", "Row 1 when it holds a caption number field. Its text and field codes are never changed."), _
+        Array("", "Header", "", "Center", "Center", "", "Yes", "1", "Recognize: how many header rows follow the caption row."), _
+        Array("", "Divider", "", "Left", "Center", "", "Yes", "merged", "Recognize: merged (one cell across the table), or merged; first cell only."), _
+        Array("", "Total", "", "", "Center", "", "Yes", "Total;Subtotal;Grand Total", "Recognize: the words a total row's first cell starts with."), _
+        Array("", "Number", "", "Right", "Center", "", "", "-", "Cells holding figures. Recognize: other texts that count as a figure, such as N/A."), _
+        Array("", "Short text", "", "Center", "Center", "", "", "3", "Recognize: the most words a short cell holds."), _
+        Array("", "Long text", "", "Left", "Top", "", "", "", "Every other cell."), _
+        Array("", "Notes", "", "Left", "Top", "", "", "Note;Notes;Source;Sources", "A merged row whose text starts with one of these words."), _
+        Array("", "Keep", "", "", "", "", "", "", "Recognize: paragraph styles left as they are inside cells, such as bullet and numbered note styles, separated by ;"), _
+        Array("", "", "", "", "", "", "", "", "Align: Left, Center, Right. Vertical: Top, Center, Bottom. Shading: RRGGBB or None. Bold: Yes or No. A blank cell leaves that setting as it is."), _
+        Array("", "", "", "", "", "", "", "", "To give one table type its own value, add a row with the type's name in Type."), _
+        Array("", "", "", "", "", "", "", "", "Borders and cell margins are on the Table types sheet. Cell margins: inches, one value or top; bottom; left; right. Border style: Single, Dotted, Dashed, Double or None. Border width: 0.25, 0.5, 0.75, 1, 1.5, 2.25, 3, 4.5 or 6 points. Border color: RRGGBB."))
+End Function
+
+' Adds the Table roles sheet to the standards workbook the tools already use.
+Public Function SKW_AddTableRolesSheet() As String
+    Dim xl As Object, wb As Object, ed As String, p As String, ws As Object, has As Boolean
+    p = SKW_StandardsPath()
+    If Len(p) = 0 Then SKW_AddTableRolesSheet = "No standards workbook is chosen. Run Make Standards Workbook or Choose Standards Workbook first.": Exit Function
+    If Len(Dir$(p)) = 0 Then SKW_AddTableRolesSheet = "Not found: " & p: Exit Function
+    On Error GoTo Fail
+    Set xl = CreateObject("Excel.Application")
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Open(p)
+    If wb.ReadOnly Then
+        wb.Close False
+        xl.Quit
+        SKW_AddTableRolesSheet = "The workbook is open somewhere else. Close it in Excel and run this again."
+        Exit Function
+    End If
+    For Each ws In wb.Worksheets
+        If LCase$(ws.Name) = "table roles" Then has = True
+    Next
+    If has Then
+        wb.Close False
+        xl.Quit
+        SKW_AddTableRolesSheet = "The workbook already has a Table roles sheet."
+        Exit Function
+    End If
+    Sheet wb, wb.Worksheets.Count + 1, "Table roles", TableRolesRows()
+    wb.Worksheets(1).Activate
+    wb.Save
+    wb.Close False
+    xl.Quit
+    SKW_AddTableRolesSheet = "Added the Table roles sheet to " & Mid$(p, InStrRev(p, "\") + 1) & ". Fill in the style for each role and save it."
+    Exit Function
+Fail:
+    ed = Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+    SKW_AddTableRolesSheet = "The sheet could not be added: " & ed
 End Function
 
 Private Function JoinRows(ByVal a As Variant, ByVal b As Variant) As Variant
@@ -256,6 +322,15 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Review.BannedPhrasesReview", "Banned Phrases Review", "Before delivery", _
         "Finds the team's banned phrases in the selection or the whole body. Ones with a replacement are changed as tracked changes; every finding gets a comment naming the rule. One Ctrl+Z undoes it.", _
         "banned, phrases, plain language, words, wording, style guide, track", "Text, Comments and tracking", "Selection or whole document", "Yes")
+    s = s & "," & T("SKW_Tables.TableRolesCheck", "Table Roles Check", "Tables", _
+        "Report of every table's rows by role (caption, header, divider, total, body) and its cells by kind (number, short text, long text), with the rows to look at. Changes nothing, then offers to style every table in a copy.", _
+        "tables, roles, total row, divider row, numbers, alignment, format all tables, fix", "Tables", "Whole document", "No, it reports; the fix works on a copy")
+    s = s & "," & T("SKW_Tables.ApplyTableRolesHere", "Apply Table Roles (Table at Cursor)", "Tables", _
+        "Styles the table at the cursor by role: caption row, header row, divider rows, total rows, number cells, short text and long text. One Ctrl+Z undoes it.", _
+        "tables, roles, total row, divider row, numbers, alignment, format, fix", "Tables", "Table at the cursor", "Yes")
+    s = s & "," & T("SKW_Setup.AddTableRolesSheet", "Add the Table Roles Sheet", "Tools setup", _
+        "Adds the Table roles sheet to your standards workbook: one row per role with its style, alignment, shading and how it is recognized.", _
+        "tables, roles, standards workbook, sheet, setup", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Captions.CaptionAudit", "Caption Audit", "Tables", _
         "Report of tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side and repeated captions. Changes nothing.", _
         "captions, figures, tables, numbering, seq", "Captions, Tables, Figures", "Whole document", "No, it only reports")
@@ -420,7 +495,7 @@ Private Function SkKind(ByVal run As String) As String
         "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|" & _
         "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
-        "DeckDeliveryCheck|BookCheck|"
+        "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AddTableRolesSheet|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else

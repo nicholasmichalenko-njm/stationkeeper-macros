@@ -1168,3 +1168,191 @@ Public Function TW_Offer() As String
     SKW_Fixable = 3
     TW_Offer = "quiet=" & SKW_OfferFix("3 found.", "The fix does it.")
 End Function
+
+' ---------------------------------------------------------------------
+' 1.8.0: table roles
+' ---------------------------------------------------------------------
+Private Sub FillRow(ByVal t As Object, ByVal r As Long, ByVal a As String, ByVal b As String, ByVal c As String, ByVal e As String)
+    t.Cell(r, 1).Range.Text = a
+    t.Cell(r, 2).Range.Text = b
+    t.Cell(r, 3).Range.Text = c
+    t.Cell(r, 4).Range.Text = e
+End Sub
+
+' A saved document with three fictional tables: one with a caption row, dividers and a total row; one marked skip; one plain.
+Public Function TW_BuildRoles(ByVal savePath As String) As String
+    Dim d As Object, t As Object, rg As Object
+    SKW_Quiet = True
+    ' Based on this template, so its macros stay in reach while the new document is the active one.
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.ActiveWindow.View.ShowFieldCodes = False
+    d.Content.InsertAfter "Before the first table." & vbCr
+    Set t = d.Tables.Add(AtEnd(d), 8, 4)
+    FillRow t, 2, "Item", "Description", "FY26", "FY27"
+    FillRow t, 4, "Engineer", "Designs the ground segment and writes the interface documents for the station", "$1,200", "(300)"
+    FillRow t, 5, "Tech", "Two words", "45%", "-"
+    FillRow t, 7, "Antenna", "Long text of more than three words here", "2,500.50", "N/A"
+    FillRow t, 8, "Total", "", "$3,745", "1,000"
+    t.Rows(6).Cells.Merge
+    t.Cell(6, 1).Range.Text = "Materials"
+    t.Rows(3).Cells.Merge
+    t.Cell(3, 1).Range.Text = "Labor"
+    t.Rows(1).Cells.Merge
+    t.Cell(1, 1).Range.Text = "Table "
+    Set rg = t.Cell(1, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.Collapse 0
+    d.Fields.Add rg, wdFieldEmpty, "SEQ Table \* ARABIC", False
+    Set rg = t.Cell(1, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.InsertAfter ". Costs by year"
+    d.Content.InsertParagraphAfter
+    d.Content.InsertAfter "Between." & vbCr
+    Set t = d.Tables.Add(AtEnd(d), 2, 2)
+    t.Cell(1, 1).Range.Text = "Leave me"
+    t.Cell(2, 2).Range.Text = "500"
+    t.Descr = "skip"
+    d.Content.InsertParagraphAfter
+    d.Content.InsertAfter "Between again." & vbCr
+    Set t = d.Tables.Add(AtEnd(d), 3, 2)
+    t.Cell(1, 1).Range.Text = "Name": t.Cell(1, 2).Range.Text = "Count"
+    t.Cell(2, 1).Range.Text = "Alpha": t.Cell(2, 2).Range.Text = "12"
+    t.Cell(3, 1).Range.Text = "Subtotal": t.Cell(3, 2).Range.Text = "12"
+    d.Content.InsertParagraphAfter
+    d.SaveAs2 FileName:=savePath, FileFormat:=wdFormatXMLDocument
+    d.Range(0, 0).Select
+    TW_BuildRoles = "saved=" & d.Name & " tables=" & d.Tables.Count & " fields=" & d.Tables(1).Range.Fields.Count & " cap=" & _
+        Replace(Replace(d.Tables(1).Cell(1, 1).Range.Text, Chr(13) & Chr(7), ""), vbCr, "")
+End Function
+
+Private Function RolesDoc() As Object
+    Dim d As Object
+    For Each d In Documents
+        If d.Name = "Roles 1.8.docx" Then Set RolesDoc = d
+    Next
+    RolesDoc.Activate
+End Function
+
+Public Function TW_RolesCheck() As String
+    Dim s As String
+    SKW_Quiet = True
+    RolesDoc
+    SKW_Fixable = -1
+    s = SKW_TableRolesCheck() & " ## fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    TW_RolesCheck = s
+End Function
+
+Private Function CellState(ByVal t As Object, ByVal r As Long, ByVal c As Long) As String
+    With t.Cell(r, c)
+        CellState = r & "." & c & "=" & .Range.ParagraphFormat.Alignment & "/" & .VerticalAlignment & "/" & IIf(.Range.Font.Bold = True, "B", "n")
+    End With
+End Function
+
+Private Function RolesState(ByVal d As Object) As String
+    Dim t As Object, s As String, h As String
+    Set t = d.Tables(1)
+    On Error Resume Next
+    h = "?"
+    h = IIf(d.Range(t.Cell(1, 1).Range.Start, t.Cell(2, 4).Range.End).Rows.HeadingFormat = True, "Y", "N")
+    On Error GoTo 0
+    s = CellState(t, 2, 1) & " " & CellState(t, 3, 1) & " " & CellState(t, 4, 1) & " " & CellState(t, 4, 2) & " " & CellState(t, 4, 3) & " " & _
+        CellState(t, 5, 4) & " " & CellState(t, 7, 4) & " " & CellState(t, 8, 1) & " " & CellState(t, 8, 3) & " head=" & h & _
+        " fields=" & t.Range.Fields.Count & " cap=" & Replace(Replace(t.Cell(1, 1).Range.Text, Chr(13) & Chr(7), ""), vbCr, "")
+    s = s & " ## skip " & CellState(d.Tables(2), 2, 2) & " ## plain " & CellState(d.Tables(3), 1, 1) & " " & CellState(d.Tables(3), 2, 2) & " " & _
+        CellState(d.Tables(3), 3, 1) & " " & CellState(d.Tables(3), 3, 2)
+    RolesState = s
+End Function
+
+' Styles a copy, then reads the copy and the document it came from.
+Public Function TW_RolesFix(ByVal target As String) As String
+    Dim src As Object, s As String, c As Object
+    SKW_Quiet = True
+    Set src = RolesDoc()
+    s = Replace(SKW_TableRolesFixCopy(target), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = src.FullName) & " ## COPY " & RolesState(c) & " ## SOURCE " & RolesState(src)
+    If c.FullName <> src.FullName Then c.Close SaveChanges:=0
+    src.Activate
+    TW_RolesFix = s
+End Function
+
+' Styles the plain table where it is.
+Public Function TW_RolesHere() As String
+    Dim d As Object
+    SKW_Quiet = True
+    Set d = RolesDoc()
+    d.Tables(3).Cell(2, 1).Range.Select
+    Selection.Collapse
+    TW_RolesHere = Replace(SKW_ApplyTableRolesHere(), vbCr, " / ")
+End Function
+
+Public Function TW_RolesHereState() As String
+    Dim d As Object
+    Set d = RolesDoc()
+    TW_RolesHereState = CellState(d.Tables(3), 1, 1) & " " & CellState(d.Tables(3), 2, 2) & " " & CellState(d.Tables(3), 3, 1) & " " & CellState(d.Tables(3), 3, 2)
+End Function
+
+Public Function TW_RolesClose() As String
+    RolesDoc().Close SaveChanges:=0
+    TW_RolesClose = "closed"
+End Function
+
+' The roles as the tools read them now: one line per role.
+Public Function TW_RolesRead() As String
+    Dim r As Object, k As Variant, s As String
+    Set r = SKW_TableRoles("Standard")
+    For Each k In r.Keys
+        s = s & k & "=" & r(k)("paragraph style") & "," & r(k)("align") & "," & r(k)("vertical") & "," & r(k)("bold") & "," & r(k)("recognize") & " | "
+    Next
+    TW_RolesRead = "sheet rows=" & SKW_Rows("Table roles").Count & " ## " & s
+End Function
+
+' Makes a standards workbook, sets a header style and fill, a long text style, a kept style, borders and cell margins in it,
+' then styles a copy of the roles document from it.
+Public Function TW_RolesWorkbook(ByVal path As String) As String
+    Dim prev As String, xl As Object, wb As Object, ws As Object, r As Long, d As Object, c As Object, t As Object, s As String, rg As Object
+    SKW_Quiet = True
+    prev = SKW_StandardsPath()
+    s = Left$(SKW_MakeStandardsWorkbook(path, False), 4)
+    Set xl = CreateObject("Excel.Application")
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Open(path)
+    Set ws = wb.Worksheets("Table types")
+    ws.Cells(2, 11).Value = "0.05": ws.Cells(2, 12).Value = "Single": ws.Cells(2, 13).Value = "1": ws.Cells(2, 14).Value = "FF0000"
+    Set ws = wb.Worksheets("Table roles")
+    For r = 2 To 12
+        Select Case LCase$(ws.Cells(r, 2).Value)
+            Case "header": ws.Cells(r, 3).Value = "Heading 2": ws.Cells(r, 6).Value = "D9E2F3"
+            Case "long text": ws.Cells(r, 3).Value = "Body Text"
+            Case "keep": ws.Cells(r, 8).Value = "List Bullet"
+        End Select
+    Next
+    wb.Save
+    wb.Close False
+    xl.Quit
+    SKW_SetStandardsPath path
+    Set d = RolesDoc()
+    Set rg = d.Tables(1).Cell(4, 2).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.InsertAfter vbCr & "A bullet inside the cell"
+    d.Tables(1).Cell(4, 2).Range.Paragraphs(2).Style = d.Styles("List Bullet")
+    d.Tables(1).Rows.Add
+    d.Tables(1).Rows(9).Cells.Merge
+    d.Tables(1).Cell(9, 1).Range.Text = "Note: fictional figures."
+    d.Save
+    s = s & " ## sheet rows=" & SKW_Rows("Table roles").Count & " ## " & Replace(SKW_TableRolesFixCopy(""), vbCr, " / ")
+    Set c = ActiveDocument
+    Set t = c.Tables(1)
+    s = s & " ## same=" & (c.FullName = d.FullName) & " head=" & t.Cell(2, 1).Range.Paragraphs(1).Style.NameLocal & _
+        " fill=" & Hex$(t.Cell(2, 1).Shading.BackgroundPatternColor) & " p1=" & t.Cell(4, 2).Range.Paragraphs(1).Style.NameLocal & _
+        " p2=" & t.Cell(4, 2).Range.Paragraphs(2).Style.NameLocal & " border=" & t.Borders(wdBorderTop).LineStyle & "/" & _
+        t.Borders(wdBorderTop).LineWidth & "/" & Hex$(t.Borders(wdBorderHorizontal).Color) & " pad=" & Format$(t.TopPadding, "0.0") & "/" & Format$(t.LeftPadding, "0.0") & _
+        " " & CellState(t, 9, 1)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    SKW_SetStandardsPath prev
+    d.Activate
+    TW_RolesWorkbook = s
+End Function
