@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.8.0"
+Public Const SKW_VERSION As String = "1.8.1"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -22,6 +22,8 @@ Public SKW_FindTitle As String
 Public SKW_FindPos As Long
 Public SKW_Fixable As Long                ' what the last check found that its fix can put right
 Public SKW_Collect As Collection          ' not Nothing while a set runs: reports are gathered, not opened
+Public SKW_ProgressLine As String         ' what the progress window last said (kept while tests run, when no window shows)
+Public SKW_ProgressForce As Boolean       ' tests: show the window at once and even when quiet
 
 Private mUndo As Boolean
 Private mScreen As Boolean
@@ -35,6 +37,17 @@ Private mRules As Object
 Private mRulesKey As String
 Private mEff As Object
 Private mEffAt As Date
+Private mProgTitle As String              ' the tool running
+Private mProgStart As Single              ' Timer when it began
+Private mProgLast As Single               ' Timer at the last update
+Private mProgPump As Single               ' Timer at the last DoEvents
+Private mProgShown As Boolean
+Private mProgOn As Boolean                ' a tool is running
+Private mStepTotal As Long
+Private mStepDone As Long
+Private mStepWhat As String
+Private mSetAt As Long                    ' in a set: the check running (1-based), else 0
+Private mSetOf As Long
 
 ' ---------------------------------------------------------------------
 ' Start and finish. changes = True for tools that change the document:
@@ -53,6 +66,7 @@ Public Function SKW_Begin(ByVal title As String, ByVal changes As Boolean) As St
     End If
     mScreen = Application.ScreenUpdating
     Application.ScreenUpdating = False
+    ProgBegin title
     mUndo = False
     If changes Then
         On Error Resume Next
@@ -70,6 +84,7 @@ Public Sub SKW_Finish()
     mUndo = False
     Application.ScreenUpdating = True
     Application.StatusBar = False
+    If mSetAt = 0 Then SKW_ProgressDone
 End Sub
 
 Public Function SKW_IsCoauthored(ByVal d As Object) As Boolean
@@ -89,12 +104,14 @@ Public Function SKW_IsQuiet() As Boolean
 End Function
 
 Public Sub SKW_Say(ByVal msg As String)
+    SKW_ProgressDone
     If SKW_IsQuiet() Then Exit Sub
     MsgBox msg, vbInformation, SKW_APP
 End Sub
 
 ' Shows a tool's result: the report if one was made, else a message.
 Public Sub SKW_Show(ByVal summary As String)
+    SKW_ProgressDone
     If SKW_IsQuiet() Then Exit Sub
     If Not SKW_LastReport Is Nothing Then
         On Error Resume Next
@@ -105,9 +122,191 @@ Public Sub SKW_Show(ByVal summary As String)
     End If
 End Sub
 
+' What a tool is doing now. Text that holds "12 of 340" moves the bar; other text shows as a phase. "" ends it.
 Public Sub SKW_Status(ByVal s As String)
-    Application.StatusBar = s
+    Static re As Object
+    Dim m As Object, pct As Double, t As Single
+    If Len(s) = 0 Then
+        Application.StatusBar = ""
+        If mSetAt = 0 Then SKW_ProgressDone
+        Exit Sub
+    End If
+    pct = -1
+    On Error Resume Next
+    If re Is Nothing Then
+        Set re = CreateObject("VBScript.RegExp")
+        re.Pattern = "(\d+) of (\d+)"
+    End If
+    Set m = re.Execute(s)
+    If m.Count > 0 Then
+        If CDbl(m(0).SubMatches(1)) > 0 Then pct = CDbl(m(0).SubMatches(0)) / CDbl(m(0).SubMatches(1)) * 100
+        t = Timer
+        If t >= mProgLast And t - mProgLast < 0.3 And pct < 100 Then Exit Sub
+    End If
+    On Error GoTo 0
+    ProgShow s, pct
 End Sub
+
+' A counted loop: say how many items there are, then call SKW_Step once for each.
+Public Sub SKW_Steps(ByVal total As Long, ByVal what As String)
+    mStepTotal = total
+    mStepDone = 0
+    mStepWhat = what
+End Sub
+
+Public Sub SKW_Step()
+    Dim t As Single
+    mStepDone = mStepDone + 1
+    t = Timer
+    If t >= mProgLast And t - mProgLast < 0.3 Then Exit Sub
+    If mStepTotal > 0 Then
+        ProgShow mStepWhat & " " & mStepDone & " of " & mStepTotal, mStepDone / mStepTotal * 100
+    Else
+        ProgShow mStepWhat & " " & mStepDone, -1
+    End If
+End Sub
+
+' Names the tool that is starting and starts its clock, for tools that do not go through SKW_Begin.
+Public Sub SKW_ProgressTitle(ByVal title As String)
+    ProgBegin title
+End Sub
+
+' Keeps the window alive inside a long item (a table of many pages) without changing what it says.
+Public Sub SKW_Pulse()
+    Dim t As Single
+    t = Timer
+    If t >= mProgPump And t - mProgPump < 1.5 Then Exit Sub
+    mProgPump = t
+    On Error Resume Next
+    If mProgShown Then frmSKWProgress.Repaint
+    DoEvents
+End Sub
+
+Private Sub ProgBegin(ByVal title As String)
+    If mSetAt > 0 Then Exit Sub          ' a set keeps its own title and clock
+    On Error Resume Next
+    If mProgShown Then Unload frmSKWProgress
+    mProgShown = False
+    On Error GoTo 0
+    mProgTitle = title
+    If Len(mProgTitle) > 0 Then mProgTitle = UCase$(Left$(mProgTitle, 1)) & Mid$(mProgTitle, 2)
+    mProgStart = Timer
+    mProgLast = 0
+    mProgPump = Timer
+    mProgOn = True
+    mStepTotal = 0: mStepDone = 0: mStepWhat = ""
+    SKW_ProgressLine = ""
+End Sub
+
+Private Function Minutes(ByVal secs As Double) As String
+    If secs < 60 Then
+        Minutes = "under a minute"
+    ElseIf secs < 3600 Then
+        Minutes = "about " & CLng(secs / 60) & " min"
+    Else
+        Minutes = "about " & Format$(secs / 3600, "0.0") & " h"
+    End If
+End Function
+
+' Updates the status bar and the window. pct below zero: no count to go by.
+Private Sub ProgShow(ByVal line As String, ByVal pct As Double)
+    Dim t As Single, el As Double, tm As String, all As Double
+    t = Timer
+    If Not mProgOn Then
+        ' A tool that never called SKW_Begin (the deck and workbook tools): start the clock here.
+        mProgTitle = "Stationkeeper Tools"
+        mProgStart = t: mProgPump = t: mProgOn = True
+    End If
+    If t < mProgStart Then mProgStart = t          ' the clock passed midnight
+    mProgLast = t
+    el = t - mProgStart
+    all = pct
+    If mSetAt > 0 And mSetOf > 0 Then
+        If pct < 0 Then all = (mSetAt - 1) / mSetOf * 100 Else all = ((mSetAt - 1) + pct / 100) / mSetOf * 100
+    End If
+    tm = "Running " & IIf(el < 60, Format$(el, "0") & " s", CLng(Int(el / 60)) & " min " & Format$(el - 60 * Int(el / 60), "0") & " s")
+    If all >= 2 And all < 100 And el >= 4 Then tm = tm & "   |   " & Minutes(el * (100 - all) / all) & " left"
+    SKW_ProgressLine = mProgTitle & " | " & line & IIf(all >= 0, " | " & Format$(all, "0") & "%", "")
+    On Error Resume Next
+    Application.StatusBar = Left$(mProgTitle & ": " & line & IIf(all >= 0, "  (" & Format$(all, "0") & "%)", ""), 250)
+    If SKW_IsQuiet() And Not SKW_ProgressForce Then Exit Sub
+    ' Quick tools end before the window is worth showing.
+    If Not mProgShown Then
+        If el < 0.7 And Not SKW_ProgressForce Then Exit Sub
+        frmSKWProgress.Show 0
+        mProgShown = True
+    End If
+    frmSKWProgress.SetState mProgTitle, line, all, tm & IIf(all >= 0, "   |   " & Format$(all, "0") & "%", "")
+    ' Word marks itself Not Responding unless it gets a turn now and then.
+    If t - mProgPump > 1.5 Or t < mProgPump Then
+        mProgPump = t
+        DoEvents
+    End If
+End Sub
+
+' ---------------------------------------------------------------------
+' Where reports are kept. With no folder chosen a report opens unsaved, as before.
+' The Stationkeeper Macros menu and admin set the same folder.
+' ---------------------------------------------------------------------
+Public Function SKW_ReportsFolder() As String
+    Dim d As String
+    d = GetSetting(SKW_APP, "Reports", "folder", "")
+    If Len(d) > 0 Then
+        On Error Resume Next
+        If Len(Dir$(d, vbDirectory)) = 0 Then d = ""
+        If Err.Number <> 0 Then d = ""
+    End If
+    SKW_ReportsFolder = d
+End Function
+
+Public Sub SKW_SetReportsFolder(ByVal d As String)
+    On Error Resume Next
+    If Len(d) > 0 Then
+        If Len(Dir$(d, vbDirectory)) = 0 Then MkDir d
+        SaveSetting SKW_APP, "Reports", "folder", d
+    Else
+        DeleteSetting SKW_APP, "Reports", "folder"
+    End If
+End Sub
+
+' Saves a new report in the reports folder as "<report> - <what was checked> - <date time>.docx",
+' or marks it as nothing to save when no folder is chosen.
+Public Sub SKW_KeepReport(ByVal d As Object, ByVal title As String, ByVal srcName As String)
+    Dim f As String, nm As String, v As Variant, p As String, n As Long
+    If d Is Nothing Then Exit Sub
+    f = SKW_ReportsFolder()
+    On Error Resume Next
+    If Len(f) > 0 Then
+        nm = title & " - " & SKW_Stem(srcName) & " - " & Format$(Now, "yyyy-mm-dd hhnn")
+        For Each v In Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+            nm = Replace(nm, CStr(v), " ")
+        Next
+        p = f & "\" & nm & ".docx"
+        Do While Len(Dir$(p)) > 0
+            n = n + 1
+            p = f & "\" & nm & " (" & (n + 1) & ").docx"
+        Loop
+        Err.Clear
+        d.SaveAs2 FileName:=p, FileFormat:=12, AddToRecentFiles:=False
+        If Err.Number <> 0 Then SKW_Status "The report could not be saved in " & f & ". It is open and not saved."
+    End If
+    d.Saved = True
+End Sub
+
+' Ends the progress window. Safe to call when none shows.
+Public Sub SKW_ProgressDone()
+    On Error Resume Next
+    If mProgShown Then Unload frmSKWProgress
+    mProgShown = False
+    mProgOn = False
+    mSetAt = 0: mSetOf = 0
+    mStepTotal = 0: mStepDone = 0
+End Sub
+
+' Tests: what the window shows now, or "(no window)".
+Public Function SKW_ProgressProbe() As String
+    If mProgShown Then SKW_ProgressProbe = frmSKWProgress.Probe() Else SKW_ProgressProbe = "(no window)"
+End Function
 
 ' ---------------------------------------------------------------------
 ' Stories: every part of the document (body, headers, footers, notes,
@@ -235,7 +434,7 @@ Public Function SKW_ReportFor(ByVal title As String, ByVal intro As String, ByVa
     End If
     Kill tmp
     On Error GoTo 0
-    If Not d Is Nothing Then d.Saved = True
+    SKW_KeepReport d, title, srcName
     SKW_LastRows = rows.Count
     ' Remember the findings so Go to Next Finding can walk through them in the document.
     SKW_FindCol = -1
@@ -272,10 +471,15 @@ Public Function SKW_RunSet(ByVal title As String, ByVal sourceName As String, By
     End If
     If skippable Then skip = ";" & LCase$(Replace(SKW_Setting("DeliveryCheckSkip", ""), "; ", ";")) & ";"
     Set SKW_Collect = New Collection
+    SKW_ProgressDone
+    ProgBegin title
+    mSetOf = UBound(checks) - LBound(checks) + 1
     For Each c In checks
         a = Split(CStr(c), "|")
+        mSetAt = mSetAt + 1
         If InStr(1, skip, ";" & LCase$(a(1)) & ";", vbTextCompare) = 0 Or Len(skip) < 3 Then
-            SKW_Status title & ": " & a(1) & "..."
+            mProgTitle = title & ": " & a(1) & " (" & mSetAt & " of " & mSetOf & ")"
+            ProgShow "Starting", -1
             before = SKW_Collect.Count
             res = ""
             On Error Resume Next
@@ -336,7 +540,7 @@ Public Function SKW_RunSet(ByVal title As String, ByVal sourceName As String, By
     End If
     Kill tmp
     On Error GoTo 0
-    If Not d Is Nothing Then d.Saved = True
+    SKW_KeepReport d, title, sourceName
     SKW_LastRows = nFind
     Set SKW_FindRows = New Collection
     SKW_FindCol = -1
@@ -344,6 +548,7 @@ Public Function SKW_RunSet(ByVal title As String, ByVal sourceName As String, By
     SKW_FindTitle = title
     Set SKW_LastReport = d
     If SKW_IsQuiet() And Not src Is Nothing Then src.Activate
+    mSetAt = 0
     SKW_Status ""
     SKW_RunSet = nRun & " check(s) run, " & nWith & " with findings, " & nFind & " finding(s) in all."
 End Function

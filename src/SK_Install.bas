@@ -1,6 +1,6 @@
 Attribute VB_Name = "SK_Install"
 ' =====================================================================
-' Stationkeeper Macros kit installer 1.8.0
+' Stationkeeper Macros kit installer 1.8.1
 ' Lives only in "Stationkeeper Macros Kit.dotm". It copies the menu and
 ' the admin into a template you pick, with Word's Organizer. No VBA
 ' editor needed. Your own macros are not touched.
@@ -16,7 +16,7 @@ Attribute VB_Name = "SK_Install"
 Option Explicit
 
 Private Const KIT_ITEMS As String = "SK_Macros|frmSKMenu|frmSKAdmin|frmSKBrand"
-Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output|SKW_Utils|SKP_Deck|SKP_Fix|SKP_Tidy|frmSKPMedia|frmSKWBrand|SKX_Book"
+Private Const TOOL_ITEMS As String = "SKW_Lib|SKW_Setup|SKW_Fields|SKW_Review|SKW_Styles|SKW_Tables|SKW_Layout|SKW_Captions|SKW_Lists|SKW_Acronyms|SKW_Text|SKW_Output|SKW_Utils|SKP_Deck|SKP_Fix|SKP_Tidy|frmSKPMedia|frmSKWBrand|frmSKWProgress|SKX_Book"
 Private Const RIBBON_FILE As String = "Stationkeeper Ribbon.dotm"
 Public SK_RibbonStartup As String   ' tests: a stand-in for Word's Startup folder
 

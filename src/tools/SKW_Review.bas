@@ -111,7 +111,9 @@ Public Function SKW_PreDeliveryLeftovers() As String
     Set d = ActiveDocument
 
     ' Comments
+    SKW_Steps d.Comments.Count, "Comment"
     For Each c In d.Comments
+        SKW_Step
         nCom = nCom + 1
         If nCom <= 300 Then rows.Add SKW_Row("Comment", "Comment by " & c.Author, "Body", SKW_Page(c.Scope), c.Range.Text)
     Next
@@ -119,7 +121,9 @@ Public Function SKW_PreDeliveryLeftovers() As String
     For Each story In SKW_Stories(d)
         If story.StoryType <> wdCommentsStory Then
             st = SKW_StoryName(story.StoryType)
+            SKW_Steps story.Revisions.Count, "Tracked change"
             For Each rv In story.Revisions
+                SKW_Step
                 nRev = nRev + 1
                 If nRev <= 300 Then rows.Add SKW_Row("Tracked change", RevName(rv.Type) & " by " & rv.Author, st, SKW_Page(rv.Range), rv.Range.Text)
             Next

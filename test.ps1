@@ -46,6 +46,10 @@ $setKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\Setti
 $prevBackup = (Get-ItemProperty $setKey -ErrorAction SilentlyContinue).backupDir
 $linkKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Link'
 $prevLink = (Get-ItemProperty $linkKey -ErrorAction SilentlyContinue).folder
+$repKey = 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Reports'
+$prevReports = $null; try { $prevReports = (Get-ItemProperty $repKey -Name folder -ErrorAction Stop).folder } catch { }
+# A person's own reports folder is put back at the end; tests run with none.
+Remove-ItemProperty $repKey -Name folder -ErrorAction SilentlyContinue
 foreach ($k in @('Team Sample Template.dotm')) { Remove-Item "HKCU:\Software\VB and VBA Program Settings\Stationkeeper Macros\$k" -Recurse -ErrorAction SilentlyContinue }
 
 # Guard: a dialog left open by Word (a VBA error, a security question) would stall a step for ever.
@@ -301,7 +305,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(17 modules and 2 forms)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(17 modules and 3 forms)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -313,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 65 tools arrive described, categorised and in the menu' (($tc -like '65 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 67 tools arrive described, categorised and in the menu' (($tc -like '67 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -539,6 +543,8 @@ try {
     [string]$rolesDoc = Join-Path $work 'Roles 1.8.docx'
     [string]$rolesCopy = Join-Path $work 'Roles 1.8 (tables styled).docx'
     [string]$rolesStd = Join-Path $work 'Roles standards 1.8.xlsx'
+    [string]$reportsDir = Join-Path $work 'Reports 1.8.1'
+    Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $rolesStd, (Join-Path $work 'Roles 1.8 (tables styled) 2.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $rolesDoc, $rolesCopy -Force -ErrorAction SilentlyContinue
     Invoke-WordJob -Root $Root -Job {
@@ -571,6 +577,26 @@ try {
         Check '1.8.0: a kept style inside a cell is left as it is' ($wbk -match 'p2=List Bullet') $wbk
         Check '1.8.0: borders and cell margins come from the table type' (($wbk -match 'border=1/8/FF ') -and ($wbk -match 'pad=3\.6/3\.6')) $wbk
         Check '1.8.0: a merged row that starts with Note is a notes row, not a divider' ($wbk -match '9\.1=0/0/n') $wbk
+        Check '1.8.1: the caption row takes its left indent and tab stop, and captions outside tables take theirs' (($wbk -match 'cap indent=7\.2 tabs=1@72') -and ($wbk -match 'fig align=1 tabs=2@36,90') -and ($wbk -match '1 caption\(s\) outside tables set')) $wbk
+        $pg = RunW $word 'SKW_Test.TW_Progress'
+        Write-Output "PROGRESS: $pg"
+        Check '1.8.1: the progress window names the tool and the item it is on' ($pg -match 'first: Progress test \| Paragraph 1 of 200 \| fill=[01] \| Running 0 s') $pg
+        Check '1.8.1: the bar and the percent follow a counted loop' ($pg -match 'half: Progress test \| Paragraph 100 of 200 \| fill=50 \| Running \d+ s\s+\|\s+50%') $pg
+        Check '1.8.1: a status that says 3 of 4 moves the bar too' (($pg -match 'status: Progress test \| Reading table 3 of 4\.\.\. \| fill=75 \|') -and ($pg -match 'line: Progress test \| Reading table 3 of 4\.\.\. \| 75%')) $pg
+        Check '1.8.1: a phase with no count shows a full amber bar, and the window closes when the tool ends' (($pg -match 'phase: Progress test \| Saving \| fill=100 \|') -and ($pg -match 'after: \(no window\)')) $pg
+        $ps = RunW $word 'SKW_Test.TW_ProgressSet'
+        Check '1.8.1: a set shows the check it is on and the percent of the whole set, with no window while tests run' (($ps -match '^2 check\(s\) run') -and ($ps -match 'Mini set: Tables two \(2 of 2\) \| Reading table 3 of 3\.\.\. \| 100%') -and ($ps -match '\(no window\)$')) $ps
+        $rf = RunW $word 'SKW_Test.TW_ReportsFolder' $reportsDir
+        Write-Output "REPORTS: $rf"
+        Check '1.8.1: the folder set from the menu or admin is the one the tools read' ($rf -match ('^tools read=' + [regex]::Escape($reportsDir) + ' ##')) $rf
+        Check '1.8.1: a report is saved there, named for the report, the file and the time' (($rf -match 'saved=Table Roles Check - Roles 1\.8 - \d{4}-\d\d-\d\d \d{4}\.docx in=') -and ($rf -match 'exists=True clean=True')) $rf
+        Check '1.8.1: a set report is saved there too' ($rf -match ('## set=Mini set - Roles 1\.8 - \d{4}-\d\d-\d\d \d{4}\.docx in=' + [regex]::Escape($reportsDir))) $rf
+        Check '1.8.1: with no folder chosen a report opens and is not saved' ($rf -match 'cleared: folder=\[\] path=\[\]$') $rf
+        $du = RunW $word 'SKW_Test.TW_DeleteUnused'
+        Write-Output "DELUNUSED: $du"
+        Check '1.8.1: Delete Unused Styles lists custom styles to delete and built-in styles to hide, and changes nothing' (($du -match '^\d+ custom style\(s\) to delete, \d+ built-in style\(s\) to hide') -and ($du -match 'fixable>0=True') -and ($du -match 'ZZ Unused B \| Custom \| Paragraph \| Delete') -and ($du -match 'ZZ Unused A \| Custom \| Paragraph \| Kept for now') -and ($du -match 'Intense Quote \| Built-in \| [^|]+ \| Hide from the Styles pane') -and ($du -match 'before: ZZ Unused A=shown ZZ Unused B=shown')) $du
+        Check '1.8.1: it deletes unused custom styles, the style one was based on too, and keeps a style in use' (($du -match 'after: ZZ Unused A=gone ZZ Unused B=gone ZZ In Use=shown')) $du
+        Check '1.8.1: an unused built-in style is hidden; one in use, Normal and Heading 1 stay' (($du -match 'Intense Quote=hidden Title=shown Normal=shown Heading 1=shown') -and ($du -match 'Deleted \d+ unused custom style\(s\) and hid \d+ unused built-in style\(s\)')) $du
         [void](RunW $word 'SKW_Test.TW_RolesClose')
     }
 
@@ -1039,6 +1065,8 @@ finally {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Remove-ItemProperty 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Standards' -Name 'Team Sample Template.dotm' -ErrorAction SilentlyContinue
     Remove-ItemProperty 'HKCU:\Software\VB and VBA Program Settings\Stationkeeper Tools\Run' -Name 'quiet' -ErrorAction SilentlyContinue
+    Remove-ItemProperty $repKey -Name folder -ErrorAction SilentlyContinue
+    if ($null -ne $prevReports) { if (-not (Test-Path $repKey)) { [void](New-Item $repKey -Force) }; Set-ItemProperty $repKey -Name folder -Value $prevReports }
     if ($null -ne $prevLink) { if (-not (Test-Path $linkKey)) { [void](New-Item $linkKey -Force) }; Set-ItemProperty $linkKey -Name folder -Value $prevLink }
     if ($null -ne $prevBackup) { Set-ItemProperty $setKey -Name backupDir -Value $prevBackup }
     else { Remove-ItemProperty $setKey -Name backupDir -ErrorAction SilentlyContinue }

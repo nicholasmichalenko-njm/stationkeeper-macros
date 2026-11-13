@@ -98,11 +98,15 @@ Public Function SKW_CaptionAudit() As String
     fSide = SKW_Setting("FigureCaptionPosition", "Below")
     tLabel = SKW_Setting("TableLabel", "Table")
     fLabel = SKW_Setting("FigureLabel", "Figure")
+    SKW_Steps d.Tables.Count, "Table"
     For Each t In d.Tables
+        SKW_Step
         i = i + 1
         CheckOne "Table", i, t.Range, capStyle, tSide, tLabel, rows, nNo, nSide, nLabel
     Next
+    SKW_Steps d.InlineShapes.Count, "Picture"
     For Each sh In d.InlineShapes
+        SKW_Step
         Select Case sh.Type
             Case 3, 4, 12, 15   ' picture, linked picture, chart, SmartArt
                 If Not sh.Range.Information(wdWithInTable) Then

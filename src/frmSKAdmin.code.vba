@@ -46,6 +46,8 @@ Private lblTestDoc As MSForms.Label
 Private lblHealthAll As MSForms.Label
 Private WithEvents btnBackupDir As MSForms.CommandButton
 Private lblBackupPath As MSForms.Label
+Private lblReportsPath As MSForms.Label
+Private WithEvents btnReportsDir As MSForms.CommandButton
 
 ' Categories page
 Private WithEvents lstCats As MSForms.ListBox
@@ -287,6 +289,12 @@ Private Sub UserForm_Initialize()
     lblPrimaryPath.Font.Bold = True
     Set btnPrimaryChoose = Btn(pg, "btnPrimaryChoose", "Choose the primary list", 8, 364, 170, 24)
     Set btnPrimaryClear = Btn(pg, "btnPrimaryClear", "Stop using it", 186, 364, 120, 24)
+    lblPrimaryPath.Width = 400
+    Lbl pg, "lblRp", "Reports from the tools are saved to (your choice, on this PC):", 420, 330, 340, 14
+    Set lblReportsPath = Lbl(pg, "lblReportsPath", "", 420, 346, 340, 14)
+    lblReportsPath.Font.Bold = True
+    Set btnReportsDir = Btn(pg, "btnReportsDir", "Choose the reports folder", 420, 364, 170, 24)
+    UpdateReportsLabel
 
     ' ----- Bulk tools: each button does one thing to many macros at once -----
     Set pg = mp.Pages(3)
@@ -1275,6 +1283,25 @@ Private Sub ShowTestAndHealth()
         lblHealth.Caption = ""
     End If
 End Sub
+
+Private Sub UpdateReportsLabel()
+    Dim d As String: d = SK_ReportsDir()
+    If Len(d) = 0 Then d = "Not chosen. Reports open and are not saved."
+    lblReportsPath.Caption = d
+End Sub
+
+Private Sub btnReportsDir_Click()
+    Dim s As String
+    s = SK_ChooseReportsDir()
+    If Len(s) = 0 Then Exit Sub
+    UpdateReportsLabel
+End Sub
+
+' Tests: the reports line of the Settings page.
+Public Function TestReports() As String
+    UpdateReportsLabel
+    TestReports = lblReportsPath.Caption & " | button=" & btnReportsDir.Caption & " top=" & btnReportsDir.Top
+End Function
 
 Private Sub UpdateBackupLabel()
     Dim d As String: d = SK_BackupDir()

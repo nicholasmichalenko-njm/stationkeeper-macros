@@ -69,7 +69,9 @@ Public Function SKW_SectionMap() As String
     msg = SKW_Begin("Section map", False)
     If Len(msg) > 0 Then SKW_SectionMap = msg: Exit Function
     Set d = ActiveDocument
+    SKW_Steps d.Sections.Count, "Section"
     For Each s In d.Sections
+        SKW_Step
         i = i + 1
         Set ps = s.PageSetup
         Set r = s.Range.Duplicate
@@ -121,7 +123,9 @@ Public Function SKW_KeepWithNextAudit() As String
     capStyle = LCase$(SKW_Setting("CaptionStyle", "Caption"))
     maxChain = Val(SKW_Setting("MaxKeepWithNextChain", "8"))
     If maxChain < 2 Then maxChain = 8
+    SKW_Steps d.Paragraphs.Count, "Paragraph"
     For Each p In d.Paragraphs
+        SKW_Step
         inTable = p.Range.Information(wdWithInTable)
         txt = SKW_Excerpt(p.Range.Text, 80)
         If Not inTable And Len(txt) > 0 Then
@@ -171,7 +175,9 @@ NextBreak:
         nCol = nCol + 1
         If nCol <= 300 Then rows.Add SKW_Row("Column break", "Manual column break", "Body", SKW_Page(r), PrevText(r))
     Next
+    SKW_Steps d.Paragraphs.Count, "Paragraph"
     For Each p In d.Paragraphs
+        SKW_Step
         t = p.Range.Text
         If (t = vbCr) And Not p.Range.Information(wdWithInTable) Then
             If run = 0 Then Set runStart = p
@@ -194,7 +200,9 @@ NextBreak:
             End If
         End If
     Next
+    SKW_Steps d.Sections.Count, "Section"
     For Each s In d.Sections
+        SKW_Step
         If s.Index > 1 Then
             nSec = nSec + 1
         End If
@@ -277,7 +285,9 @@ Public Function SKW_TOCCheck() As String
             If Len(txt) > 0 Then entries(Clean(txt)) = pg
         Next
         Set heads = CreateObject("Scripting.Dictionary")
+        SKW_Steps d.Paragraphs.Count, "Paragraph"
         For Each p In d.Paragraphs
+            SKW_Step
             If Not p.Range.InRange(toc.Range) Then
                 lvl = 0
                 On Error Resume Next
@@ -352,7 +362,9 @@ Public Function SKW_PageLimitCounter() As String
         End If
     Next
     total = d.ComputeStatistics(wdStatisticPages)
+    SKW_Steps d.Paragraphs.Count, "Paragraph"
     For Each p In d.Paragraphs
+        SKW_Step
         If p.Format.OutlineLevel = 1 And Not p.Range.Information(wdWithInTable) Then
             t = Trim$(Replace(Replace(p.Range.Text, vbCr, ""), Chr$(12), ""))
             If Len(t) > 0 Then starts.Add PageNo(p.Range): titles.Add t
@@ -401,7 +413,9 @@ Public Function SKW_GraphicsAudit() As String
     msg = SKW_Begin("Graphics audit", False)
     If Len(msg) > 0 Then SKW_GraphicsAudit = msg: Exit Function
     Set d = ActiveDocument
+    SKW_Steps d.InlineShapes.Count, "Picture"
     For Each sh In d.InlineShapes
+        SKW_Step
         i = i + 1
         notes = ""
         Select Case sh.Type
@@ -436,7 +450,9 @@ Public Function SKW_GraphicsAudit() As String
             SKW_Page(sh.Range), Mid$(notes & " ", 3), alt)
 NextInline:
     Next
+    SKW_Steps d.Shapes.Count, "Shape"
     For Each sh In d.Shapes
+        SKW_Step
         i = i + 1
         nFloat = nFloat + 1
         notes = "; floating (text wraps around it; it can drift from its text)"

@@ -50,7 +50,9 @@ Public Function SKW_TypedListsFinder() As String
     Set d = ActiveDocument
     For Each story In SKW_Stories(d)
         If story.StoryType = wdMainTextStory Or story.StoryType = wdFootnotesStory Or story.StoryType = wdEndnotesStory Or story.StoryType = wdTextFrameStory Then
+            SKW_Steps story.Paragraphs.Count, "Paragraph"
             For Each p In story.Paragraphs
+                SKW_Step
                 If p.Range.ListFormat.ListType = wdListNoNumbering Then
                     m = SKW_TypedMarker(p.Range.Text)
                     If Len(m) > 0 Then

@@ -129,13 +129,31 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 65 tools in 1.8.0)
+## Stationkeeper Tools (0.4.0 and later; 67 tools in 1.8.1)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
-**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies seventeen modules and two forms (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKP_Fix`, `SKP_Tidy`, `frmSKPMedia`, `frmSKWBrand`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
+**Add them:** open the kit, View > Macros > `StationkeeperToolsInstall`, pick the template. That copies seventeen modules and three forms (`SKW_Lib`, `SKW_Setup`, `SKW_Fields`, `SKW_Review`, `SKW_Styles`, `SKW_Tables`, `SKW_Layout`, `SKW_Captions`, `SKW_Lists`, `SKW_Acronyms`, `SKW_Text`, `SKW_Output`, `SKW_Utils`, `SKP_Deck`, `SKP_Fix`, `SKP_Tidy`, `frmSKPMedia`, `frmSKWBrand`, `SKX_Book`). Running it again updates them; `StationkeeperToolsRemove` takes them out. Or import the files in `Import files/Stationkeeper Tools/`. Open the template once afterwards: the menu lists the tools with titles, descriptions and categories. Save once in the admin to keep that in the catalog.
 
 **Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
+
+### The progress window (1.8.1)
+
+A tool that runs longer than a moment shows a small window: the tool's name, the item it is on (Paragraph 1,200 of 9,400), a bar, the percent done, the time it has run and the time left. The same line goes on Word's status bar.
+
+- The time left appears after four seconds, once there is a pace to go by.
+- A set (Delivery Check, Styles and Fonts Check, Pagination Check, Deck Delivery Check, Book Check) names the check it is on and shows the percent of the whole set.
+- A step with no count (opening a copy, saving) shows a full amber bar.
+- The window has no buttons. Closing it hides it and does not stop the tool.
+- Word gets a turn every second and a half, so its window no longer says Not Responding during a long run.
+
+### The reports folder (1.8.1)
+
+A report opens as a new document. Choose a folder once (the menu's **Reports folder...** button, the admin's Settings page, or the tool `Choose Reports Folder`) and every report is also saved there as it is made: `<report> - <document> - <date time>.docx`. The setting is per PC and is shared by the menu and the tools. Choose again and answer No to stop.
+
+### Delete Unused Styles (1.8.1)
+
+Clears the Styles pane down to what the document uses. It reports first, then asks. Unused custom styles are deleted, pass after pass, so a style goes once the style based on it is gone. Word does not delete built-in styles, so an unused built-in style that shows in the pane is hidden until it is used. Kept: styles in use, styles they depend on, the team's styles (Allowed styles list, StylePrefix), Normal and Heading 1 to 9. One Ctrl+Z undoes it.
 
 ### Table roles (1.8.0)
 
@@ -152,6 +170,8 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 | Long text cell | Everything else | Top left |
 
 - The **Table roles** sheet of the standards workbook sets each role's paragraph style, alignment, vertical alignment, shading (RRGGBB), bold and how it is recognized. A blank Type applies to every table type; a row with a type's name applies to that type only. `Add the Table Roles Sheet` adds the sheet to a workbook made before 1.8.0.
+- **Left indent** and **Tab stops** (1.8.1, inches) work on every role. Tab stops are left tabs and replace the paragraph's own; they set where text after a tab starts and never type a tab. On the Caption row they set the caption row's indent and the distance from the caption number to its title.
+- A **Figure caption** row (1.8.1) reaches captions outside tables: put their paragraph style in Recognize, and each such paragraph gets the row's Align, Left indent and Tab stops.
 - A linked effort can carry the same rows as `table_roles` in its rules. The effort's rows replace the sheet.
 - A table's Alt Text (Table Properties) can hold `skip` (leave the table alone) or `type=Name` (use that table type).
 - The report's Look at column names anything the tool was unsure of: a row with text in its first cell only (when the Divider role recognizes `first cell only`), a caption row with no number field, a table inside a table.

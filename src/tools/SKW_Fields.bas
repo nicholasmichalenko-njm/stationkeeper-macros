@@ -40,7 +40,9 @@ Public Function SKW_SafeUpdateAllFields() As String
     d.TrackRevisions = False
     ' 1. Lock the fields that would reach outside the document.
     For Each story In SKW_Stories(d)
+        SKW_Steps story.Fields.Count, "Field"
         For Each f In story.Fields
+            SKW_Step
             If IsOutsideFile(f.Type) And Not f.Locked Then
                 f.Locked = True
                 locked.Add f
@@ -67,7 +69,9 @@ Public Function SKW_SafeUpdateAllFields() As String
         locked(i).Locked = False
     Next
     For Each story In SKW_Stories(d)
+        SKW_Steps story.Fields.Count, "Field"
         For Each f In story.Fields
+            SKW_Step
             If InStr(1, f.Result.Text, "Error!", vbTextCompare) > 0 Then nErr = nErr + 1
         Next
     Next
@@ -124,7 +128,9 @@ Public Function SKW_FindBrokenReferences() As String
     d.Bookmarks.ShowHidden = True
     For Each story In SKW_Stories(d)
         st = SKW_StoryName(story.StoryType)
+        SKW_Steps story.Fields.Count, "Field"
         For Each f In story.Fields
+            SKW_Step
             code = Trim$(f.Code.Text)
             res = ""
             On Error Resume Next
@@ -152,7 +158,9 @@ Public Function SKW_FindBrokenReferences() As String
                     End If
             End Select
         Next
+        SKW_Steps story.Hyperlinks.Count, "Link"
         For Each h In story.Hyperlinks
+            SKW_Step
             On Error Resume Next
             bm = ""
             bm = h.SubAddress
@@ -184,7 +192,9 @@ Public Function SKW_FieldCodeReport() As String
     Set d = ActiveDocument
     Set counts = CreateObject("Scripting.Dictionary")
     For Each story In SKW_Stories(d)
+        SKW_Steps story.Fields.Count, "Field"
         For Each f In story.Fields
+            SKW_Step
             total = total + 1
             nm = SKW_FieldTypeName(f.Type)
             counts(nm) = counts(nm) + 1

@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.8.0"
+Public Const SK_VERSION As String = "1.8.1"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -952,6 +952,42 @@ Public Function SK_SetBackupDir(ByVal d As String) As Boolean
     End If
     SaveSetting SK_APP, "Settings", "backupDir", d
     SK_SetBackupDir = (Err.Number = 0)
+End Function
+
+' Where reports from the Stationkeeper Tools are saved, on this PC. The tools read the same setting,
+' so it works with the tools alone, the menu alone, or both. "" means reports open and are not saved.
+Public Function SK_ReportsDir() As String
+    SK_ReportsDir = GetSetting("Stationkeeper Tools", "Reports", "folder", "")
+End Function
+
+Public Sub SK_SetReportsDir(ByVal d As String)
+    On Error Resume Next
+    If Len(d) > 0 Then
+        If Len(Dir$(d, vbDirectory)) = 0 Then MkDir d
+        SaveSetting "Stationkeeper Tools", "Reports", "folder", d
+    Else
+        DeleteSetting "Stationkeeper Tools", "Reports", "folder"
+    End If
+End Sub
+
+' Asks where reports go. Returns what to say afterwards, or "" when nothing changed.
+Public Function SK_ChooseReportsDir() As String
+    Dim cur As String, d As String, a As VbMsgBoxResult
+    cur = SK_ReportsDir()
+    If Len(cur) > 0 Then
+        a = MsgBox("Reports are saved in:" & vbCr & cur & vbCr & vbCr & "Choose another folder?" & vbCr & _
+                   "No stops saving them: reports then open and are yours to save or close.", vbYesNoCancel + vbQuestion, SK_APP)
+        If a = vbCancel Then Exit Function
+        If a = vbNo Then
+            SK_SetReportsDir ""
+            SK_ChooseReportsDir = "Reports are no longer saved. They open, and you save the ones you want."
+            Exit Function
+        End If
+    End If
+    d = SK_PickFolder("Choose where Stationkeeper reports are saved", IIf(Len(cur) > 0, cur, ThisDocument.Path))
+    If Len(d) = 0 Then Exit Function
+    SK_SetReportsDir d
+    SK_ChooseReportsDir = "Reports are saved in " & d
 End Function
 
 ' The folder suggested the first time: beside the template, else Documents.

@@ -340,6 +340,7 @@ Public Function SKW_TableRoles(ByVal typeName As String) As Object
     AddRole res, "long text", "", "left", "top", "", "", ""
     AddRole res, "notes", "", "left", "top", "", "", "Note;Notes;Source;Sources"
     AddRole res, "keep", "", "", "", "", "", ""
+    AddRole res, "figure caption", "", "", "", "", "", ""
     For pass = 1 To 2
         For Each r In SKW_Rows("Table roles")
             If r.Exists("role") Then
@@ -349,7 +350,7 @@ Public Function SKW_TableRoles(ByVal typeName As String) As Object
                 If res.Exists(role) Then
                     If (pass = 1 And (Len(ty) = 0 Or ty = "all")) Or (pass = 2 And Len(ty) > 0 And ty = LCase$(typeName)) Then
                         Set d = res(role)
-                        For Each k In Array("paragraph style", "align", "vertical", "shading", "bold", "recognize")
+                        For Each k In Array("paragraph style", "align", "vertical", "shading", "bold", "recognize", "left indent", "tab stops")
                             If r.Exists(k) Then
                                 If Len(Trim$(r(k))) > 0 Then d(k) = Trim$(r(k))
                             End If
@@ -368,6 +369,7 @@ Private Sub AddRole(ByVal res As Object, ByVal role As String, ByVal sty As Stri
     Set d = CreateObject("Scripting.Dictionary")
     d("paragraph style") = sty: d("align") = al: d("vertical") = vert
     d("shading") = shade: d("bold") = bld: d("recognize") = recog
+    d("left indent") = "": d("tab stops") = ""
     Set res(role) = d
 End Sub
 
@@ -452,6 +454,7 @@ Private Function ScanTable(ByVal d As Object, ByVal t As Object, ByVal types As 
     For Each c In t.Range.Cells
         i = i + 1
         If i > n Then Exit For
+        If i Mod 200 = 0 Then SKW_Pulse
         ri(i) = c.RowIndex
         Set rg = c.Range
         cs(i) = rg.Start: ce(i) = rg.End
@@ -662,7 +665,51 @@ Private Sub ApplyRole(ByVal d As Object, ByVal rg As Object, ByVal st As Object,
     If v >= 0 Then rg.ParagraphFormat.Alignment = v
     v = VerticalValue(st("vertical"))
     If v >= 0 Then rg.Cells.VerticalAlignment = v
+    If what = "all" Then IndentAndTabs rg, st
 End Sub
+
+' Left indent and left tab stops, in inches. Several tab stops are separated by ;. A blank value leaves them as they are.
+Private Sub IndentAndTabs(ByVal rg As Object, ByVal st As Object)
+    Dim t As Variant, s As String
+    On Error Resume Next
+    s = Trim$(st("left indent"))
+    If Len(s) > 0 And IsNumeric(s) Then rg.ParagraphFormat.LeftIndent = CSng(s) * 72
+    s = Trim$(st("tab stops"))
+    If Len(s) > 0 Then
+        rg.ParagraphFormat.TabStops.ClearAll
+        For Each t In Split(s, ";")
+            If IsNumeric(Trim$(t)) Then rg.ParagraphFormat.TabStops.Add CSng(Trim$(t)) * 72, 0, 0
+        Next
+    End If
+End Sub
+
+' Captions outside tables (figure captions): every paragraph in a style named on the Figure caption row
+' gets that row's alignment, left indent and tab stops. Returns how many.
+Private Function StyleFigureCaptions(ByVal d As Object, ByVal types As Collection) As Long
+    Dim roles As Object, st As Object, nm As Variant, so As Object, story As Object, r As Object, v As Long, n As Long
+    Set roles = SKW_TableRoles(types(1)("type"))
+    Set st = roles("figure caption")
+    If Len(Trim$(st("recognize"))) = 0 Then Exit Function
+    On Error Resume Next
+    For Each nm In Split(st("recognize"), ";")
+        Set so = Nothing
+        If Len(Trim$(nm)) > 0 Then Set so = SKW_GetStyle(d, Trim$(nm))
+        If Not so Is Nothing Then
+            For Each story In SKW_Stories(d)
+                For Each r In SKW_StyleRanges(story, so)
+                    If Not r.Information(wdWithInTable) Then
+                        v = AlignValue(st("align"))
+                        If v >= 0 Then r.ParagraphFormat.Alignment = v
+                        IndentAndTabs r, st
+                        n = n + 1
+                        SKW_Pulse
+                    End If
+                Next
+            Next
+        End If
+    Next
+    StyleFigureCaptions = n
+End Function
 
 ' Styles one scanned table. Returns what could not be set.
 Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Object, ByVal missing As Object) As String
@@ -738,6 +785,7 @@ Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Ob
     End If
     For r = 1 To sc("maxRow")
         role = rRole(r)
+        If r Mod 20 = 0 Then SKW_Pulse
         If Len(role) > 0 Then
             Set rg = d.Range(cs(rFirst(r)), ce(rLast(r)))
             Select Case role
@@ -797,7 +845,6 @@ Public Function SKW_TableRolesCheck() As String
     For Each t In d.Tables
         i = i + 1
         SKW_Status "Reading table " & i & " of " & d.Tables.Count & "..."
-        If i Mod 10 = 0 Then DoEvents
         Set sc = ScanTable(d, t, types)
         If sc("skip") Then
             nSkip = nSkip + 1
@@ -849,9 +896,9 @@ Private Function StyleAllTables(ByVal d As Object, ByVal clearUndo As Boolean, B
             d.UndoClear
             On Error GoTo 0
         End If
-        If i Mod 5 = 0 Then DoEvents
     Next
-    StyleAllTables = nDone & "|" & nSkip & "|" & notes
+    SKW_Status "Setting captions outside tables..."
+    StyleAllTables = nDone & "|" & nSkip & "|" & notes & "|" & StyleFigureCaptions(d, types)
 End Function
 
 ' Styles every table in a copy of the active document. target: the copy's full path, or "" for one beside the document.
@@ -874,15 +921,20 @@ Public Function SKW_TableRolesFixCopy(ByVal target As String) As String
     On Error GoTo Fail
     Set fso = CreateObject("Scripting.FileSystemObject")
     fso.CopyFile d.FullName, target, True
+    SKW_ProgressTitle "Table roles: styling a copy"
+    SKW_Status "Opening the copy..."
     Set c = Documents.Open(FileName:=target, AddToRecentFiles:=False, Visible:=True)
     Application.ScreenUpdating = False
     Set missing = CreateObject("Scripting.Dictionary")
     c.TrackRevisions = False
     parts = Split(StyleAllTables(c, True, missing), "|")
+    SKW_Status "Saving the copy..."
     c.Save
     Application.ScreenUpdating = True
     Application.StatusBar = False
+    SKW_ProgressDone
     SKW_TableRolesFixCopy = parts(0) & " table(s) styled in a copy, " & parts(1) & " skipped: " & Mid$(target, InStrRev(target, "\") + 1) & "." & _
+        IIf(Val(parts(3)) > 0, " " & parts(3) & " caption(s) outside tables set.", "") & _
         IIf(Len(parts(2)) > 0, vbCr & "Not set: " & parts(2) & ".", "") & _
         IIf(Len(MissingText(missing)) > 0, vbCr & MissingText(missing), "") & vbCr & "Your document is not changed. The copy is open."
     Exit Function
@@ -890,6 +942,7 @@ Fail:
     ed = Err.Description
     Application.ScreenUpdating = True
     Application.StatusBar = False
+    SKW_ProgressDone
     SKW_TableRolesFixCopy = "Stopped: " & ed & ". Your document is not changed."
 End Function
 

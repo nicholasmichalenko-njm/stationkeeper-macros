@@ -1310,6 +1310,15 @@ Public Function TW_RolesRead() As String
     TW_RolesRead = "sheet rows=" & SKW_Rows("Table roles").Count & " ## " & s
 End Function
 
+' The tab stops a person set (not Word's default ones), as positions in points.
+Private Function CustomTabs(ByVal ts As Object) As String
+    Dim t As Object, s As String, n As Long
+    For Each t In ts
+        If t.CustomTab Then n = n + 1: s = s & "," & Format$(t.Position, "0")
+    Next
+    CustomTabs = n & "@" & Mid$(s, 2)
+End Function
+
 ' Makes a standards workbook, sets a header style and fill, a long text style, a kept style, borders and cell margins in it,
 ' then styles a copy of the roles document from it.
 Public Function TW_RolesWorkbook(ByVal path As String) As String
@@ -1323,10 +1332,12 @@ Public Function TW_RolesWorkbook(ByVal path As String) As String
     Set ws = wb.Worksheets("Table types")
     ws.Cells(2, 11).Value = "0.05": ws.Cells(2, 12).Value = "Single": ws.Cells(2, 13).Value = "1": ws.Cells(2, 14).Value = "FF0000"
     Set ws = wb.Worksheets("Table roles")
-    For r = 2 To 12
+    For r = 2 To 14
         Select Case LCase$(ws.Cells(r, 2).Value)
             Case "header": ws.Cells(r, 3).Value = "Heading 2": ws.Cells(r, 6).Value = "D9E2F3"
             Case "long text": ws.Cells(r, 3).Value = "Body Text"
+            Case "caption": ws.Cells(r, 9).Value = "0.1": ws.Cells(r, 10).Value = "1"
+            Case "figure caption": ws.Cells(r, 8).Value = "Caption": ws.Cells(r, 4).Value = "Center": ws.Cells(r, 10).Value = "0.5; 1.25"
             Case "keep": ws.Cells(r, 8).Value = "List Bullet"
         End Select
     Next
@@ -1342,6 +1353,8 @@ Public Function TW_RolesWorkbook(ByVal path As String) As String
     d.Tables(1).Rows.Add
     d.Tables(1).Rows(9).Cells.Merge
     d.Tables(1).Cell(9, 1).Range.Text = "Note: fictional figures."
+    d.Paragraphs(d.Paragraphs.Count).Range.InsertBefore "Figure 1" & vbTab & "A caption outside a table"
+    d.Paragraphs(d.Paragraphs.Count).Style = d.Styles("Caption")
     d.Save
     s = s & " ## sheet rows=" & SKW_Rows("Table roles").Count & " ## " & Replace(SKW_TableRolesFixCopy(""), vbCr, " / ")
     Set c = ActiveDocument
@@ -1351,8 +1364,119 @@ Public Function TW_RolesWorkbook(ByVal path As String) As String
         " p2=" & t.Cell(4, 2).Range.Paragraphs(2).Style.NameLocal & " border=" & t.Borders(wdBorderTop).LineStyle & "/" & _
         t.Borders(wdBorderTop).LineWidth & "/" & Hex$(t.Borders(wdBorderHorizontal).Color) & " pad=" & Format$(t.TopPadding, "0.0") & "/" & Format$(t.LeftPadding, "0.0") & _
         " " & CellState(t, 9, 1)
+    With t.Cell(1, 1).Range.ParagraphFormat
+        s = s & " cap indent=" & Format$(.LeftIndent, "0.0") & " tabs=" & CustomTabs(.TabStops)
+    End With
+    With c.Paragraphs(c.Paragraphs.Count).Range.ParagraphFormat
+        s = s & " ## fig align=" & .Alignment & " tabs=" & CustomTabs(.TabStops)
+    End With
     If c.FullName <> d.FullName Then c.Close SaveChanges:=0
     SKW_SetStandardsPath prev
     d.Activate
     TW_RolesWorkbook = s
+End Function
+
+' ---------------------------------------------------------------------
+' 1.8.1: the progress window
+' ---------------------------------------------------------------------
+Private Sub WaitSecs(ByVal secs As Single)
+    Dim t As Single
+    t = Timer
+    Do While Timer - t < secs And Timer >= t
+    Loop
+End Sub
+
+' Runs a counted loop the way a tool does and reads the window at three points.
+Public Function TW_Progress() As String
+    Dim i As Long, s As String, msg As String
+    SKW_Quiet = True
+    SKW_ProgressForce = True
+    RolesDoc
+    msg = SKW_Begin("progress test", False)
+    SKW_Steps 200, "Paragraph"
+    For i = 1 To 99
+        SKW_Step
+    Next
+    s = "first: " & SKW_ProgressProbe()
+    WaitSecs 0.4
+    SKW_Step
+    s = s & " ## half: " & SKW_ProgressProbe()
+    WaitSecs 0.4
+    SKW_Status "Reading table 3 of 4..."
+    s = s & " ## status: " & SKW_ProgressProbe() & " ## line: " & SKW_ProgressLine
+    SKW_Status "Saving"
+    s = s & " ## phase: " & SKW_ProgressProbe()
+    SKW_Finish
+    s = s & " ## after: " & SKW_ProgressProbe()
+    SKW_ProgressForce = False
+    TW_Progress = s
+End Function
+
+' A set shows how far the whole set is, not only the check running.
+Public Function TW_ProgressSet() As String
+    Dim s As String
+    SKW_Quiet = True
+    RolesDoc
+    s = SKW_RunSet("Mini set", "", Array("SKW_TableRolesCheck|Tables one", "SKW_TableRolesCheck|Tables two"), False)
+    CloseReport
+    TW_ProgressSet = s & " ## " & SKW_ProgressLine & " ## " & SKW_ProgressProbe()
+End Function
+
+' ---------------------------------------------------------------------
+' 1.8.1: the reports folder
+' ---------------------------------------------------------------------
+' Sets the folder the way the menu and admin do (the kit's setting), runs a report, then clears it and runs another.
+Public Function TW_ReportsFolder(ByVal folder As String) As String
+    Dim s As String, nm As String, pth As String
+    SKW_Quiet = True
+    RolesDoc
+    SK_SetReportsDir folder
+    s = "tools read=" & SKW_ReportsFolder()
+    SKW_TableRolesCheck
+    nm = SKW_LastReport.Name: pth = SKW_LastReport.Path
+    s = s & " ## saved=" & nm & " in=" & pth & " exists=" & (Len(Dir$(pth & "\" & nm)) > 0) & " clean=" & SKW_LastReport.Saved
+    CloseReport
+    SKW_RunSet "Mini set", "", Array("SKW_TableRolesCheck|Tables one"), False
+    s = s & " ## set=" & SKW_LastReport.Name & " in=" & SKW_LastReport.Path
+    CloseReport
+    SK_SetReportsDir ""
+    SKW_TableRolesCheck
+    s = s & " ## cleared: folder=[" & SKW_ReportsFolder() & "] path=[" & SKW_LastReport.Path & "]"
+    CloseReport
+    TW_ReportsFolder = s
+End Function
+
+' ---------------------------------------------------------------------
+' 1.8.1: Delete Unused Styles
+' ---------------------------------------------------------------------
+Private Function HasStyle(ByVal d As Object, ByVal nm As String) As String
+    Dim st As Object
+    On Error Resume Next
+    Set st = d.Styles(nm)
+    If st Is Nothing Then HasStyle = nm & "=gone" Else HasStyle = nm & "=" & IIf(st.Visibility, "hidden", "shown")
+End Function
+
+' On the roles document: two unused custom styles (one based on the other), one custom style in use,
+' an unused built-in style that shows in the pane, and a built-in style in use.
+Public Function TW_DeleteUnused() As String
+    Dim d As Object, s As String, a As Object
+    SKW_Quiet = True
+    Set d = RolesDoc()
+    Set a = d.Styles.Add("ZZ Unused A", wdStyleTypeParagraph)
+    d.Styles.Add "ZZ Unused B", wdStyleTypeParagraph
+    d.Styles("ZZ Unused B").BaseStyle = "ZZ Unused A"
+    d.Styles.Add "ZZ In Use", wdStyleTypeParagraph
+    d.Paragraphs(1).Style = d.Styles("ZZ In Use")
+    d.Styles("Intense Quote").Visibility = False
+    d.Styles("Title").Visibility = False
+    d.Paragraphs(d.Paragraphs.Count).Range.InsertBefore "A title line"
+    d.Paragraphs(d.Paragraphs.Count).Style = d.Styles("Title")
+    s = SKW_DeleteUnusedStyles("") & " ## fixable>0=" & (SKW_Fixable > 0) & " ## " & ReportText()
+    CloseReport
+    s = s & " ## before: " & HasStyle(d, "ZZ Unused A") & " " & HasStyle(d, "ZZ Unused B")
+    d.Activate
+    s = s & " ## " & Replace(SKW_DeleteUnusedStyles("fix"), vbCr, " / ")
+    s = s & " ## after: " & HasStyle(d, "ZZ Unused A") & " " & HasStyle(d, "ZZ Unused B") & " " & HasStyle(d, "ZZ In Use") & " " & _
+        HasStyle(d, "Intense Quote") & " " & HasStyle(d, "Title") & " " & HasStyle(d, "Normal") & " " & HasStyle(d, "Heading 1")
+    TW_DeleteUnused = s
 End Function

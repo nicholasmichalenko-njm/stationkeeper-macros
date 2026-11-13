@@ -13,6 +13,7 @@ Private WithEvents cboAffects As MSForms.ComboBox
 Private WithEvents btnRun As MSForms.CommandButton
 Private WithEvents btnPin As MSForms.CommandButton
 Private WithEvents btnClose As MSForms.CommandButton
+Private WithEvents btnReports As MSForms.CommandButton
 Private WithEvents chkKeep As MSForms.CheckBox
 Private WithEvents cboShow As MSForms.ComboBox
 Private WithEvents cboCat As MSForms.ComboBox
@@ -174,6 +175,9 @@ Private Sub UserForm_Initialize()
     Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 448, 450, 14)
     lblStatus.ForeColor = &H808080
     Set btnClose = AddCtl("Forms.CommandButton.1", "btnClose", 570, 442, 80, 24)
+    Set btnReports = AddCtl("Forms.CommandButton.1", "btnReports", 466, 442, 98, 24)
+    btnReports.Caption = "Reports folder..."
+    btnReports.ControlTipText = IIf(Len(SK_ReportsDir()) > 0, "Reports are saved in " & SK_ReportsDir(), "Reports open and are not saved. Choose a folder to keep them.")
     btnClose.Caption = "Close"
     btnClose.Cancel = True
 
@@ -778,6 +782,19 @@ Private Sub btnPin_Click()
     RefreshList
     SelectRun run
 End Sub
+
+Private Sub btnReports_Click()
+    Dim s As String
+    s = SK_ChooseReportsDir()
+    If Len(s) = 0 Then Exit Sub
+    lblStatus.Caption = s
+    btnReports.ControlTipText = IIf(Len(SK_ReportsDir()) > 0, "Reports are saved in " & SK_ReportsDir(), "Reports open and are not saved. Choose a folder to keep them.")
+End Sub
+
+' Tests: the reports button.
+Public Function TestReports() As String
+    TestReports = btnReports.Caption & " | " & btnReports.ControlTipText & " | left=" & btnReports.Left
+End Function
 
 Private Sub btnClose_Click()
     If fraAsk.Visible Then btnAskCancel_Click: Exit Sub   ' Esc closes the question first

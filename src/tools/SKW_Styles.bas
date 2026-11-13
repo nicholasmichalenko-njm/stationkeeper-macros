@@ -268,7 +268,9 @@ Public Function SKW_NonAllowedStyleReport() As String
         End If
     Next
     prefix = SKW_Setting("StylePrefix", "")
+    SKW_Steps d.Styles.Count, "Style"
     For Each st In d.Styles
+        SKW_Step
         If st.InUse And st.Type <> wdStyleTypeTable And st.Type <> wdStyleTypeList Then
             If Not SKW_StyleAllowed(st, allowed, prefix) Then
                 n = 0
@@ -290,7 +292,9 @@ Public Function SKW_NonAllowedStyleReport() As String
             End If
         End If
     Next
+    SKW_Steps d.Tables.Count, "Table"
     For Each t In d.Tables
+        SKW_Step
         i = i + 1
         tn = ""
         On Error Resume Next
@@ -334,7 +338,9 @@ Public Function SKW_DirectFormattingReport() As String
     For Each story In SKW_Stories(d)
         If story.StoryType <> wdCommentsStory Then
             stn = SKW_StoryName(story.StoryType)
+            SKW_Steps story.Paragraphs.Count, "Paragraph"
             For Each p In story.Paragraphs
+                SKW_Step
                 nPar = nPar + 1
                 If nPar Mod 100 = 0 Then SKW_Status "Direct formatting: paragraph " & nPar & "..."
                 inCell = p.Range.Information(wdWithInTable)
@@ -516,13 +522,17 @@ Public Function SKW_ImportTeamStyles(ByVal source As String) As String
     msg = SKW_Begin("Import team styles", True)
     If Len(msg) > 0 Then SKW_ImportTeamStyles = msg: Exit Function
     Set before = CreateObject("Scripting.Dictionary")
+    SKW_Steps d.Styles.Count, "Style"
     For Each st In d.Styles
+        SKW_Step
         If st.InUse Then before(st.NameLocal) = StyleSig(st)
     Next
     On Error GoTo Fail
     d.CopyStylesFromTemplate source
     On Error GoTo 0
+    SKW_Steps d.Styles.Count, "Style"
     For Each st In d.Styles
+        SKW_Step
         If st.InUse Then
             If before.Exists(st.NameLocal) Then
                 If before(st.NameLocal) <> StyleSig(st) Then
@@ -624,7 +634,9 @@ Public Function SKW_FontNotAllowed() As String
     Set fonts = CreateObject("Scripting.Dictionary")
     For Each story In SKW_Stories(d)
         If story.StoryType <> wdCommentsStory Then
+            SKW_Steps story.Paragraphs.Count, "Paragraph"
             For Each p In story.Paragraphs
+                SKW_Step
                 If Len(p.Range.Text) > 1 Then
                     nm = FontNameOf(d, p.Range.Font.Name)
                     If Len(nm) > 0 Then
@@ -689,20 +701,26 @@ Public Function SKW_RemoveUnusedCustomStyles() As String
     ' Styles other styles depend on, and table styles in use, are kept.
     Set keep = CreateObject("Scripting.Dictionary")
     On Error Resume Next
+    SKW_Steps d.Styles.Count, "Style"
     For Each o In d.Styles
+        SKW_Step
         ' A style naming itself (its own next style, say) does not count as depending on it.
         KeepRef keep, o, o.BaseStyle
         KeepRef keep, o, o.NextParagraphStyle
         ' LinkStyle answers with an unrelated style when a style is not linked, so ask only linked ones.
         If o.Linked Then KeepRef keep, o, o.LinkStyle
     Next
+    SKW_Steps d.Tables.Count, "Table"
     For Each t In d.Tables
+        SKW_Step
         tn = "": tn = t.Style.NameLocal
         keep(tn) = True
     Next
     Err.Clear
     On Error GoTo Fail
+    SKW_Steps d.Styles.Count, "Style"
     For Each st In d.Styles
+        SKW_Step
         If Not st.BuiltIn And st.Type <> wdStyleTypeList Then
             If Not keep.Exists(st.NameLocal) And Not SKW_InList(allowed, st.NameLocal) And _
                Not (Len(prefix) > 0 And LCase$(Left$(st.NameLocal, Len(prefix))) = LCase$(prefix)) Then
@@ -729,4 +747,209 @@ Fail:
     msg = Err.Description
     SKW_Finish
     SKW_RemoveUnusedCustomStyles = "Stopped after " & n & " style(s): " & msg & ". Press Ctrl+Z to undo what was done."
+End Function
+
+' =====================================================================
+' Delete Unused Styles (1.8.1)
+' Clears the Styles pane down to what the document uses. A custom style
+' nobody uses is deleted. Word does not allow a built-in style to be
+' deleted, so an unused built-in style that shows in the pane is hidden
+' until it is used. Kept: styles in use, styles a kept style depends on,
+' the team's styles (list or prefix), Normal and Heading 1 to 9.
+' =====================================================================
+
+' Lists the styles the document does not use: custom ones to delete and built-in ones to hide from the Styles pane (Word does not let a built-in style be deleted). Changes nothing, then asks before doing it. One Ctrl+Z undoes it.
+Public Sub DeleteUnusedStyles()
+    Dim d As Object, s As String
+    If SKW_IsQuiet() Then Exit Sub
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    Set d = ActiveDocument
+    SKW_Fixable = 0
+    s = SKW_DeleteUnusedStyles("")
+    If SKW_Fixable <= 0 Or SKW_LastReport Is Nothing Then SKW_Show s: Exit Sub
+    On Error Resume Next
+    SKW_LastReport.Activate
+    On Error GoTo 0
+    If MsgBox(Split(s & vbCr, vbCr)(0) & vbCr & vbCr & "Do it now in " & d.Name & "?" & vbCr & _
+              "One Ctrl+Z undoes it. The report stays open.", vbYesNo + vbQuestion, SKW_APP) <> vbYes Then Exit Sub
+    d.Activate
+    SKW_Say SKW_DeleteUnusedStyles("fix")
+End Sub
+
+' A style that cannot be looked for counts as in use, so it is left alone.
+Private Function StyleInUse(ByVal d As Object, ByVal st As Object) As Boolean
+    Dim story As Object, n As Long
+    On Error Resume Next
+    For Each story In SKW_Stories(d)
+        n = -1
+        n = SKW_StyleRanges(story, st, 1).Count
+        If Err.Number <> 0 Or n <> 0 Then
+            Err.Clear
+            StyleInUse = True
+            Exit Function
+        End If
+    Next
+End Function
+
+Private Function StyleTypeName(ByVal t As Long) As String
+    Select Case t
+        Case wdStyleTypeParagraph: StyleTypeName = "Paragraph"
+        Case wdStyleTypeCharacter: StyleTypeName = "Character"
+        Case wdStyleTypeTable: StyleTypeName = "Table"
+        Case wdStyleTypeList: StyleTypeName = "List"
+        Case Else: StyleTypeName = "Paragraph and character"
+    End Select
+End Function
+
+' The styles other styles lean on (base, next paragraph, linked) and the table styles in use.
+Private Function StyleDependencies(ByVal d As Object) As Object
+    Dim keep As Object, o As Object, t As Object, tn As String
+    Set keep = CreateObject("Scripting.Dictionary")
+    keep.CompareMode = 1
+    On Error Resume Next
+    For Each o In d.Styles
+        KeepRef keep, o, o.BaseStyle
+        KeepRef keep, o, o.NextParagraphStyle
+        If o.Linked Then KeepRef keep, o, o.LinkStyle
+    Next
+    For Each t In d.Tables
+        tn = "": tn = t.Style.NameLocal
+        If Len(tn) > 0 Then keep(tn) = True
+    Next
+    Set StyleDependencies = keep
+End Function
+
+' how = "": report only. how = "fix": delete and hide.
+Public Function SKW_DeleteUnusedStyles(ByVal how As String) As String
+    Dim d As Object, msg As String, st As Object, allowed As Collection, keep As Object, prefix As String, nm As String
+    Dim rows As New Collection, del As Collection, toHide As New Collection, v As Variant, pass As Long, isTeam As Boolean
+    Dim nDel As Long, nHide As Long, nTeam As Long, nLean As Long, doIt As Boolean, bi As Boolean, tp As Long, vis As Boolean, total As Long, i As Long
+    Dim failed As Object, nGone As Long
+    Set failed = CreateObject("Scripting.Dictionary")
+    failed.CompareMode = 1
+    Set SKW_LastReport = Nothing
+    SKW_Fixable = 0
+    doIt = (LCase$(how) = "fix")
+    msg = SKW_Begin("Delete unused styles", doIt)
+    If Len(msg) > 0 Then SKW_DeleteUnusedStyles = msg: Exit Function
+    Set d = ActiveDocument
+    Set allowed = SKW_Column("Allowed styles", "Style")
+    prefix = SKW_Setting("StylePrefix", "")
+    On Error GoTo Fail
+    ' Custom styles: pass after pass, because deleting a style frees the style it was based on.
+    For pass = 1 To 8
+        Set keep = StyleDependencies(d)
+        Set del = New Collection
+        total = d.Styles.Count
+        i = 0
+        For Each st In d.Styles
+            i = i + 1
+            SKW_Status "Reading style " & i & " of " & total & IIf(pass > 1, " (pass " & pass & ")", "") & "..."
+            bi = True: tp = 0: nm = ""
+            On Error Resume Next
+            bi = st.BuiltIn: tp = st.Type: nm = st.NameLocal
+            On Error GoTo Fail
+            If Not bi And tp <> wdStyleTypeList And Len(nm) > 0 Then
+                isTeam = SKW_InList(allowed, nm) Or (Len(prefix) > 0 And LCase$(Left$(nm, Len(prefix))) = LCase$(prefix))
+                If keep.Exists(nm) Then
+                    If pass = 1 And Not doIt Then
+                        If tp = wdStyleTypeTable Then
+                            ' a table style in use: nothing to say
+                        ElseIf Not StyleInUse(d, st) Then
+                            nLean = nLean + 1
+                            rows.Add SKW_Row(nm, "Custom", StyleTypeName(tp), "Kept for now: another style is based on it or follows it. It goes once that style is gone")
+                        End If
+                    End If
+                ElseIf isTeam Then
+                    If pass = 1 Then
+                        If tp = wdStyleTypeTable Then
+                            nTeam = nTeam + 1
+                            If Not doIt Then rows.Add SKW_Row(nm, "Custom", StyleTypeName(tp), "Kept: a team style, not used")
+                        ElseIf Not StyleInUse(d, st) Then
+                            nTeam = nTeam + 1
+                            If Not doIt Then rows.Add SKW_Row(nm, "Custom", StyleTypeName(tp), "Kept: a team style, not used")
+                        End If
+                    End If
+                ElseIf failed.Exists(nm) Then
+                    ' Word would not delete it on an earlier pass
+                ElseIf tp = wdStyleTypeTable Then
+                    del.Add st
+                ElseIf Not StyleInUse(d, st) Then
+                    del.Add st
+                End If
+            End If
+        Next
+        If del.Count = 0 Then Exit For
+        nGone = 0
+        For Each v In del
+            If doIt Then
+                nm = v.NameLocal
+                On Error Resume Next
+                v.Delete
+                If Err.Number <> 0 Then
+                    failed(nm) = True
+                    Err.Clear
+                Else
+                    nDel = nDel + 1: nGone = nGone + 1
+                End If
+                On Error GoTo Fail
+            Else
+                nDel = nDel + 1
+                rows.Add SKW_Row(v.NameLocal, "Custom", StyleTypeName(v.Type), "Delete")
+            End If
+        Next
+        If Not doIt Or nGone = 0 Then Exit For
+    Next
+    ' Built-in styles that show in the pane and are not used: hidden until used.
+    total = d.Styles.Count
+    i = 0
+    For Each st In d.Styles
+        i = i + 1
+        SKW_Status "Reading built-in style " & i & " of " & total & "..."
+        bi = False: tp = 0: nm = "": vis = False
+        On Error Resume Next
+        bi = st.BuiltIn: tp = st.Type: nm = st.NameLocal
+        vis = Not st.Visibility
+        On Error GoTo Fail
+        If bi And vis And tp <> wdStyleTypeList And tp <> wdStyleTypeTable And Len(nm) > 0 Then
+            If LCase$(nm) <> "normal" And Not (LCase$(nm) Like "heading [1-9]") And Not SKW_InList(allowed, nm) And Not keep.Exists(nm) Then
+                If Not StyleInUse(d, st) Then
+                    nHide = nHide + 1
+                    If doIt Then
+                        toHide.Add st
+                    Else
+                        rows.Add SKW_Row(nm, "Built-in", StyleTypeName(tp), "Hide from the Styles pane until it is used (Word does not delete built-in styles)")
+                    End If
+                End If
+            End If
+        End If
+    Next
+    If doIt Then
+        On Error Resume Next
+        For Each v In toHide
+            v.QuickStyle = False
+            v.UnhideWhenUsed = True
+            v.Visibility = True
+        Next
+        On Error GoTo Fail
+    End If
+    SKW_Finish
+    If doIt Then
+        SKW_DeleteUnusedStyles = "Deleted " & nDel & " unused custom style(s) and hid " & nHide & " unused built-in style(s) from the Styles pane." & vbCr & _
+            "Kept: styles in use, styles they depend on, " & nTeam & " unused team style(s), Normal and Heading 1 to 9." & _
+            IIf(failed.Count > 0, " Word would not delete " & failed.Count & ": " & Join(failed.Keys, ", ") & ".", "") & " One Ctrl+Z undoes it."
+    Else
+        SKW_Report "Delete Unused Styles", nDel & " custom style(s) to delete, " & nHide & " built-in style(s) to hide, " & nTeam & _
+            " unused team style(s) kept" & IIf(nLean > 0, ", " & nLean & " that go once the style leaning on them is gone", "") & _
+            ". Word does not let a built-in style be deleted, so an unused one is hidden from the Styles pane until it is used. " & _
+            "Kept: styles in use, styles they depend on, the team's styles (the Allowed styles list and the StylePrefix setting), Normal and Heading 1 to 9. Changes nothing.", _
+            Array("Style", "Kind", "Type", "What happens"), rows
+        SKW_Fixable = nDel + nHide
+        SKW_DeleteUnusedStyles = nDel & " custom style(s) to delete, " & nHide & " built-in style(s) to hide, " & nTeam & " unused team style(s) kept."
+    End If
+    Exit Function
+Fail:
+    msg = Err.Description
+    SKW_Finish
+    SKW_DeleteUnusedStyles = "Stopped: " & msg & "." & IIf(doIt, " Press Ctrl+Z to undo what was done.", "")
 End Function

@@ -42,6 +42,31 @@ Public Sub ChooseStandardsWorkbook()
     SKW_Say SKW_ChooseStandards(p)
 End Sub
 
+' Chooses the folder where reports are saved, on this PC. Each report is saved there as it is made, named for the report, the file it checked and the time. With no folder chosen, reports open and are not saved.
+Public Sub ChooseReportsFolder()
+    Dim cur As String, a As VbMsgBoxResult, p As String
+    If SKW_IsQuiet() Then Exit Sub   ' needs a person to choose the folder
+    cur = SKW_ReportsFolder()
+    If Len(cur) > 0 Then
+        a = MsgBox("Reports are saved in:" & vbCr & cur & vbCr & vbCr & "Choose another folder?" & vbCr & _
+                   "No stops saving them: reports then open and are yours to save or close.", vbYesNoCancel + vbQuestion, SKW_APP)
+        If a = vbCancel Then Exit Sub
+        If a = vbNo Then
+            SKW_SetReportsFolder ""
+            SKW_Say "Reports are no longer saved. They open, and you save the ones you want."
+            Exit Sub
+        End If
+    End If
+    With Application.FileDialog(4)
+        .Title = "Choose where Stationkeeper reports are saved"
+        If Len(cur) > 0 Then .InitialFileName = cur & "\"
+        If .Show <> -1 Then Exit Sub
+        p = .SelectedItems(1)
+    End With
+    SKW_SetReportsFolder p
+    SKW_Say "Reports are saved in " & p & "."
+End Sub
+
 ' Adds the Table roles sheet to your standards workbook: one row per role (caption, header, divider, total, number, short text, long text) with its style, alignment and shading, for Table Roles Check.
 Public Sub AddTableRolesSheet()
     If SKW_IsQuiet() Then Exit Sub
@@ -177,19 +202,21 @@ End Function
 ' The starting rows of the Table roles sheet: one row per role. A blank Type means every table type.
 Private Function TableRolesRows() As Variant
     TableRolesRows = Array( _
-        Array("Type", "Role", "Paragraph style", "Align", "Vertical", "Shading", "Bold", "Recognize", "Notes"), _
-        Array("", "Caption", "", "", "", "", "", "", "Row 1 when it holds a caption number field. Its text and field codes are never changed."), _
-        Array("", "Header", "", "Center", "Center", "", "Yes", "1", "Recognize: how many header rows follow the caption row."), _
-        Array("", "Divider", "", "Left", "Center", "", "Yes", "merged", "Recognize: merged (one cell across the table), or merged; first cell only."), _
-        Array("", "Total", "", "", "Center", "", "Yes", "Total;Subtotal;Grand Total", "Recognize: the words a total row's first cell starts with."), _
-        Array("", "Number", "", "Right", "Center", "", "", "-", "Cells holding figures. Recognize: other texts that count as a figure, such as N/A."), _
-        Array("", "Short text", "", "Center", "Center", "", "", "3", "Recognize: the most words a short cell holds."), _
-        Array("", "Long text", "", "Left", "Top", "", "", "", "Every other cell."), _
-        Array("", "Notes", "", "Left", "Top", "", "", "Note;Notes;Source;Sources", "A merged row whose text starts with one of these words."), _
-        Array("", "Keep", "", "", "", "", "", "", "Recognize: paragraph styles left as they are inside cells, such as bullet and numbered note styles, separated by ;"), _
-        Array("", "", "", "", "", "", "", "", "Align: Left, Center, Right. Vertical: Top, Center, Bottom. Shading: RRGGBB or None. Bold: Yes or No. A blank cell leaves that setting as it is."), _
-        Array("", "", "", "", "", "", "", "", "To give one table type its own value, add a row with the type's name in Type."), _
-        Array("", "", "", "", "", "", "", "", "Borders and cell margins are on the Table types sheet. Cell margins: inches, one value or top; bottom; left; right. Border style: Single, Dotted, Dashed, Double or None. Border width: 0.25, 0.5, 0.75, 1, 1.5, 2.25, 3, 4.5 or 6 points. Border color: RRGGBB."))
+        Array("Type", "Role", "Paragraph style", "Align", "Vertical", "Shading", "Bold", "Recognize", "Left indent", "Tab stops", "Notes"), _
+        Array("", "Caption", "", "", "", "", "", "", "", "", "Row 1 when it holds a caption number field. Its text and field codes are never changed."), _
+        Array("", "Header", "", "Center", "Center", "", "Yes", "1", "", "", "Recognize: how many header rows follow the caption row."), _
+        Array("", "Divider", "", "Left", "Center", "", "Yes", "merged", "", "", "Recognize: merged (one cell across the table), or merged; first cell only."), _
+        Array("", "Total", "", "", "Center", "", "Yes", "Total;Subtotal;Grand Total", "", "", "Recognize: the words a total row's first cell starts with."), _
+        Array("", "Number", "", "Right", "Center", "", "", "-", "", "", "Cells holding figures. Recognize: other texts that count as a figure, such as N/A."), _
+        Array("", "Short text", "", "Center", "Center", "", "", "3", "", "", "Recognize: the most words a short cell holds."), _
+        Array("", "Long text", "", "Left", "Top", "", "", "", "", "", "Every other cell."), _
+        Array("", "Notes", "", "Left", "Top", "", "", "Note;Notes;Source;Sources", "", "", "A merged row whose text starts with one of these words."), _
+        Array("", "Keep", "", "", "", "", "", "", "", "", "Recognize: paragraph styles left as they are inside cells, such as bullet and numbered note styles, separated by ;"), _
+        Array("", "Figure caption", "", "", "", "", "", "", "", "", "Captions outside tables. Recognize: their paragraph style. Only Align, Left indent and Tab stops are set on them."), _
+        Array("", "", "", "", "", "", "", "", "", "", "Align: Left, Center, Right. Vertical: Top, Center, Bottom. Shading: RRGGBB or None. Bold: Yes or No. A blank cell leaves that setting as it is."), _
+        Array("", "", "", "", "", "", "", "", "", "", "Left indent and Tab stops: inches. Tab stops are left tabs; give several separated by ; and they replace the paragraph's own."), _
+        Array("", "", "", "", "", "", "", "", "", "", "To give one table type its own value, add a row with the type's name in Type."), _
+        Array("", "", "", "", "", "", "", "", "", "", "Borders and cell margins are on the Table types sheet. Cell margins: inches, one value or top; bottom; left; right. Border style: Single, Dotted, Dashed, Double or None. Border width: 0.25, 0.5, 0.75, 1, 1.5, 2.25, 3, 4.5 or 6 points. Border color: RRGGBB."))
 End Function
 
 ' Adds the Table roles sheet to the standards workbook the tools already use.
@@ -214,7 +241,7 @@ Public Function SKW_AddTableRolesSheet() As String
     If has Then
         wb.Close False
         xl.Quit
-        SKW_AddTableRolesSheet = "The workbook already has a Table roles sheet."
+        SKW_AddTableRolesSheet = "The workbook already has a Table roles sheet. A sheet made in 1.8.0 lacks two columns: add the headings Left indent and Tab stops to row 1 to use them, and a row with Figure caption in Role for captions outside tables."
         Exit Function
     End If
     Sheet wb, wb.Worksheets.Count + 1, "Table roles", TableRolesRows()
@@ -286,6 +313,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Setup.ChooseStandardsWorkbook", "Choose Standards Workbook", "Tools setup", _
         "Points the tools at your team's standards workbook. Each person does this once per template.", _
         "standards, excel, setup, rules", "Template", "Template", "No, it only reports")
+    s = s & "," & T("SKW_Setup.ChooseReportsFolder", "Choose Reports Folder", "Tools setup", _
+        "Chooses the folder on this PC where every report is saved as it is made, named for the report, the file it checked and the time. With no folder chosen, reports open and are not saved.", _
+        "reports, folder, save, where, setup", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Fields.SafeUpdateAllFields", "Safe Update All Fields", "Fields", _
         "Updates every field in every part of the document (body, headers, footers, notes, text boxes), then the tables of contents and figures. Fields that pull in outside files are kept as they are. One Ctrl+Z undoes it.", _
         "update, fields, f9, toc, cross-references, refresh", "Fields, Cross-references, Headers and footers", "Whole document", "Yes")
@@ -370,6 +400,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Output.PDFWithBookmarks", "PDF with Bookmarks", "Before delivery", _
         "Saves a PDF beside the document with bookmarks from the headings and tags for screen readers, without the file's personal details.", _
         "pdf, export, bookmarks, accessible, tagged", "Whole document", "Whole document", "No, it saves a PDF")
+    s = s & "," & T("SKW_Styles.DeleteUnusedStyles", "Delete Unused Styles", "Styles", _
+        "Clears the Styles pane down to what the document uses: lists the unused custom styles to delete and the unused built-in styles to hide (Word does not delete built-in styles), then asks before doing it. One Ctrl+Z undoes it.", _
+        "styles, delete, unused, clean, styles pane, hide, purge", "Styles", "Whole document", "Yes, after it asks")
     s = s & "," & T("SKW_Styles.RemoveUnusedCustomStyles", "Remove Unused Custom Styles", "Styles", _
         "Deletes custom styles nobody uses (not applied, not on the team list, not the base or next style of another). Lists what it deleted. One Ctrl+Z undoes it.", _
         "styles, cleanup, unused, delete styles", "Styles", "Whole document", "Yes")
@@ -492,7 +525,7 @@ Private Function SkKind(ByVal run As String) As String
     Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|PreDeliveryLeftovers|StyleInspector|" & _
         "NonAllowedStyleReport|DirectFormattingReport|ClearDirectFormattingSelection|TableStandardsAudit|" & _
         "ApplyTeamTableType|BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
-        "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|" & _
+        "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|DeleteUnusedStyles|" & _
         "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
         "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AddTableRolesSheet|"
