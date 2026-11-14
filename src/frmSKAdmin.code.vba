@@ -284,7 +284,7 @@ Private Sub UserForm_Initialize()
     Set lblBackupPath = Lbl(pg, "lblBackupPath", "", 8, 276, 600, 14)
     lblBackupPath.Font.Bold = True
     Set btnBackupDir = Btn(pg, "btnBackupDir", "Choose the backup folder", 8, 294, 170, 24)
-    Lbl pg, "lblPl", "Primary list for this template (Excel, CSV, Word or JSON), on this PC:", 8, 330, 600, 14
+    Lbl pg, "lblPl", "Primary list for this template (Excel, CSV or JSON), on this PC:", 8, 330, 600, 14
     Set lblPrimaryPath = Lbl(pg, "lblPrimaryPath", "", 8, 346, 750, 14)
     lblPrimaryPath.Font.Bold = True
     Set btnPrimaryChoose = Btn(pg, "btnPrimaryChoose", "Choose the primary list", 8, 364, 170, 24)
@@ -311,7 +311,7 @@ Private Sub UserForm_Initialize()
     Set btnUpdatePrimary = Btn(pg, "btnUpdatePrimary", "Update from the primary list", 8, 148, 260, 22)
     Set lblPrimaryBulk = Lbl(pg, "lblB5", "", 278, 152, 480, 14)
     Set btnUpdateFile = Btn(pg, "btnUpdateFile", "Update from a list file", 8, 176, 260, 22)
-    Lbl pg, "lblB5b", "Excel, CSV, a Word table or JSON. Shows what will change first. Blank cells leave values as they are.", _
+    Lbl pg, "lblB5b", "Excel, CSV or JSON. Shows what will change first. Blank cells leave values as they are.", _
         278, 180, 480, 14
     Set btnReadBas = Btn(pg, "btnReadBas", "Read macros from .bas files", 8, 214, 260, 22)
     Lbl pg, "lblB6", "Only when Word will not let the admin look inside the template: export each module " & _
@@ -1172,7 +1172,7 @@ Private Function PickListFile(ByVal title As String, ByVal start As String) As S
     With Application.FileDialog(3)
         .Title = title
         .Filters.Clear
-        .Filters.Add "Lists (Excel, CSV, Word, JSON)", "*.xlsx;*.xlsm;*.xls;*.csv;*.docx;*.docm;*.doc;*.json"
+        .Filters.Add "Lists (Excel, CSV, JSON)", "*.xlsx;*.xlsm;*.xls;*.csv;*.json"
         .AllowMultiSelect = False
         If Len(start) > 0 Then .InitialFileName = start
         If .Show = -1 Then PickListFile = .SelectedItems(1)

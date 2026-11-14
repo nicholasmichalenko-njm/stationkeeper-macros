@@ -233,7 +233,10 @@ End Function
 Public Function T_UpdateFrom(ByVal path As String) As String
     Dim m As Object, rows As Collection, a As String, b As String, n1 As Long, n2 As Long, s As String, k As Variant
     Set m = SK_LoadModel()
+    On Error Resume Next
     Set rows = SK_ReadListFile(path)
+    If Err.Number <> 0 Then T_UpdateFrom = "NOT READ: " & Err.Description: Exit Function
+    On Error GoTo 0
     a = SK_UpdateFromRows(m, rows, False, n1)
     b = SK_UpdateFromRows(m, rows, True, n2)
     s = "PREVIEW " & Replace(a, vbCr, " / ") & " || APPLIED " & n2 & " ||"
@@ -328,7 +331,7 @@ Public Function T_SkMenu() As String
     Dim s As String, k As Variant
     Load frmSKMenu
     s = "LINK " & frmSKMenu.TestLink()
-    For Each k In Array("Needs effort data", "Stationkeeper", "Other", "Ready to run now")
+    For Each k In Array("Stationkeeper", "Other")
         s = s & " || " & UCase$(k) & " " & frmSKMenu.TestShow(CStr(k))
     Next
     s = s & " || GATE built: " & frmSKMenu.TestGate("Module1.ShowHiddenText")
@@ -336,6 +339,7 @@ Public Function T_SkMenu() As String
     s = s & " || GATE needsT: " & frmSKMenu.TestGate("Module1.UpdateAllFields")
     s = s & " || GATE none: " & frmSKMenu.TestGate("Module1.FitTablesToMargins")
     frmSKMenu.TestShow "All macros"
+    s = s & " ## SHOW=" & frmSKMenu.TestShowChoices()
     Unload frmSKMenu
     T_SkMenu = s
 End Function
@@ -366,7 +370,7 @@ Public Function T_SkPublish(ByVal arg As String) As String
     rules = "{""schema_version"": ""1.0"", ""manifest_revision"": " & a(2) & ", " & _
         """settings"": {""CaptionStyle"": """ & a(3) & """, ""TableLabel"": null, ""CaptionInFirstRow"": true}, " & _
         """banned_phrases"": [{""phrase"": ""leverage"", ""replacement"": ""use"", ""rule_id"": ""EF-1"", ""reason"": ""Effort rule"", ""match_case"": false, ""whole_word"": true}], " & _
-        """placeholders"": []}"
+        """placeholders"": []" & IIf(UBound(a) >= 4, ", ""table_types"": [{""type"": ""Effort Type"", ""table_style"": ""Table Grid"", ""header_row_repeats"": true}]", "") & "}"
     SK_WriteUtf8 dd & "\rules\rules.json", rules
     SK_WriteUtf8 dd & "\templates\effort.dotx", "stand-in template, revision " & a(1)
     SK_WriteUtf8 dd & "\dictionaries\effort.dic", "Effortword" & vbCrLf & "Stationkeeper"

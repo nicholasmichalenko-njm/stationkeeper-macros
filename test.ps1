@@ -214,7 +214,7 @@ try {
         $d.Close([ref]0)
     }
 
-    # 7c. 0.3.0: update from lists. Excel export, primary list edited in Excel, a Word table, JSON.
+    # 7c. 0.3.0: update from lists. Excel export, primary list edited in Excel, JSON.
     [string]$primaryX = Join-Path $work 'Macro primary list.xlsx'
     [string]$wordList = Join-Path $work 'Macro list.docx'
     [string]$jsonList = Join-Path $work 'macro list.json'
@@ -262,7 +262,7 @@ try {
         Check 'Excel list: Show in menu Yes applied' ($ux -match 'ClearDirectFormatting: [^#]*\|shown=1') ''
         $uw = TR1 $word 'T_UpdateFrom' $wordList
         Write-Output "WORD: $uw"
-        Check 'Word table list: applied, unknown macro skipped' (($uw -match 'FitTablesToMargins: [^#]*cat=Tables\|desc=Sets every table to the full text width\.') -and ($uw -match 'skipped: NoSuch\.Macro')) ''
+        Check 'a Word file is refused as a list, with the reason' ($uw -match 'A Word file cannot be read as a list') $uw
         $uj = TR1 $word 'T_UpdateFrom' $jsonList
         Write-Output "JSON: $uj"
         Check 'JSON list: escapes, unicode, true, bare macro name' (($uj -match 'TOCFix: [^#]*cat=Fields\|desc=Updates every table of contents\.\\nSecond line with "quotes" and caf.\.') -and ($uj -match 'TOCFix: [^#]*shown=1') -and ($uj -match 'UpdateAllFields: [^#]*kw=fields, toc, f9\|works=Whole document') -and ($uj -match 'skipped: Gone\.Macro')) ''
@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 69 tools arrive described, categorised and in the menu' (($tc -like '69 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTeamTableType\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 67 tools arrive described, categorised and in the menu' (($tc -like '67 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -363,14 +363,6 @@ try {
         $r = RunW $word 'SKW_Test.TW_Tables'
         Write-Output "TABLES: $($r.Substring(0, [Math]::Min(900, $r.Length)))"
         Check 'table audit: good table clean, bad and floating tables flagged' (($r -like '3 table(s) checked, 2 with findings*') -and ($r -match 'Header row does not repeat') -and ($r -match 'Rows can break') -and ($r -match 'Wider than the margins') -and ($r -match 'Floating') -and ($r -match 'Style Table Normal is not a team table type') -and ($r -notmatch '\| 1 \| \d+ \|')) ''
-        $r = RunW $word 'SKW_Test.TW_ApplyType'
-        Write-Output "APPLY: $($r.Substring(0, [Math]::Min(300, $r.Length))) ... $($r.Substring([Math]::Max(0, $r.Length - 200)))"
-        $r = $r + ' ## ' + (RunW $word 'SKW_Test.TW_TableState') + ' ## audit: ' + (RunW $word 'SKW_Test.TW_Tables')
-        $ul = RunW $word 'SKW_Test.TW_UndoList'
-        $u = 1; [void]$doc.Undo([ref]$u)
-        $st = (RunW $word 'SKW_Test.TW_TableState') + " (undo list was: $ul)"
-        Check 'apply table type: style, header repeats, rows whole, full width; one Ctrl+Z restores' (($r -match 'style=Table Grid head=-1 break=0 widthType=2 width=100') -and ($st -like 'style=Table Normal head=0 break=-1 widthType=3 width=* (undo list was: * | Stationkeeper: Apply table type |*')) "after one undo: $st"
-        Check 'after applying, only the caption is left on that table' (($r -match '\| 2 \| \d+ \| Caption') -and ($r -notmatch '\| 2 \| \d+ \| (Header row|Rows break|Width|Table style)')) ''
         $r = RunW $word 'SKW_Test.TW_SafeUpdate'
         Write-Output "UPDATE: $r"
         Check 'safe update: included file kept, broken ref now shows, tracking restored' (($r -match 'kept as they were') -and ($r -match 'include same=True locked=False brokenref=Error!') -and ($r -match 'track=True') -and ($r -match 'Track changes was paused')) ''
@@ -542,13 +534,14 @@ try {
     # 12b. 1.8.0: table roles on three fictional tables.
     [string]$rolesDoc = Join-Path $work 'Roles 1.8.docx'
     [string]$rolesCopy = Join-Path $work 'Roles 1.8 (tables styled).docx'
-    [string]$rolesStd = Join-Path $work 'Roles standards 1.8.xlsx'
+    [string]$macroStd = Join-Path $work 'Global Standards (with macro rows).xlsx'
+    Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (with macro rows).xlsx') $macroStd -Force
     [string]$reportsDir = Join-Path $work 'Reports 1.8.1'
     [string]$appStd = Join-Path $work 'Company Standards (app format 2).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Company Standards (app format 2).xlsx') $appStd -Force
     Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 3.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item $rolesStd, (Join-Path $work 'Roles 1.8 (tables styled) 2.docx') -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 2.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $rolesDoc, $rolesCopy -Force -ErrorAction SilentlyContinue
     Invoke-WordJob -Root $Root -Job {
         param($word)
@@ -556,7 +549,7 @@ try {
         $b = RunW $word 'SKW_Test.TW_BuildRoles' $rolesDoc
         Check '1.8.0: the roles test document is made with a caption number field in row 1' (($b -match 'tables=3 fields=1') -and ($b -match 'cap=Table 1\. Costs by year')) $b
         $rr = RunW $word 'SKW_Test.TW_RolesRead'
-        Check '1.8.0: seven roles are read, with built-in values where the sheet says nothing' (($rr -match 'header=,center,center,yes,1 \|') -and ($rr -match 'number=,right,center,,- \|') -and ($rr -match 'short text=,center,center,,3 \|') -and ($rr -match 'long text=,left,top,, \|') -and ($rr -match 'total=,,center,yes,Total;Subtotal;Grand Total \|')) $rr
+        Check '1.8.0: with no Table looks sheet the built-in roles are read' (($rr -match 'header=,center,center,yes,1 \|') -and ($rr -match 'number=,right,center,,- \|') -and ($rr -match 'short text=,center,center,,3 \|') -and ($rr -match 'long text=,left,top,, \|') -and ($rr -match 'total=,,center,yes,Total;Subtotal;Grand Total \|')) $rr
         $r = RunW $word 'SKW_Test.TW_RolesCheck'
         Check '1.8.0: Table Roles Check reads every row and cell by role and changes nothing' (($r -match '^3 table\(s\) read, 0 with rows to look at, 1 skipped\. ## fixable=2 ') -and ($r -match 'Caption 1, Header 1, Divider 2, Total 1, Body 3') -and ($r -match 'Number 7, Short text 6, Long text 2') -and ($r -match 'Skipped: its Alt Text says skip') -and ($r -match 'Header 1, Divider 0, Total 1, Body 1')) $r
         $f = RunW $word 'SKW_Test.TW_RolesFix' $rolesCopy
@@ -573,14 +566,12 @@ try {
         $h = RunW $word 'SKW_Test.TW_RolesHere'
         $hs = RunW $word 'SKW_Test.TW_RolesHereState'
         Check '1.8.0: Apply Table Roles styles the table at the cursor and says what it read' (($h -match '^Table styled as \S.*Rows: Header 1, Divider 0, Total 1, Body 1\. Cells: Number 2, Short text 2, Long text 0\.') -and ($hs -eq '1.1=1/1/B 2.2=2/1/n 3.1=0/1/B 3.2=2/1/B')) "$h ## $hs"
-        $wbk = RunW $word 'SKW_Test.TW_RolesWorkbook' $rolesStd
-        Write-Output "ROLESWB: $wbk"
-        Check '1.8.0: a new standards workbook has the Table roles sheet, and the tools read it' (($wbk -match '^Made ## sheet rows=1\d ') -and ($wbk -match 'same=False') -and ($wbk -match 'skipped: Roles 1\.8 \(tables styled\) 2\.docx\.')) $wbk
-        Check '1.8.0: a role takes its paragraph style and fill from the sheet' (($wbk -match 'head=Heading 2 fill=F3E2D9') -and ($wbk -match 'p1=Body Text')) $wbk
-        Check '1.8.0: a kept style inside a cell is left as it is' ($wbk -match 'p2=List Bullet') $wbk
-        Check '1.8.0: borders and cell margins come from the table type' (($wbk -match 'border=1/8/FF ') -and ($wbk -match 'pad=3\.6/3\.6')) $wbk
-        Check '1.8.0: a merged row that starts with Note is a notes row, not a divider' ($wbk -match '9\.1=0/0/n') $wbk
-        Check '1.8.1: the caption row takes its left indent and tab stop, and captions outside tables take theirs' (($wbk -match 'cap indent=7\.2 tabs=1@72') -and ($wbk -match 'fig align=1 tabs=2@36,90') -and ($wbk -match '1 caption\(s\) outside tables set')) $wbk
+        $wbk = RunW $word 'SKW_Test.TW_MacroLooks' $macroStd
+        Write-Output "MACROLOOKS: $wbk"
+        Check '1.9.1: the macros'' own looks are read from the app''s workbook: number cells right, short text centered' (($wbk -match '^app=True ## ') -and ($wbk -match 'same=False') -and ($wbk -match 'skipped: Roles 1\.8 \(tables styled\) 2\.docx\.') -and ($wbk -match '4\.1=1/1/n') -and ($wbk -match '4\.3=2/1/n') -and ($wbk -match '5\.4=2/1/n')) $wbk
+        Check '1.9.1: a kept style inside a cell is left as it is, and the rest of the cell takes the body tag style' (($wbk -match 'p1=PE Table Text') -and ($wbk -match 'p2=List Bullet')) $wbk
+        Check '1.9.1: a merged row that starts with Note takes the note look' ($wbk -match 'note=PE Table Note') $wbk
+        Check '1.9.1: the caption row takes its tab stop, and captions outside tables take their alignment and tab stops' (($wbk -match 'cap tabs=1@72') -and ($wbk -match 'fig align=1 tabs=2@36,90') -and ($wbk -match '1 caption\(s\) outside tables set')) $wbk
         $pg = RunW $word 'SKW_Test.TW_Progress'
         Write-Output "PROGRESS: $pg"
         Check '1.8.1: the progress window names the tool and the item it is on' ($pg -match 'first: Progress test \| Paragraph 1 of 200 \| fill=[01] \| Running 0 s') $pg
@@ -603,7 +594,7 @@ try {
         $ap = RunW $word 'SKW_Test.TW_AppStandards' $appStd
         Write-Output "APPSTD: $ap"
         Check '1.9.0: the tools read the Stationkeeper app''s workbook: its table types, its settings and its changed date' ($ap -match '^app=True types=4 first=std font=Arial changed=True ##') $ap
-        Check '1.9.0: the check says the looks come from the app''s standards and names the styles it will make' (($ap -match 'The looks come from the Table looks sheet of the Stationkeeper standards \(Company Standards \(app format 2\)\.xlsx changed \d{4}') -and ($ap -match 'made from the standards: [^.]*PE Table Header')) $ap
+        Check '1.9.0: the check says the looks come from the Global Standards and names the styles it will make' (($ap -match 'The looks come from the Table looks sheet of the Global Standards \(Company Standards \(app format 2\)\.xlsx changed \d{4}') -and ($ap -match 'made from the Global Standards: [^.]*PE Table Header')) $ap
         Check '1.9.0: each row takes its look: tag style, fill and font color' (($ap -match 'head=PE Table Header\|64381F\|FFFFFF') -and ($ap -match 'div=PE Table Subhead\|D9D9D9') -and ($ap -match 'note=PE Table Note') -and ($ap -match 'sub=PE Table Subtotal')) $ap
         Check '1.9.0: a tag style the document lacks is made from the look' (($ap -match 'style=Arial\|9\|-?1\|2') -and ($ap -match 'body=PE Table Text\|Arial\|9\|0')) $ap
         Check '1.9.0: a total row takes its fill and its heavier top edge; body cells take the inside edges' (($ap -match 'total=PE Table Total\|F7EEE8\|top=1/12/64381F') -and ($ap -match 'bodyedge=1/4/DBA98E')) $ap
@@ -709,10 +700,9 @@ try {
             $mn = TR $word 'T_SkMenu'
             Write-Output "MENU0: $mn"
             Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
-            Check 'filter Needs effort data: the two, with the filled badge' ($mn -match 'NEEDS EFFORT DATA 2: \[[^\]]+ SK\+\] \[[^\]]+ SK\+\] \|\|') ''
+            Check 'the Show box has three choices: All macros, Stationkeeper, Other' ($mn -match 'SHOW=All macros\|Stationkeeper\|Other(\s|$)') ''
             Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Fit All Tables\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
             Check 'filter Other: own macros only' (($mn -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'OTHER \d+:[^|]*(SK-|SK\+|Style Inspector)')) ''
-            Check 'filter Ready to run now: needs-data macros left out when not linked' (($mn -match 'READY TO RUN NOW \d+:') -and ($mn -notmatch 'READY TO RUN NOW [^|]*SK\+')) ''
             Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link a folder\.\.\., Cancel \| Don''t ask again') ''
             Check 'needs data, not linked: says what and where, offers the picker' ($mn -match 'GATE needs: needs \| Needs Stationkeeper data \| This macro is used with the Stationkeeper application\. Please point to the Stationkeeper data folder for your effort\.[^|]*It needs the effort rules\.[^|]*Stationkeeper Data\\rules\\rules\.json[^|]*Right now: Not linked\.[^|]*\| buttons: Point to the folder\.\.\., Cancel \|\|') ''
             Check 'not related: runs with no question' ($mn -match 'GATE none: run') ''
@@ -738,7 +728,6 @@ try {
             Check 'menu link strip: current, Change, Unlink' (($mn -match 'LINK Stationkeeper data: Current  \|  ') -and ($mn -match 'Effort A, revision 15, saved') -and ($mn -match 'button=Change\.\.\. unlink=True')) ''
             Check 'linked: built and needs-rules run with no question' (($mn -match 'GATE built: run') -and ($mn -match 'GATE needs: run')) ''
             Check 'linked, part missing: needs-template says the template is missing' ($mn -match 'GATE needsT: needs \| Needs Stationkeeper data \| [^|]*Right now: This effort''s Stationkeeper Data has no effort template yet\.') ''
-            Check 'Ready to run now: needs-rules in, needs-template out' (($mn -match 'READY TO RUN NOW [^|]*\[Write Test Marker SK\+\]') -and ($mn -notmatch 'READY TO RUN NOW [^|]*\[Update All Fields')) ''
             [void](TR1 $word 'T_SkMakeData' "$effort|incomplete")
             $l = TR1 $word 'T_SkLink' $effort
             Check 'link: incomplete when rules.json is a revision behind' (($l -like 'Incomplete*') -and ($l -match 'rules/rules\.json \(revision 14\)')) $l
@@ -796,6 +785,11 @@ try {
             $lf = TR $word 'T_SkLinkFiles'
             [void](RunW $word 'SKW_Test.TW_RenameFolder' "$effB moved|$effB")
             Check 'out of reach (offline, sync off): the last complete copy is used' (($r -match '^note=Rules: effort Effort B rev 5 \(last complete copy: folder missing\)') -and ($r -match 'caption=Effort Caption 5 \|') -and ($lf -like 'Folder missing | cached=True*')) "$r ;; $lf"
+            [void](TR1 $word 'T_SkPublish' "$effB|6|6|Effort Caption 5|tt")
+            $et = RunW $word 'SKW_Test.TW_EffortTables' $appStd
+            Write-Output "EFFORTTABLES: $et"
+            Check '1.9.1: with an effort linked that publishes table types, the looks and the table types still come from the Global Standards workbook' ($et -match '^linked=True effort types=True app=True types=4 first=std ##') $et
+            Check '1.9.1: the report says an effort is linked and may differ from the Global Standards' ($et -match 'An effort is linked \(Effort B\): its own standards cannot be read yet, so these are the Global Standards and the effort may differ\.') $et
             [void](TR1 $word 'T_SkLink' '')
             $c = RunW $word 'SKW_Test.TW_Cache'
             $r = RunW $word 'SKW_Test.TW_Rules'

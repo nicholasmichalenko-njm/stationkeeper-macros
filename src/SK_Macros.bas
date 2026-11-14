@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.9.0"
+Public Const SK_VERSION As String = "1.9.1"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -1123,7 +1123,7 @@ End Function
 
 ' ---------------------------------------------------------------------
 ' Lists: update titles, categories, descriptions and the rest from a file.
-' Excel (.xlsx/.xlsm/.xls), CSV, a table in a Word file, or JSON.
+' Excel (.xlsx/.xlsm/.xls), CSV or JSON. A Word file is refused.
 ' Each row needs a Macro column (Module.Macro, or just the macro name).
 ' Blank cells leave values as they are. Rows for macros that are not in
 ' the template are skipped and listed. Code is never changed.
@@ -1149,9 +1149,9 @@ Public Function SK_ReadListFile(ByVal path As String) As Collection
     Select Case LCase$(Mid$(path, InStrRev(path, ".") + 1))
         Case "csv", "txt": Set SK_ReadListFile = SK_RowsFromCells(SK_ParseCsv(SK_ReadUtf8(path)))
         Case "xlsx", "xlsm", "xls": Set SK_ReadListFile = SK_RowsFromCells(SK_CellsFromExcel(path))
-        Case "docx", "docm", "doc": Set SK_ReadListFile = SK_RowsFromCells(SK_CellsFromWord(path))
+        Case "docx", "docm", "doc": Err.Raise vbObjectError + 2, SK_APP, "A Word file cannot be read as a list. Use Excel, CSV or JSON."
         Case "json": Set SK_ReadListFile = SK_RowsFromJson(path)
-        Case Else: Err.Raise vbObjectError + 2, SK_APP, "Use an Excel, CSV, Word or JSON file."
+        Case Else: Err.Raise vbObjectError + 2, SK_APP, "Use an Excel, CSV or JSON file."
     End Select
 End Function
 
@@ -1224,43 +1224,6 @@ Fail:
     If Not wb Is Nothing Then wb.Close False
     If Not xl Is Nothing Then xl.Quit
     Err.Raise vbObjectError + 4, SK_APP, "Could not read the Excel file: " & ed
-End Function
-
-Private Function SK_CellsFromWord(ByVal path As String) As Collection
-    Dim d As Object, t As Object, tbl As Object, res As New Collection, row As Collection
-    Dim r As Long, c As Long, txt As String, ed As String
-    On Error GoTo Fail
-    Set d = Documents.Open(FileName:=path, ReadOnly:=True, AddToRecentFiles:=False, Visible:=False)
-    For Each t In d.Tables
-        For c = 1 To t.Rows(1).Cells.Count
-            If SK_FieldKey(SK_CellText(t.Rows(1).Cells(c))) = "run" Then Set tbl = t: Exit For
-        Next
-        If Not tbl Is Nothing Then Exit For
-    Next
-    If Not tbl Is Nothing Then
-        For r = 1 To tbl.Rows.Count
-            Set row = New Collection
-            For c = 1 To tbl.Rows(r).Cells.Count
-                row.Add SK_CellText(tbl.Rows(r).Cells(c))
-            Next
-            res.Add row
-        Next
-    End If
-    d.Close SaveChanges:=0
-    Set SK_CellsFromWord = res
-    Exit Function
-Fail:
-    ed = Err.Description
-    On Error Resume Next
-    If Not d Is Nothing Then d.Close SaveChanges:=0
-    Err.Raise vbObjectError + 5, SK_APP, "Could not read the table in the Word file (use a simple table, no merged cells): " & ed
-End Function
-
-Private Function SK_CellText(ByVal cel As Object) As String
-    Dim t As String
-    t = cel.Range.Text
-    If Len(t) >= 2 Then t = Left$(t, Len(t) - 2)
-    SK_CellText = Replace(t, vbCr, vbCrLf)
 End Function
 
 ' JSON: an array of objects, or an object with a "macros" array.

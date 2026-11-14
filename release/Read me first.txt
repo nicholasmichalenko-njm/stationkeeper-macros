@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.9.0
+STATIONKEEPER MACROS 1.9.1
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -28,7 +28,7 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
      Tick "Show in the menu".
    - Many macros? Keep a primary list: Bulk tools > Export the list to Excel, edit it,
      then Bulk tools > Update from the primary list. It shows what will change first.
-     Any Excel, CSV, Word table or JSON list works (Update from a list file).
+     Any Excel, CSV or JSON list works (Update from a list file).
      Blank cells leave values as they are.
    - Settings tab: set Alt+Shift+M, an Add-ins tab button, and where backups go.
    - Tick Ready to save, then Save to template. A dated backup is made first.
@@ -42,7 +42,7 @@ A menu and a bookshelf for the macros in a Word template. It never edits your co
      or View > Macros > StationkeeperMacros.
    - Type to search. Up/Down move, Enter runs, Esc closes.
    - One Ctrl+Z undoes a whole macro.
-   - Show: All macros, Stationkeeper, Other, Needs effort data, Ready to run now.
+   - Show: All macros, Stationkeeper, Other.
      Category: one of your categories.
      An outlined diamond SK means built for Stationkeeper (runs on its own); a filled
      diamond SK means it needs Stationkeeper data.

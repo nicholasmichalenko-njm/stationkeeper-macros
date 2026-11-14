@@ -45,7 +45,6 @@ Private mBusy As Boolean
 Private mInfo As Object          ' the Stationkeeper link, read fresh (SK_LinkInfo)
 Private mAskRun As String        ' the macro waiting on the question panel
 Private mAskKind As String       ' "ask" or "needs"
-Private mNeedsOk As Object       ' "Works on" answers met right now, per refresh
 Private mDocPath As String       ' the folder of the document the menu was opened from
 Private mSuggest As String       ' an effort folder to offer (the document's own), or ""
 
@@ -103,8 +102,6 @@ Private Sub UserForm_Initialize()
     cboShow.AddItem "All macros"
     cboShow.AddItem "Stationkeeper"
     cboShow.AddItem "Other"
-    cboShow.AddItem "Needs effort data"
-    cboShow.AddItem "Ready to run now"
     cboShow.ControlTipText = "Stationkeeper: made for Stationkeeper. Other: not made for Stationkeeper."
 
     AddLabel "lblCat", "Category", 282, 8, 100, 14
@@ -250,6 +247,8 @@ Private Sub UserForm_Initialize()
     v = SK_GetPref("show", "All macros")
     If v = "My macros" Then v = "Other"                    ' names before 1.3.0
     If v = "Stationkeeper tools" Then v = "Stationkeeper"
+    ' Choices retired in 1.9.1 fall back to All macros; save that once so the old name is gone.
+    If v = "Needs effort data" Or v = "Ready to run now" Then v = "All macros": SK_SetPref "show", v
     cboShow.ListIndex = 0
     For i = 0 To cboShow.ListCount - 1
         If LCase$(cboShow.List(i)) = LCase$(v) Then cboShow.ListIndex = i
@@ -353,7 +352,6 @@ Private Sub RefreshList()
     q = Trim$(txtSearch.Text)
     If cboAffects.ListIndex > 0 Then aff = cboAffects.Text
     flt = cboShow.Text
-    Set mNeedsOk = CreateObject("Scripting.Dictionary")
     mode = cboSort.Text
     n = mItems.Count
     ReDim keys(1 To n + 1): ReDim idx(1 To n + 1): ReDim why(1 To n + 1)
@@ -615,17 +613,11 @@ Private Sub cboCat_Change()
 End Sub
 
 Private Function ShowPasses(ByVal e As Object, ByVal flt As String) As Boolean
-    Dim k As String, why As String, w As String
+    Dim k As String
     k = SK_SkKind(e("stationkeeper"))
     Select Case flt
         Case "Other": ShowPasses = (k = "none" And Not IsSkTool(e))
         Case "Stationkeeper": ShowPasses = (k <> "none" Or IsSkTool(e))
-        Case "Needs effort data": ShowPasses = (k = "needs")
-        Case "Ready to run now"
-            w = LCase$(e("workson"))
-            If Not mNeedsOk.Exists(w) Then mNeedsOk(w) = SK_NeedsMet(e("workson"), why)
-            ShowPasses = mNeedsOk(w)
-            If ShowPasses And k = "needs" Then ShowPasses = SK_DataReady(mInfo, SK_SkParts(e("stationkeeper")), why)
         Case Else: ShowPasses = True
     End Select
 End Function
@@ -814,11 +806,29 @@ Public Function TestSearch(ByVal q As String) As String
     TestSearch = s
 End Function
 
+' Picks a Show choice by name; a name that is not in the list picks All macros.
+Private Sub SetShowChoice(ByVal flt As String)
+    Dim i As Long, pick As Long
+    For i = 0 To cboShow.ListCount - 1
+        If LCase$(cboShow.List(i)) = LCase$(flt) Then pick = i
+    Next
+    cboShow.ListIndex = pick
+End Sub
+
+' The Show choices, joined with "|".
+Public Function TestShowChoices() As String
+    Dim s As String, i As Long
+    For i = 0 To cboShow.ListCount - 1
+        s = s & IIf(i > 0, "|", "") & cboShow.List(i)
+    Next
+    TestShowChoices = s
+End Function
+
 ' The list under a Show filter: count, then title and badge (SK- for built, SK+ for needs data).
 Public Function TestShow(ByVal flt As String) As String
     Dim s As String, i As Long, b As String
     txtSearch.Text = ""
-    cboShow.Text = flt
+    SetShowChoice flt
     s = lstMacros.ListCount & ":"
     For i = 0 To lstMacros.ListCount - 1
         b = lstMacros.List(i, 1)
@@ -835,7 +845,7 @@ Public Function TestCat(ByVal flt As String, ByVal cat As String) As String
         s = s & cboCat.List(i) & "|"
     Next
     txtSearch.Text = ""
-    cboShow.Text = flt
+    SetShowChoice flt
     cboCat.Text = cat
     s = s & " -> " & lstMacros.ListCount & ":"
     For i = 0 To lstMacros.ListCount - 1

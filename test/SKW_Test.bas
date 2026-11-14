@@ -289,15 +289,6 @@ Public Function TW_Tables() As String
     TW_Tables = s
 End Function
 
-Public Function TW_ApplyType() As String
-    Dim d As Object, t As Object, s As String
-    SKW_Quiet = True
-    Set d = ActiveDocument
-    FindText(d, "Bad head").Select
-    ' Only the run here: reading the table back inside the same macro puts a step on Word's Undo list.
-    TW_ApplyType = Replace(SKW_ApplyTeamTableType("Standard"), vbCr, " / ")
-End Function
-
 ' Read after test.ps1 presses Undo once. Undo inside the same macro run is not reliable in Word
 ' (its undo list settles after the macro ends), and a person presses Ctrl+Z after the run anyway.
 Public Function TW_TableState() As String
@@ -1307,7 +1298,7 @@ Public Function TW_RolesRead() As String
     For Each k In r.Keys
         s = s & k & "=" & r(k)("paragraph style") & "," & r(k)("align") & "," & r(k)("vertical") & "," & r(k)("bold") & "," & r(k)("recognize") & " | "
     Next
-    TW_RolesRead = "sheet rows=" & SKW_Rows("Table roles").Count & " ## " & s
+    TW_RolesRead = "app=" & SKW_AppStandards() & " ## " & s
 End Function
 
 ' The tab stops a person set (not Word's default ones), as positions in points.
@@ -1319,31 +1310,12 @@ Private Function CustomTabs(ByVal ts As Object) As String
     CustomTabs = n & "@" & Mid$(s, 2)
 End Function
 
-' Makes a standards workbook, sets a header style and fill, a long text style, a kept style, borders and cell margins in it,
-' then styles a copy of the roles document from it.
-Public Function TW_RolesWorkbook(ByVal path As String) As String
-    Dim prev As String, xl As Object, wb As Object, ws As Object, r As Long, d As Object, c As Object, t As Object, s As String, rg As Object
+' 1.9.1: the app's workbook with the macros' own rows (number, short, keep, figure caption) and columns
+' (Recognize, Tab stops) on its Table looks sheet. Styles a copy of the roles document from it.
+Public Function TW_MacroLooks(ByVal path As String) As String
+    Dim prev As String, d As Object, c As Object, t As Object, s As String, rg As Object
     SKW_Quiet = True
     prev = SKW_StandardsPath()
-    s = Left$(SKW_MakeStandardsWorkbook(path, False), 4)
-    Set xl = CreateObject("Excel.Application")
-    xl.DisplayAlerts = False
-    Set wb = xl.Workbooks.Open(path)
-    Set ws = wb.Worksheets("Table types")
-    ws.Cells(2, 11).Value = "0.05": ws.Cells(2, 12).Value = "Single": ws.Cells(2, 13).Value = "1": ws.Cells(2, 14).Value = "FF0000"
-    Set ws = wb.Worksheets("Table roles")
-    For r = 2 To 14
-        Select Case LCase$(ws.Cells(r, 2).Value)
-            Case "header": ws.Cells(r, 3).Value = "Heading 2": ws.Cells(r, 6).Value = "D9E2F3"
-            Case "long text": ws.Cells(r, 3).Value = "Body Text"
-            Case "caption": ws.Cells(r, 9).Value = "0.1": ws.Cells(r, 10).Value = "1"
-            Case "figure caption": ws.Cells(r, 8).Value = "Caption": ws.Cells(r, 4).Value = "Center": ws.Cells(r, 10).Value = "0.5; 1.25"
-            Case "keep": ws.Cells(r, 8).Value = "List Bullet"
-        End Select
-    Next
-    wb.Save
-    wb.Close False
-    xl.Quit
     SKW_SetStandardsPath path
     Set d = RolesDoc()
     Set rg = d.Tables(1).Cell(4, 2).Range
@@ -1356,16 +1328,14 @@ Public Function TW_RolesWorkbook(ByVal path As String) As String
     d.Paragraphs(d.Paragraphs.Count).Range.InsertBefore "Figure 1" & vbTab & "A caption outside a table"
     d.Paragraphs(d.Paragraphs.Count).Style = d.Styles("Caption")
     d.Save
-    s = s & " ## sheet rows=" & SKW_Rows("Table roles").Count & " ## " & Replace(SKW_TableRolesFixCopy(""), vbCr, " / ")
+    s = "app=" & SKW_AppStandards() & " ## " & Replace(SKW_TableRolesFixCopy(""), vbCr, " / ")
     Set c = ActiveDocument
     Set t = c.Tables(1)
-    s = s & " ## same=" & (c.FullName = d.FullName) & " head=" & t.Cell(2, 1).Range.Paragraphs(1).Style.NameLocal & _
-        " fill=" & Hex$(t.Cell(2, 1).Shading.BackgroundPatternColor) & " p1=" & t.Cell(4, 2).Range.Paragraphs(1).Style.NameLocal & _
-        " p2=" & t.Cell(4, 2).Range.Paragraphs(2).Style.NameLocal & " border=" & t.Borders(wdBorderTop).LineStyle & "/" & _
-        t.Borders(wdBorderTop).LineWidth & "/" & Hex$(t.Borders(wdBorderHorizontal).Color) & " pad=" & Format$(t.TopPadding, "0.0") & "/" & Format$(t.LeftPadding, "0.0") & _
-        " " & CellState(t, 9, 1)
+    s = s & " ## same=" & (c.FullName = d.FullName) & " " & CellState(t, 4, 1) & " " & CellState(t, 4, 3) & " " & CellState(t, 5, 4) & _
+        " p1=" & t.Cell(4, 2).Range.Paragraphs(1).Style.NameLocal & " p2=" & t.Cell(4, 2).Range.Paragraphs(2).Style.NameLocal & _
+        " note=" & t.Cell(9, 1).Range.Paragraphs(1).Style.NameLocal
     With t.Cell(1, 1).Range.ParagraphFormat
-        s = s & " cap indent=" & Format$(.LeftIndent, "0.0") & " tabs=" & CustomTabs(.TabStops)
+        s = s & " cap tabs=" & CustomTabs(.TabStops)
     End With
     With c.Paragraphs(c.Paragraphs.Count).Range.ParagraphFormat
         s = s & " ## fig align=" & .Alignment & " tabs=" & CustomTabs(.TabStops)
@@ -1373,7 +1343,22 @@ Public Function TW_RolesWorkbook(ByVal path As String) As String
     If c.FullName <> d.FullName Then c.Close SaveChanges:=0
     SKW_SetStandardsPath prev
     d.Activate
-    TW_RolesWorkbook = s
+    TW_MacroLooks = s
+End Function
+
+' 1.9.1: an effort is linked and publishes table types in the older shape. The looks and the table types
+' still come from the Global Standards workbook, and the report says the effort may differ.
+Public Function TW_EffortTables(ByVal path As String) As String
+    Dim prev As String, s As String
+    SKW_Quiet = True
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath path
+    SKW_ForgetEffort
+    s = "linked=" & SKW_Effort()("ok") & " effort types=" & SKW_FromEffort("Table types") & " app=" & SKW_AppStandards() & _
+        " types=" & SKW_TableTypes().Count & " first=" & SKW_TableTypes()(1)("type") & " ## " & SKW_TableRolesSource()
+    SKW_SetStandardsPath prev
+    SKW_ForgetEffort
+    TW_EffortTables = s
 End Function
 
 ' ---------------------------------------------------------------------

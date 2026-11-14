@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.9.0"
+Public Const SKW_VERSION As String = "1.9.1"
 
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
@@ -1127,6 +1127,15 @@ Public Function SKW_Rows(ByVal sheet As String) As Collection
     Set s = SKW_Std()
     If s Is Nothing Then Set SKW_Rows = New Collection: Exit Function
     If s.Exists(LCase$(sheet)) Then Set SKW_Rows = s(LCase$(sheet)) Else Set SKW_Rows = New Collection
+End Function
+
+' A sheet's rows from the standards workbook alone, with no effort's rules laid over it.
+Public Function SKW_WbRows(ByVal sheet As String) As Collection
+    Dim w As Object
+    Set w = SKW_Workbook()
+    Set SKW_WbRows = New Collection
+    If w Is Nothing Then Exit Function
+    If w.Exists(LCase$(sheet)) Then Set SKW_WbRows = w(LCase$(sheet))
 End Function
 
 Public Function SKW_Setting(ByVal key As String, ByVal dflt As String) As String

@@ -73,7 +73,7 @@ The menu is a general macro menu. Each macro is one of three kinds (the admin's 
 | Built for Stationkeeper | ◇ SK | Runs on its own. If no effort folder is linked, it asks first: "This is built for Stationkeeper but is still functional. Would you like to run it?" with **Run it**, **Link a folder...**, **Cancel** and **Don't ask again**. |
 | Needs Stationkeeper data | ◆ SK | Runs only when the linked effort has the data it needs (the effort rules, template or dictionary). If not, it says "This macro is used with the Stationkeeper application. Please point to the Stationkeeper data folder for your effort.", names the files it needs and where Stationkeeper writes them, says what is wrong right now, and offers **Point to the folder...**. |
 
-**Show** filters the list: All macros, Stationkeeper (made for Stationkeeper), Other (not made for Stationkeeper), Needs effort data, and Ready to run now (what can run right now, given the selection and the link). **Category** narrows it to one of your categories (the admin's order first), so you can see, for example, just the Stationkeeper tools in Tables.
+**Show** filters the list: All macros, Stationkeeper (made for Stationkeeper), and Other (not made for Stationkeeper). **Category** narrows it to one of your categories (the admin's order first), so you can see, for example, just the Stationkeeper tools in Tables.
 
 ### The Stationkeeper link
 
@@ -104,7 +104,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 2. Edit the list in Excel. Add rows for macros other templates have: rows for macros a template doesn't contain are skipped and listed, so one list can serve many templates.
 3. **Bulk tools > Update from the primary list** shows what will change (how many titles, categories, descriptions and so on, which rows were skipped, which macros aren't on the list) and changes nothing until you say Yes. Then tick **Ready to save** and save.
 
-**Update from a list file** does the same from any file: Excel (.xlsx, .xlsm, .xls), CSV, a **table in a Word document**, or **JSON**.
+**Update from a list file** does the same from any file: Excel (.xlsx, .xlsm, .xls), CSV or **JSON**. A Word file is refused as a list (1.9.1).
 
 | Column | Notes |
 |---|---|
@@ -129,7 +129,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 69 tools in 1.9.0)
+## Stationkeeper Tools (0.4.0 and later; 67 tools in 1.9.1)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -137,9 +137,11 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 
 **Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
-### One workbook with the Stationkeeper app (1.9.0)
+### One workbook with the Stationkeeper app (1.9.0, Global Standards in 1.9.1)
 
-Point the tools at the app's **Company Standards.xlsx** (`ChooseStandardsWorkbook`) and the table tools read it directly. No second workbook.
+Point the tools at the app's **Global Standards.xlsx** (`ChooseStandardsWorkbook`; it was Company Standards.xlsx before app 4.31.0) and the table tools read it directly. No second workbook.
+
+With an effort linked (1.9.1), the looks and the table types still come from the Global Standards workbook: the app keeps an effort's own set of standards and does not publish it to the macros yet. Every table report says so on its first lines: these are the Global Standards and the effort may differ. With no Table looks sheet in the workbook, the built-in roles are used (alignment and bold only), and a table cannot be marked assigned.
 
 | App sheet | What the tools take from it |
 |---|---|
@@ -152,7 +154,7 @@ Point the tools at the app's **Company Standards.xlsx** (`ChooseStandardsWorkboo
 - A table's type is the first type unless its Alt Text says `type=` with the type's Name or its label.
 - The app keeps columns you add and never sends them to Word. The tools read these, and nothing else reads them: a **Recognize** column on Table looks (how many header rows, the words that start a total or subtotal row, the most words in a short cell), a **Tab stops** column, and looks named **number**, **short** and **keep**. Without a number or short look, those cells take the body look.
 - Every report names the workbook and when it was last changed.
-- The tools' own Table roles sheet is not read when the workbook has a Table looks sheet.
+- The tools' own Table roles sheet (1.8.0) and Apply Team Table Type are retired in 1.9.1. One place holds a table's look: the app's workbook.
 
 ### Assigned tables (1.9.0)
 
@@ -165,7 +167,7 @@ A row's role is the paragraph style on it: the role's Tag style. That one fact m
 - An assigned table is read from its styles and never guessed again: a row set by hand stays set. A row with no role is read as body and named in the report.
 - In a table that is not assigned yet, a header, subhead, subtotal, total, note or caption style someone already set wins over a guess.
 - **Suggest again** (the last choice in Assign Table Role) forgets a table's roles and reads it afresh.
-- A table can be assigned only when the roles have styles: the Stationkeeper standards' Tag styles, or a paragraph style for the Header and Long text roles on the tools' own sheet.
+- A table can be assigned only when the roles have styles: the Global Standards' Tag styles.
 
 ### The progress window (1.8.1)
 
@@ -199,13 +201,9 @@ Clears the Styles pane down to what the document uses. It reports first, then as
 | Short text cell | 1 to 3 words | Centered both ways |
 | Long text cell | Everything else | Top left |
 
-- The **Table roles** sheet of the standards workbook sets each role's paragraph style, alignment, vertical alignment, shading (RRGGBB), bold and how it is recognized. A blank Type applies to every table type; a row with a type's name applies to that type only. `Add the Table Roles Sheet` adds the sheet to a workbook made before 1.8.0.
-- **Left indent** and **Tab stops** (1.8.1, inches) work on every role. Tab stops are left tabs and replace the paragraph's own; they set where text after a tab starts and never type a tab. On the Caption row they set the caption row's indent and the distance from the caption number to its title.
-- A **Figure caption** row (1.8.1) reaches captions outside tables: put their paragraph style in Recognize, and each such paragraph gets the row's Align, Left indent and Tab stops.
-- A linked effort can carry the same rows as `table_roles` in its rules. The effort's rows replace the sheet.
+- The built-in formats above apply when the workbook has no Table looks sheet. With the app's workbook, each role takes its look from Table looks. **Tab stops** (inches, left tabs) and a **figure caption** look are read from the same sheet (see One workbook above).
 - A table's Alt Text (Table Properties) can hold `skip` (leave the table alone) or `type=Name` (use that table type).
 - The report's Look at column names anything the tool was unsure of: a row with text in its first cell only (when the Divider role recognizes `first cell only`), a caption row with no number field, a table inside a table.
-- A role's style that is not in the document is not applied, and the report says so: run `Import Team Styles` first.
 
 | Tool | What it does | Changes the document? |
 |---|---|---|
@@ -219,7 +217,6 @@ Clears the Styles pane down to what the document uses. It reports first, then as
 | Direct Formatting Report | Paragraphs whose font or spacing was set by hand. Bold, italic, superscript and subscript count as emphasis (setting `KeepOnClear`). In tables only font and size are checked, since table styles set the rest | No, report |
 | Clear Direct Formatting (Selection) | Clears hand formatting in the selection; keeps emphasis and list numbering | Yes, one Ctrl+Z |
 | Table Standards Audit | Each table against the team table types: style, repeating header row, rows breaking across pages, width, floating or nested tables, cell styles, a caption above or below | No, report |
-| Apply Team Table Type | Sets the table at the cursor to a team type: style, header row, rows kept whole, width, cell styles, padding | Yes, one Ctrl+Z |
 | Section Map | Every section: first page, orientation, paper, margins, columns, how it starts, headers and footers linked or own, page number restarts | No, report |
 | Banned Phrases Review | The team's banned phrases (Banned phrases sheet) in the selection or the whole body: replacements as tracked changes, a comment naming the rule on each | Yes, one Ctrl+Z |
 | Caption Audit | Tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side (settings TableCaptionPosition, FigureCaptionPosition), repeated captions | No, report |

@@ -2,35 +2,15 @@ Attribute VB_Name = "SKW_Tables"
 ' =====================================================================
 ' Stationkeeper Tools: tables.
 '   TableStandardsAudit   report: tables that do not follow the team table types
-'   ApplyTeamTableType    sets the table at the cursor to a team table type
 ' Table types come from the "Table types" sheet of the standards workbook.
+' Styling a table is the job of the table roles tools further down (Table Roles Check,
+' Apply Table Roles, Assign Table Role). Apply Team Table Type was retired in 1.9.1.
 ' =====================================================================
 Option Explicit
 
 ' Checks every table against the team table types: table style, header row repeating on each page, rows breaking across pages, width, floating tables, tables inside tables, header and body styles, and a caption above or below. Changes nothing.
 Public Sub TableStandardsAudit()
     SKW_Show SKW_TableStandardsAudit()
-End Sub
-
-' Sets the table at the cursor to a team table type: table style, header row that repeats, rows kept whole, width, cell styles and padding. Asks which type when there are several. One Ctrl+Z undoes it.
-Public Sub ApplyTeamTableType()
-    Dim types As Collection, s As String, i As Long, pick As String, nm As String
-    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
-    If Not Selection.Information(wdWithInTable) Then SKW_Say "Put the cursor in a table first.": Exit Sub
-    Set types = SKW_TableTypes()
-    If types.Count = 1 Or SKW_IsQuiet() Then
-        nm = types(1)("type")
-    Else
-        For i = 1 To types.Count
-            s = s & i & "  " & types(i)("type") & IIf(Len(types(i)("table style")) > 0, "  (" & types(i)("table style") & ")", "") & vbCr
-        Next
-        pick = InputBox("Which table type?" & vbCr & vbCr & s & vbCr & "Type the number.", "Apply Team Table Type", "1")
-        If Len(pick) = 0 Then Exit Sub
-        If Not IsNumeric(pick) Then SKW_Say "Type a number from the list.": Exit Sub
-        If CLng(pick) < 1 Or CLng(pick) > types.Count Then SKW_Say "Type a number from the list.": Exit Sub
-        nm = types(CLng(pick))("type")
-    End If
-    SKW_Show SKW_ApplyTeamTableType(nm)
 End Sub
 
 ' ---------------------------------------------------------------------
@@ -45,7 +25,7 @@ Public Function SKW_TableTypes() As Collection
                  "cell margins", "border style", "border width", "border color")
     If SKW_AppStandards() Then
         ' The Stationkeeper app's workbook: one row per table type, named by its Name column.
-        For Each r In SKW_Rows("Table types")
+        For Each r In AppRows("Table types")
             If AppApproved(r) And Len(AppVal(r, "name")) > 0 Then
                 Set d = CreateObject("Scripting.Dictionary")
                 For Each k In keys
@@ -228,97 +208,9 @@ Public Function SKW_TableStandardsAudit() As String
     Next
     SKW_Finish
     SKW_Report "Table Standards Audit", d.Tables.Count & " table(s) checked, " & nBadTables & " with findings. Team table types: " & names & _
-        ". To fix one, put the cursor in it and run Apply Team Table Type. Changes nothing.", _
+        ". To fix one, put the cursor in it and run Apply Table Roles (Table at Cursor). Changes nothing.", _
         Array("Table", "Page", "Rule", "Finding", "First cell"), rows
     SKW_TableStandardsAudit = d.Tables.Count & " table(s) checked, " & nBadTables & " with findings."
-End Function
-
-Public Function SKW_ApplyTeamTableType(ByVal typeName As String) As String
-    Dim d As Object, msg As String, ty As Object, k As Object, t As Object, done As String, skipped As String
-    Dim c As Object, nm As String, pct As String, pad As String, lastRow As Long, notes As Boolean, nm2 As Variant
-    Set SKW_LastReport = Nothing
-    If Documents.Count > 0 Then
-        If Not Selection.Information(wdWithInTable) Then SKW_ApplyTeamTableType = "Put the cursor in a table first.": Exit Function
-    End If
-    For Each k In SKW_TableTypes()
-        If LCase$(k("type")) = LCase$(typeName) Then Set ty = k
-    Next
-    If ty Is Nothing Then SKW_ApplyTeamTableType = "There is no table type called " & typeName & ".": Exit Function
-    msg = SKW_Begin("Apply table type", True)
-    If Len(msg) > 0 Then SKW_ApplyTeamTableType = msg: Exit Function
-    Set d = ActiveDocument
-    Set t = Selection.Tables(1)
-    On Error GoTo Fail
-    nm = ty("table style")
-    If Len(nm) > 0 Then
-        If SKW_GetStyle(d, nm) Is Nothing Then
-            skipped = skipped & "; table style " & nm & " is not in this document (import the team styles first)"
-        Else
-            ' Through the range: Table.Style escapes Word's undo grouping, Range.Style does not.
-            t.Range.Style = nm
-            done = done & "; style " & nm
-        End If
-    End If
-    t.Rows.WrapAroundText = False
-    If Len(ty("header row repeats")) > 0 Then
-        On Error Resume Next
-        t.Rows(1).HeadingFormat = SKW_IsYes(ty("header row repeats"))
-        If Err.Number <> 0 Then skipped = skipped & "; header row (merged cells)" Else done = done & "; header row " & IIf(SKW_IsYes(ty("header row repeats")), "repeats", "does not repeat")
-        Err.Clear
-        On Error GoTo Fail
-    End If
-    If Len(ty("rows may break across pages")) > 0 Then
-        t.Rows.AllowBreakAcrossPages = SKW_IsYes(ty("rows may break across pages"))
-        done = done & "; rows " & IIf(SKW_IsYes(ty("rows may break across pages")), "may", "do not") & " break across pages"
-    End If
-    pct = ty("width percent")
-    If IsNumeric(pct) And Len(pct) > 0 Then
-        If CSng(pct) = 100 Then
-            t.AutoFitBehavior wdAutoFitWindow
-        Else
-            t.PreferredWidthType = wdPreferredWidthPercent
-            t.PreferredWidth = CSng(pct)
-        End If
-        done = done & "; width " & pct & "%"
-    End If
-    pad = ty("cell padding")
-    If IsNumeric(pad) And Len(pad) > 0 Then
-        t.LeftPadding = CSng(pad): t.RightPadding = CSng(pad)
-        t.TopPadding = CSng(pad): t.BottomPadding = CSng(pad)
-        done = done & "; padding " & pad & " pt"
-    End If
-    notes = SKW_IsYes(ty("has notes row"))
-    lastRow = t.Rows.Count
-    If Len(ty("header row style")) + Len(ty("body style")) + Len(ty("notes row style")) > 0 Then
-        For Each nm2 In Array("header row style", "body style", "notes row style")
-            If Len(ty(nm2)) > 0 Then
-                If SKW_GetStyle(d, ty(nm2)) Is Nothing Then skipped = skipped & "; " & nm2 & " " & ty(nm2) & " is not in this document"
-            End If
-        Next
-        For Each c In t.Range.Cells
-            If c.RowIndex = 1 Then
-                nm = ty("header row style")
-            ElseIf notes And c.RowIndex = lastRow Then
-                nm = ty("notes row style")
-            Else
-                nm = ty("body style")
-            End If
-            If Len(nm) > 0 Then
-                If Not SKW_GetStyle(d, nm) Is Nothing Then c.Range.Style = nm
-            End If
-        Next
-        done = done & "; cell styles"
-    End If
-    SKW_Finish
-    If Left$(done, 2) = "; " Then done = Mid$(done, 3)
-    If Left$(skipped, 2) = "; " Then skipped = Mid$(skipped, 3)
-    SKW_ApplyTeamTableType = "Table set to " & ty("type") & ": " & done & "." & _
-        IIf(Len(skipped) > 0, vbCr & "Not set: " & skipped & ".", "") & vbCr & "One Ctrl+Z undoes it."
-    Exit Function
-Fail:
-    msg = Err.Description
-    SKW_Finish
-    SKW_ApplyTeamTableType = "Stopped: " & msg & ". Press Ctrl+Z to undo what was done."
 End Function
 
 ' =====================================================================
@@ -326,8 +218,10 @@ End Function
 '   TableRolesCheck       report: every table's rows and cells by role; offers to style a copy
 '   ApplyTableRolesHere   styles the table at the cursor by role
 ' A row is a Caption, Header, Divider, Total or Body row. A cell in a body or total row is a
-' Number, Short text or Long text cell. Each role's format comes from the "Table roles" sheet
-' of the standards workbook (or the effort's table_roles), with built-in values when there is none.
+' Number, Short text or Long text cell. Each role's format comes from the Table looks of the
+' Global Standards (the Stationkeeper app's workbook, or a linked effort's own set once the app
+' publishes it). With neither, the built-in roles below are used: alignment and bold only.
+' The tools' own Table roles sheet (1.8.0) was retired in 1.9.1: one place holds a table's look.
 ' A table's Alt Text can hold "skip" (leave the table alone) or "type=Name" (use that table type).
 ' =====================================================================
 
@@ -351,7 +245,7 @@ End Sub
 
 ' The roles for one table type: built-in values, then the sheet's rows for every type, then the rows for this type.
 Public Function SKW_TableRoles(ByVal typeName As String) As Object
-    Dim res As Object, r As Object, pass As Long, ty As String, role As String, k As Variant, d As Object
+    Dim res As Object
     If SKW_AppStandards() Then Set SKW_TableRoles = AppRoles(typeName): Exit Function
     Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = 1
@@ -368,25 +262,6 @@ Public Function SKW_TableRoles(ByVal typeName As String) As Object
     AddRole res, "header2", "", "center", "center", "", "yes", ""
     AddRole res, "subtotal", "", "", "center", "", "yes", ""
     res("header2")("absent") = "yes"
-    For pass = 1 To 2
-        For Each r In SKW_Rows("Table roles")
-            If r.Exists("role") Then
-                ty = ""
-                If r.Exists("type") Then ty = LCase$(Trim$(r("type")))
-                role = LCase$(Trim$(r("role")))
-                If res.Exists(role) Then
-                    If (pass = 1 And (Len(ty) = 0 Or ty = "all")) Or (pass = 2 And Len(ty) > 0 And ty = LCase$(typeName)) Then
-                        Set d = res(role)
-                        For Each k In Array("paragraph style", "align", "vertical", "shading", "bold", "recognize", "left indent", "tab stops")
-                            If r.Exists(k) Then
-                                If Len(Trim$(r(k))) > 0 Then d(k) = Trim$(r(k))
-                            End If
-                        Next
-                    End If
-                End If
-            End If
-        Next
-    Next
     Set SKW_TableRoles = res
 End Function
 
@@ -797,7 +672,7 @@ Private Sub ApplyRole(ByVal d As Object, ByVal rg As Object, ByVal st As Object,
         nm = st("paragraph style")
         If Len(nm) > 0 Then
             Set so = SKW_GetStyle(d, nm)
-            ' A look from the Stationkeeper standards carries the style's values, so a missing style is made.
+            ' A look from the Global Standards carries the style's values, so a missing style is made.
             If so Is Nothing And st("app") = "yes" Then Set so = MakeLookStyle(d, nm, st, missing)
             If so Is Nothing Then
                 missing(nm) = True
@@ -930,7 +805,7 @@ Private Function StyleTable(ByVal d As Object, ByVal t As Object, ByVal sc As Ob
         Next
     End If
     If ty("app") = "yes" Then
-        ' Stationkeeper standards: margins in points, the table's place on the page, and the rows whose look says Repeat.
+        ' Global Standards: margins in points, the table's place on the page, and the rows whose look says Repeat.
         mg = Split(ty("margins pt"), ";")
         If UBound(mg) = 3 Then
             If IsNumeric(mg(0)) And Len(mg(0)) > 0 Then t.TopPadding = CSng(mg(0))
@@ -1008,23 +883,44 @@ Private Function MissingText(ByVal missing As Object) As String
             s = s & IIf(Len(s) > 0, ", ", "") & k
         End If
     Next
-    If Len(made) > 0 Then MissingText = "Styles the document lacks, made from the standards: " & made & "."
-    If Len(s) > 0 Then MissingText = MissingText & IIf(Len(MissingText) > 0, " ", "") & "Not in this document, so not applied: " & s & ". Run Import Team Styles first."
+    If Len(made) > 0 Then MissingText = "Styles the document lacks, made from the Global Standards: " & made & "."
+    If Len(s) > 0 Then MissingText = MissingText & IIf(Len(MissingText) > 0, " ", "") & "Not in this document, so not applied: " & s & ". Run Import Team Styles first, or add the style to the Global Standards."
 End Function
 
 ' =====================================================================
-' The Stationkeeper app's standards (Company Standards.xlsx, format 2).
+' The Stationkeeper app's standards (Global Standards.xlsx; Company Standards.xlsx before app 4.31.0).
 ' When the standards workbook the tools read has a Table looks sheet, the
 ' table tools take every value from it: one look per row role (caption,
 ' header, header2, subhead, body, subtotal, total, note) and the table
 ' types with their cell margins, roles and overrides. The tools' own
-' Table roles sheet is not read then. Only Approved rows count. A value
+' Table roles sheet is retired. Only Approved rows count. A value
 ' that starts with = names a row of the Settings sheet.
 ' Read by the macros only, and kept by the app: a Recognize column on
 ' Table looks, and looks named number, short and keep.
 ' =====================================================================
 Public Function SKW_AppStandards() As Boolean
-    SKW_AppStandards = (SKW_Rows("Table looks").Count > 0)
+    SKW_AppStandards = (AppRows("Table looks").Count > 0)
+End Function
+
+' A sheet of the standards in the app's shape. A linked effort that carries its own Table looks is
+' read whole (its looks, types and settings). Otherwise every sheet comes from the workbook itself:
+' effort data older than that carries table types and settings in another shape, and mixing the two
+' would lose a type's cell margins and overrides.
+Private Function AppRows(ByVal sheet As String) As Collection
+    If SKW_FromEffort("Table looks") Then Set AppRows = SKW_Rows(sheet) Else Set AppRows = SKW_WbRows(sheet)
+End Function
+
+' A named value of the standards' Settings sheet (Name, Value).
+Private Function AppSetting(ByVal key As String) As String
+    Dim r As Object
+    For Each r In AppRows("Settings")
+        If r.Exists("name") Then
+            If LCase$(Trim$(r("name"))) = LCase$(key) Then
+                If r.Exists("value") Then AppSetting = Trim$(r("value"))
+                Exit Function
+            End If
+        End If
+    Next
 End Function
 
 Private Function AppApproved(ByVal r As Object) As Boolean
@@ -1037,7 +933,7 @@ End Function
 Private Function AppVal(ByVal r As Object, ByVal key As String) As String
     Dim v As String
     If r.Exists(key) Then v = Trim$(r(key))
-    If Left$(v, 1) = "=" Then v = SKW_Setting(Mid$(v, 2), "")
+    If Left$(v, 1) = "=" Then v = AppSetting(Mid$(v, 2))
     AppVal = v
 End Function
 
@@ -1119,7 +1015,7 @@ Private Function AppRoles(ByVal tyName As String) As Object
     AppAbsent res, "number", "-"
     AppAbsent res, "short text", "3"
     AppAbsent res, "long text", ""
-    AppAbsent res, "keep", SKW_Setting("table_keep_styles", "")
+    AppAbsent res, "keep", AppSetting("table_keep_styles")
     AppAbsent res, "figure caption", ""
     For Each k In SKW_TableTypes()
         If LCase$(k("type")) = LCase$(tyName) Then Set ty = k
@@ -1137,7 +1033,7 @@ Private Function AppRoles(ByVal tyName As String) As Object
             End If
         End If
     End If
-    For Each r In SKW_Rows("Table looks")
+    For Each r In AppRows("Table looks")
         nm = ""
         If r.Exists("name") Then nm = LCase$(Trim$(r("name")))
         If AppApproved(r) And names.Exists(nm) Then
@@ -1253,7 +1149,7 @@ Private Sub OneEdge(ByVal b As Object, ByVal spec As String)
     If c <> -2 Then b.Color = c
 End Sub
 
-' The edges of a row from its look. Only looks from the Stationkeeper standards carry edges.
+' The edges of a row from its look. Only looks from the Global Standards carry edges.
 Private Sub ApplyEdges(ByVal rg As Object, ByVal st As Object)
     If st("app") <> "yes" Then Exit Sub
     On Error Resume Next
@@ -1268,13 +1164,24 @@ End Sub
 
 Private Function RolesSource() As String
     If SKW_AppStandards() Then
-        RolesSource = "The looks come from the Table looks sheet of the Stationkeeper standards" & IIf(Len(SKW_StdChanged()) > 0, " (" & SKW_StdChanged() & ").", ".") & _
-            " A tag style the document lacks is made from its look."
-    ElseIf SKW_Rows("Table roles").Count > 0 Then
-        RolesSource = "The roles come from the Table roles sheet" & IIf(SKW_FromEffort("Table roles"), " of the linked effort.", " of the standards workbook.")
+        If SKW_FromEffort("Table looks") Then
+            RolesSource = "The looks are the linked effort's own (" & SKW_Effort()("effort") & ")."
+        Else
+            RolesSource = "The looks come from the Table looks sheet of the Global Standards" & IIf(Len(SKW_StdChanged()) > 0, " (" & SKW_StdChanged() & ").", ".")
+            ' An effort keeps its own set of standards, and the app does not publish it to the macros yet.
+            If SKW_Effort()("ok") Then RolesSource = RolesSource & " An effort is linked (" & SKW_Effort()("effort") & _
+                "): its own standards cannot be read yet, so these are the Global Standards and the effort may differ."
+        End If
+        RolesSource = RolesSource & " A tag style the document lacks is made from its look."
     Else
-        RolesSource = "There is no Table roles sheet, so the built-in roles are used."
+        RolesSource = "The standards workbook in use has no Table looks sheet, so the built-in roles are used: alignment and bold only. " & _
+            "Run Choose Standards Workbook and pick the Stationkeeper app's Global Standards.xlsx for the full looks."
     End If
+End Function
+
+' Where the looks come from, as the reports say it.
+Public Function SKW_TableRolesSource() As String
+    SKW_TableRolesSource = RolesSource()
 End Function
 
 Public Function SKW_TableRolesCheck() As String
@@ -1483,7 +1390,7 @@ Public Function SKW_AssignTableRole(ByVal role As String) As String
     If Not sc("canMark") Then
         SKW_Finish
         SKW_AssignTableRole = "The standards give the roles no styles, so a role cannot be kept on a row. " & _
-            "Point the tools at the Stationkeeper standards workbook, or give the Header and Long text roles a paragraph style. Nothing was changed."
+            "Run Choose Standards Workbook and pick the Stationkeeper app's Global Standards.xlsx. Nothing was changed."
         Exit Function
     End If
     s = StyleTable(d, t, sc, missing)
