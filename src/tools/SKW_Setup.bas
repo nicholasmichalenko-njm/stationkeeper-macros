@@ -304,7 +304,7 @@ Public Function SKW_ToolList() As String
         "Report of every table against the quick values: the header row's style, the body rows' style and the cell margins. Changes nothing, then offers to set every table in a copy.", _
         "tables, quick, header row, body, cell margins, style, format all tables, fix", "Tables", "Whole document", "No, it reports; the fix works on a copy")
     s = s & "," & T("SKW_Quick.QuickCaptionFormatHere", "Quick Caption Format (Caption at Cursor)", "Tables", _
-        "Sets the caption at the cursor from the quick values: its paragraph style, and the action caption's style from the first period on. One Ctrl+Z undoes it.", _
+        "Sets the caption at the cursor from the quick values: its paragraph style, one tab after the number, the style's tab stops and indents, and the action caption's style. One Ctrl+Z undoes it.", _
         "captions, quick, action caption, style, figure, table, format, fix", "Captions, Tables, Figures", "Paragraph at the cursor", "Yes")
     s = s & "," & T("SKW_Quick.QuickCaptionFormatAll", "Quick Caption Format (All Captions)", "Tables", _
         "Report of every table and figure caption against the quick values, each shown as title and action caption. Changes nothing, then offers to set every caption in a copy.", _

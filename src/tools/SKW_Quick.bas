@@ -22,7 +22,7 @@ Private Const SEC As String = "Quick"
 ' ---------------------------------------------------------------------
 Public Function SKW_QuickKeys() As Variant
     SKW_QuickKeys = Array("head", "body", "keep", "tstyle", "mtop", "mbottom", "mleft", "mright", "headrow", _
-        "captable", "capfigure", "captablechar", "capfigurechar", "capaction", "abbrev", _
+        "captable", "capfigure", "captablechar", "capfigurechar", "capaction", "abbrev", "captab", _
         "nummode", "numhead", "numsep", "numlevel", "tlabel", "flabel")
 End Function
 
@@ -36,6 +36,7 @@ Public Function SKW_QuickDefault(ByVal key As String) As String
         Case "capfigure": SKW_QuickDefault = "AA Caption-Figure"
         Case "capaction": SKW_QuickDefault = "AA Caption-Action"
         Case "abbrev": SKW_QuickDefault = "U.S.; vs.; No.; Inc.; Co.; Corp.; Ltd.; e.g.; i.e.; etc.; Fig.; Rev.; Vol.; Sec.; Para.; Ref.; approx.; St.; Dr.; Mr.; Ms."
+        Case "captab": SKW_QuickDefault = "1"
         Case "nummode": SKW_QuickDefault = "heading"
         Case "numhead": SKW_QuickDefault = "STYLEREF 1 \s"
         Case "numsep": SKW_QuickDefault = "-"
@@ -583,11 +584,42 @@ Private Function SplitAt(ByVal d As Object, ByVal tr As Object) As Long
     End If
 End Function
 
+' What sits between a caption's number and its title, in words.
+Private Function SepWords(ByVal s As String) As String
+    If Len(s) = 0 Then SepWords = "nothing": Exit Function
+    SepWords = """" & Replace(Replace(s, vbTab, "[tab]"), Chr$(160), "[non-breaking space]") & """"
+End Function
+
+' A paragraph's layout as text, for comparing with its style: indents and the tab stops a person or a style set.
+Private Function LayoutSig(ByVal pf As Object) As String
+    Dim t As Object, s As String
+    On Error Resume Next
+    s = Format$(pf.LeftIndent, "0.0") & "|" & Format$(pf.FirstLineIndent, "0.0") & "|"
+    For Each t In pf.TabStops
+        If t.CustomTab Then s = s & Format$(t.Position, "0.0") & "/" & t.Alignment & ";"
+    Next
+    LayoutSig = s
+End Function
+
+' Gives a paragraph its style's indents and tab stops. Nothing else on the paragraph is touched.
+Private Sub MatchLayout(ByVal p As Object, ByVal st As Object)
+    Dim t As Object
+    On Error Resume Next
+    With p.ParagraphFormat
+        .LeftIndent = st.ParagraphFormat.LeftIndent
+        .FirstLineIndent = st.ParagraphFormat.FirstLineIndent
+        .TabStops.ClearAll
+        For Each t In st.ParagraphFormat.TabStops
+            If t.CustomTab Then .TabStops.Add t.Position, t.Alignment, t.Leader
+        Next
+    End With
+End Sub
+
 ' Reads one caption against the quick values and sets it when doIt. Returns the findings.
 Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Boolean, ByRef kind As String, _
                         ByRef title As String, ByRef action As String, ByRef look As String) As String
     Dim sq As Object, sr As Object, pos As Long, pe As Long, sp As Long, s As String, ch As String
-    Dim stP As Object, stC As Object, stA As Object, wantP As String, wantC As String, wantA As String, tr As Object
+    Dim stP As Object, stC As Object, stA As Object, wantP As String, wantC As String, wantA As String, tr As Object, sepTxt As String, r As Object
     kind = "": title = "": action = "": look = ""
     NumberFields p, sq, sr
     If sq Is Nothing Then Exit Function
@@ -619,6 +651,28 @@ Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
         End If
     End If
     If pos >= pe Then look = look & IIf(Len(look) > 0, "; ", "") & "No title after the number": CapOne = s: Exit Function
+    ' One tab between the number and the title, so every title starts at the style's tab stop.
+    If SKW_QuickGet("captab") <> "0" Then
+        sepTxt = d.Range(FEnd(sq), pos).Text
+        If sepTxt <> vbTab Then
+            s = s & IIf(Len(s) > 0, "; ", "") & "The number is followed by " & SepWords(sepTxt) & ", not one tab"
+            If doIt Then
+                Set r = d.Range(FEnd(sq), pos)
+                If r.End > r.Start Then r.Text = vbTab Else r.InsertBefore vbTab
+                pos = FEnd(sq) + 1
+                pe = p.End - 1
+            End If
+        End If
+    End If
+    ' Tab stops and indents come from the caption style. One set by hand on a caption is how captions drift.
+    If Not stP Is Nothing Then
+        If Same(SKW_ParaStyleName(p), stP.NameLocal) Then
+            If LayoutSig(p.ParagraphFormat) <> LayoutSig(stP.ParagraphFormat) Then
+                s = s & IIf(Len(s) > 0, "; ", "") & "Tab stops or indents are set by hand"
+                If doIt Then MatchLayout p, stP
+            End If
+        End If
+    End If
     Set tr = d.Range(pos, pe)
     sp = SplitAt(d, tr)
     If sp >= 0 Then
@@ -668,10 +722,12 @@ Private Function CaptionIntro() As String
         ". Figure captions: " & IIf(Len(Trim$(SKW_QuickGet("capfigure"))) > 0, Trim$(SKW_QuickGet("capfigure")), "as they are") & _
         ". Action caption: " & IIf(Len(Trim$(SKW_QuickGet("capaction"))) > 0, Trim$(SKW_QuickGet("capaction")), "as it is") & _
         ". The action caption starts at the first period followed by a space, and the period goes with it. " & _
-        "A period after an abbreviation (" & SKW_QuickGet("abbrev") & ") or before a lower-case word does not count. A caption with no period has no action caption."
+        "A period after an abbreviation (" & SKW_QuickGet("abbrev") & ") or before a lower-case word does not count. A caption with no period has no action caption. " & _
+        IIf(SKW_QuickGet("captab") <> "0", "One tab sits between the number and the title. ", "") & _
+        "A caption already in its style takes its tab stops and indents from the style."
 End Function
 
-' Sets the caption at the cursor from the quick values: its paragraph style, and the action caption's style from the first period on. One Ctrl+Z undoes it.
+' Sets the caption at the cursor from the quick values: its paragraph style, one tab after the number, the style's tab stops and indents, and the action caption's style from the first period on. One Ctrl+Z undoes it.
 Public Sub QuickCaptionFormatHere()
     If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
     If Not Ready() Then Exit Sub

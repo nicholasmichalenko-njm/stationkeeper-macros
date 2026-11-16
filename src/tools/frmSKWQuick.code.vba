@@ -14,6 +14,7 @@ Private WithEvents btnCancel As MSForms.CommandButton
 Private WithEvents btnFill As MSForms.CommandButton
 Private cboHead As MSForms.ComboBox
 Private cboMode As MSForms.ComboBox
+Private cboTab As MSForms.ComboBox
 Private lblFrom As MSForms.Label
 
 Private Const C_NAVY As Long = &H603416
@@ -102,6 +103,12 @@ Private Sub UserForm_Initialize()
     Row "capfigurechar", "Figure caption character style (optional)"
     Row "capaction", "Action caption character style"
     Row "abbrev", "Periods that do not end a title ( ; )"
+    AddLabel "lbl_captab", "After the caption number", X_LABEL, mTop + 3, X_FIELD - X_LABEL - 6, 14
+    Set cboTab = AddCtl("Forms.ComboBox.1", "cboTab", X_FIELD, mTop, W_FIELD, 18)
+    cboTab.Style = 2
+    cboTab.AddItem "One tab, then the title"
+    cboTab.AddItem "Leave what is there"
+    mTop = mTop + ROW_H
 
     Heading "Caption numbering"
     AddLabel "lbl_nummode", "The rule for this work", X_LABEL, mTop + 3, X_FIELD - X_LABEL - 6, 14
@@ -149,6 +156,7 @@ Private Sub LoadValues()
     Next
     cboHead.ListIndex = IIf(SKW_QuickGet("headrow") = "2", 1, 0)
     cboMode.ListIndex = IIf(LCase$(SKW_QuickGet("nummode")) = "sequential", 1, 0)
+    cboTab.ListIndex = IIf(SKW_QuickGet("captab") = "0", 1, 0)
 End Sub
 
 Private Sub SaveValues()
@@ -159,6 +167,7 @@ Private Sub SaveValues()
     Next
     SKW_QuickSet "headrow", IIf(cboHead.ListIndex = 1, "2", "auto")
     SKW_QuickSet "nummode", IIf(cboMode.ListIndex = 1, "sequential", "heading")
+    SKW_QuickSet "captab", IIf(cboTab.ListIndex = 1, "0", "1")
     SKW_QuickSet "saved", "1"
     Saved = True
 End Sub
@@ -207,7 +216,7 @@ Public Function Probe() As String
         Set b = Box(CStr(k))
         If Not b Is Nothing Then n = n + 1: s = s & k & "=" & b.Text & " | "
     Next
-    Probe = "boxes=" & n & " head=" & cboHead.ListIndex & " mode=" & cboMode.ListIndex & " fill=" & btnFill.Enabled & " ## " & s
+    Probe = "boxes=" & n & " head=" & cboHead.ListIndex & " mode=" & cboMode.ListIndex & " tab=" & cboTab.ListIndex & " fill=" & btnFill.Enabled & " ## " & s
 End Function
 
 Public Sub TestSet(ByVal key As String, ByVal v As String)
@@ -215,6 +224,8 @@ Public Sub TestSet(ByVal key As String, ByVal v As String)
         cboHead.ListIndex = IIf(v = "2", 1, 0)
     ElseIf key = "nummode" Then
         cboMode.ListIndex = IIf(v = "sequential", 1, 0)
+    ElseIf key = "captab" Then
+        cboTab.ListIndex = IIf(v = "0", 1, 0)
     Else
         Box(key).Text = v
     End If

@@ -1573,6 +1573,13 @@ Private Sub QuickStyles(ByVal d As Object)
     For Each nm In Array("AA Table Head L1", "AA Table Body", "AA Table Bullet L1", "AA Caption-Table", "AA Caption-Figure")
         d.Styles.Add CStr(nm), wdStyleTypeParagraph
     Next
+    ' The caption styles carry the layout: one tab stop, and for figures a hanging indent to it.
+    d.Styles("AA Caption-Table").ParagraphFormat.TabStops.Add 72
+    With d.Styles("AA Caption-Figure").ParagraphFormat
+        .TabStops.Add 72
+        .LeftIndent = 72
+        .FirstLineIndent = -72
+    End With
     d.Styles.Add "AA Caption-Action", wdStyleTypeCharacter
     d.Styles("AA Caption-Action").Font.Italic = True
 End Sub
@@ -1620,19 +1627,22 @@ Public Function TW_QuickBuild(ByVal savePath As String) As String
     Set rg = t.Cell(1, 1).Range
     rg.MoveEnd wdCharacter, -1
     rg.InsertAfter vbTab & "Costs by year. Shows the U.S. total."
+    ' A tab stop set by hand on this caption.
+    t.Cell(1, 1).Range.ParagraphFormat.TabStops.Add 144
     d.Content.InsertParagraphAfter
     ' Figure caption with no heading number and no action caption.
     AtEnd(d).InsertAfter "Figure "
     AddField d, "SEQ Figure \* ARABIC"
-    AtEnd(d).InsertAfter vbTab & "Ground segment" & vbCr
+    AtEnd(d).InsertAfter ": Ground segment" & vbCr
     ' Figure caption counted as a table, with a period as separator, an abbreviation and an action caption.
     AtEnd(d).InsertAfter "Figure "
     AddField d, "STYLEREF 1 \s"
     AtEnd(d).InsertAfter "."
     AddField d, "SEQ Table \* ARABIC \s 1"
-    AtEnd(d).InsertAfter vbTab & "Design vs. build. Build wins." & vbCr
+    AtEnd(d).InsertAfter "  Design vs. build. Build wins." & vbCr
+    ' The bookmark a cross-reference to "only label and number" makes: it ends right after the number.
     Set rg = FindText(d, "Design vs. build").Paragraphs(1).Range
-    Set b = d.Range(rg.Start, FindText(d, "Design vs. build").Start - 1)
+    Set b = d.Range(rg.Start, rg.Fields(rg.Fields.Count).Result.End + 1)
     d.Bookmarks.Add "_RefQuick1", b
     AddPara d, "Management", d.Styles(wdStyleHeading1).NameLocal
     ' A caption whose number is typed, in the table caption style.
@@ -1715,6 +1725,9 @@ Public Function TW_QuickCaption(ByVal target As String) As String
         " fig1=" & FindText(c, "Ground segment").Paragraphs(1).Style.NameLocal & "|" & StyleAtEndOf(c, "Ground segment") & _
         " fig2=" & FindText(c, "Design vs.").Paragraphs(1).Style.NameLocal & "|vs=" & StyleAtEndOf(c, "Design vs.") & "|period=" & StyleAtEndOf(c, "Design vs. build.") & _
         "|end=" & StyleAtEndOf(c, "Build wins.") & " fields=" & c.Fields.Count
+    s = s & " sepF1=" & CapState(c, "Ground segment") & " bm=" & c.Bookmarks("_RefQuick1").Range.Text & _
+        " tabsA=" & CustomTabs(c.Tables(1).Cell(1, 1).Range.ParagraphFormat.TabStops) & " tabsF2=" & _
+        CustomTabs(FindText(c, "Design vs.").Paragraphs(1).Range.ParagraphFormat.TabStops)
     s = s & " ## source capA=" & ParaStyleOf(d.Tables(1).Cell(1, 1)) & " period=" & StyleAtEndOf(d, "Costs by year.")
     If c.FullName <> d.FullName Then c.Close SaveChanges:=0
     d.Activate
@@ -1796,14 +1809,15 @@ Public Function TW_QuickForm(ByVal path As String) As String
     Set SKW_QuickTest = CreateObject("Scripting.Dictionary")
     prev = SKW_StandardsPath()
     Load frmSKWQuick
-    s = Left$(frmSKWQuick.Probe(), 60) & " saved0=" & SKW_QuickGet("saved")
+    s = Left$(frmSKWQuick.Probe(), 66) & " saved0=" & SKW_QuickGet("saved")
     frmSKWQuick.TestSet "head", "X Head"
     frmSKWQuick.TestSet "nummode", "sequential"
     frmSKWQuick.TestSet "headrow", "2"
+    frmSKWQuick.TestSet "captab", "0"
     frmSKWQuick.TestSave
     Unload frmSKWQuick
     s = s & " ## head=" & SKW_QuickGet("head") & " mode=" & SKW_QuickGet("nummode") & " headrow=" & SKW_QuickGet("headrow") & " saved=" & SKW_QuickGet("saved") & _
-        " body=" & SKW_QuickGet("body")
+        " body=" & SKW_QuickGet("body") & " captab=" & SKW_QuickGet("captab")
     SKW_SetStandardsPath path
     Load frmSKWQuick
     s = s & " ## filled=" & frmSKWQuick.TestFill()
