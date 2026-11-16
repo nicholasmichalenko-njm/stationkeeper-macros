@@ -305,7 +305,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(17 modules and 3 forms)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(18 modules and 4 forms)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 67 tools arrive described, categorised and in the menu' (($tc -like '67 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 74 tools arrive described, categorised and in the menu' (($tc -like '74 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -538,6 +538,12 @@ try {
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (with macro rows).xlsx') $macroStd -Force
     [string]$reportsDir = Join-Path $work 'Reports 1.8.1'
     [string]$appStd = Join-Path $work 'Company Standards (app format 2).xlsx'
+    [string]$quickDoc = Join-Path $work 'Quick 1.10.docx'
+    [string]$quickT = Join-Path $work 'Quick 1.10 (tables).docx'
+    [string]$quickC = Join-Path $work 'Quick 1.10 (captions).docx'
+    [string]$quickN = Join-Path $work 'Quick 1.10 (numbers).docx'
+    [string]$quickS = Join-Path $work 'Quick 1.10 (sequential).docx'
+    Remove-Item $quickDoc, $quickT, $quickC, $quickN, $quickS -Force -ErrorAction SilentlyContinue
     Copy-Item (Join-Path $Root 'test\fixtures\Company Standards (app format 2).xlsx') $appStd -Force
     Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 3.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -609,6 +615,40 @@ try {
         Check '1.9.0: Suggest again forgets the roles and reads the table afresh' (($as -match '## suggest: The table was read afresh and is assigned again') -and ($as -match '## fresh=PE Table Text,PE Table Text,PE Table Text')) $as
         Check '1.9.0: Show Table Roles opens the style area and closes it again' (($as -match 'show: Each row''s style shows width>0=True') -and ($as -match 'hide: Roles are hidden again\. width=0$')) $as
         [void](RunW $word 'SKW_Test.TW_RolesClose')
+        # 12c. 1.10.0: the quick tools, on a fictional document with two tables, three captions and a typed caption number.
+        $qb = RunW $word 'SKW_Test.TW_QuickBuild' $quickDoc
+        Write-Output "QUICKBUILD: $qb"
+        Check '1.10.0: the quick test document is made with caption fields and a cross-reference' (($qb -match 'saved=Quick 1\.10\.docx tables=2') -and ($qb -match 'capA=Table 0-1>Costs by year\. Shows the U\.S\. total\.') -and ($qb -match 'ref=Figure 0\.2$')) $qb
+        $qt = RunW $word 'SKW_Test.TW_QuickTable' $quickT
+        Write-Output "QUICKTABLE: $qt"
+        Check '1.10.0: Quick Table Format reads every table against the quick values and changes nothing' (($qt -match '^2 table\(s\) read, 2 to set, 0 skipped\. ## fixable=2 ') -and ($qt -match 'Quick values saved on this PC, not the Global Standards') -and ($qt -match '2 header paragraph\(s\) not in AA Table Head L1') -and ($qt -match 'Cell margins differ') -and ($qt -match '## source A: cap=Normal head=Normal')) $qt
+        Check '1.10.0: the header row is row 2 under a caption row and row 1 without one; the caption row is left alone' (($qt -match 'A: cap=Normal head=AA Table Head L1 body=AA Table Body,') -and ($qt -match 'B: cap=AA Table Head L1 head=AA Table Head L1 body=AA Table Body,')) $qt
+        Check '1.10.0: body rows take their style, a kept bullet style stays, and the cell margins are set' (($qt -match 'A: [^#]*body=AA Table Body,AA Table Bullet L1, pad=1\.45/1\.45/7\.20/7\.20') -and ($qt -match '2 table\(s\) set in a copy, 0 skipped: Quick 1\.10 \(tables\)\.docx') -and ($qt -match 'same=False')) $qt
+        $qc = RunW $word 'SKW_Test.TW_QuickCaption' $quickC
+        Write-Output "QUICKCAPTION: $qc"
+        Check '1.10.0: Quick Caption Format reads each caption as title and action caption' (($qc -match '^1 table caption\(s\) and 2 figure caption\(s\) read, 2 with an action caption, 3 to set, 0 to look at\. ## fixable=3 ') -and ($qc -match 'Costs by year \| Shows the U\.S\. total\. \|') -and ($qc -match 'Design vs\. build \| Build wins\. \|') -and ($qc -match 'Ground segment \|  \|')) $qc
+        Check '1.10.0: the period goes with the action caption, and the title keeps the caption style alone' (($qc -match 'capA=AA Caption-Table title=Default Paragraph Font period=AA Caption-Action end=AA Caption-Action') -and ($qc -match 'fig2=AA Caption-Figure\|vs=Default Paragraph Font\|period=AA Caption-Action\|end=AA Caption-Action')) $qc
+        Check '1.10.0: a caption with no period has no action caption, and the source document is not changed' (($qc -match 'fig1=AA Caption-Figure\|Default Paragraph Font') -and ($qc -match '## source capA=Normal period=Default Paragraph Font') -and ($qc -match 'same=False')) $qc
+        $qn = RunW $word 'SKW_Test.TW_QuickNumber' "heading|$quickN"
+        Write-Output "QUICKNUMBER: $qn"
+        Check '1.10.0: Caption Numbering Check finds a missing heading number, the wrong sequence name, a wrong separator and a typed number' (($qn -match '^3 caption number\(s\) read: 2 do not follow the rule, 1 typed, 0 to look at\. ## fixable=3 saved=True ') -and ($qn -match 'No heading number; Does not restart under the heading') -and ($qn -match 'Counts as Table under the label Figure; Separator is "\.", not "-"') -and ($qn -match 'Number 2-1 is typed') -and ($qn -match '1 cross-reference\(s\) point at a caption the fix would change')) $qn
+        Check '1.10.0: the fix repairs the field codes in a copy and leaves caption text alone' (($qn -match 'F1=Figure 0-1>Ground segment \{STYLEREF 1 \\s\}\{SEQ Figure \\\* ARABIC \\s 1\}') -and ($qn -match 'F2=Figure 0-2>Design vs\. build\. Build wins\. \{STYLEREF 1 \\s\}\{SEQ Figure \\\* ARABIC \\s 1\}') -and ($qn -match 'A=Table 0-1>Costs by year\. Shows the U\.S\. total\. \{STYLEREF 1 \\s\}\{SEQ Table \\\* ARABIC \\s 1\}')) $qn
+        Check '1.10.0: a typed number becomes fields with the space before it kept, the cross-reference follows, and the source is not changed' (($qn -match 'T=Table 0-1>Staffing \{STYLEREF 1 \\s\}\{SEQ Table \\\* ARABIC \\s 1\}') -and ($qn -match 'ref=Figure 0-2 ##') -and ($qn -match '## source F1=Figure 1>Ground segment \{SEQ Figure \\\* ARABIC\}$') -and ($qn -match '2 caption number\(s\) repaired and 1 typed number\(s\) made fields in a copy')) $qn
+        $qs = RunW $word 'SKW_Test.TW_QuickNumber' "sequential|$quickS"
+        Write-Output "QUICKSEQ: $qs"
+        Check '1.10.0: under the sequential rule a heading number and a restart are findings' (($qs -match '^3 caption number\(s\) read: 2 do not follow the rule, 1 typed') -and ($qs -match 'Restarts under heading level 1; Has a heading number') -and ($qs -match 'sequential all the way through')) $qs
+        Check '1.10.0: the sequential fix numbers captions straight through' (($qs -match 'A=Table 1>Costs by year\. Shows the U\.S\. total\. \{SEQ Table \\\* ARABIC\}') -and ($qs -match 'F1=Figure 1>Ground segment \{SEQ Figure \\\* ARABIC\}') -and ($qs -match 'F2=Figure 2>Design vs\. build\. Build wins\. \{SEQ Figure \\\* ARABIC\}') -and ($qs -match 'T=Table 2>Staffing \{SEQ Table \\\* ARABIC\}') -and ($qs -match 'ref=Figure 2 ##')) $qs
+        $qh = RunW $word 'SKW_Test.TW_QuickHere'
+        Write-Output "QUICKHERE: $qh"
+        Check '1.10.0: Quick Table Format sets the table at the cursor' (($qh -match '^table: Table set from the quick values \(header row 1\)') -and ($qh -match '## B: cap=AA Table Head L1 head=AA Table Head L1 body=AA Table Body, pad=1\.45/1\.45/7\.20/7\.20')) $qh
+        Check '1.10.0: Quick Caption Format sets the caption at the cursor and shows its two parts' (($qh -match '## caption: Caption set from the quick values\.[^#]*Title: Design vs\. build / Action caption: Build wins\.') -and ($qh -match '## period=AA Caption-Action')) $qh
+        Check '1.10.0: Fix Caption Number repairs the caption at the cursor, and makes a typed number fields' (($qh -match '## number: Caption number repaired\. It had: No heading number; Does not restart under the heading\.') -and ($qh -match '## F1=Figure 0-1>Ground segment \{STYLEREF 1 \\s\}\{SEQ Figure \\\* ARABIC \\s 1\}') -and ($qh -match '## typed: The typed number 2-1 is now a field') -and ($qh -match '## T=Table 0-1>Staffing \{STYLEREF 1 \\s\}\{SEQ Table \\\* ARABIC \\s 1\}')) $qh
+        Check '1.10.0: a paragraph that is not a caption is left alone, with the reason' ($qh -match '## none: The paragraph at the cursor is not a table or figure caption') $qh
+        [void](RunW $word 'SKW_Test.TW_QuickClose')
+        $qf = RunW $word 'SKW_Test.TW_QuickForm' $appStd
+        Write-Output "QUICKFORM: $qf"
+        Check '1.10.0: the quick values form holds every value and saves on this PC' (($qf -match '^boxes=19 head=0 mode=0 fill=') -and ($qf -match 'saved0= ##') -and ($qf -match '## head=X Head mode=sequential headrow=2 saved=1 body=AA Table Body')) $qf
+        Check '1.10.0: the form fills the table styles and cell margins from the Global Standards workbook' (($qf -match '## filled=6 ') -and ($qf -match 'head=PE Table Header \| body=PE Table Text \|') -and ($qf -match 'mtop=0\.028 \| mbottom=0\.028 \| mleft=0\.069 \| mright=0\.069')) $qf
     }
 
     # 13. 0.8.0: PowerPoint tools on a deck the test makes (handed to the tools directly).

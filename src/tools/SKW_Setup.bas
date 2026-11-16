@@ -294,6 +294,27 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Tables.ShowTableRoles", "Show Table Roles", "Tables", _
         "Shows each row's role beside it: Word's Draft view with the style area open, so every paragraph's style name sits at the left. Run it again to go back.", _
         "tables, roles, show, review, style area, draft view", "Tables", "Whole document", "No, it only changes the view")
+    s = s & "," & T("SKW_Quick.QuickValues", "Quick Values", "Tools setup", _
+        "Opens the quick values: the styles, cell margins and caption numbering rule the quick tools use. Saved on this PC. They are not the Global Standards.", _
+        "quick, values, styles, cell margins, captions, numbering, setup", "Tables, Captions", "Template", "No, it only saves values on this PC")
+    s = s & "," & T("SKW_Quick.QuickTableFormatHere", "Quick Table Format (Table at Cursor)", "Tables", _
+        "Sets the table at the cursor from the quick values: the header row's style, the body rows' style and the cell margins. One Ctrl+Z undoes it.", _
+        "tables, quick, header row, body, cell margins, style, format, fix", "Tables", "Table at the cursor", "Yes")
+    s = s & "," & T("SKW_Quick.QuickTableFormatAll", "Quick Table Format (All Tables)", "Tables", _
+        "Report of every table against the quick values: the header row's style, the body rows' style and the cell margins. Changes nothing, then offers to set every table in a copy.", _
+        "tables, quick, header row, body, cell margins, style, format all tables, fix", "Tables", "Whole document", "No, it reports; the fix works on a copy")
+    s = s & "," & T("SKW_Quick.QuickCaptionFormatHere", "Quick Caption Format (Caption at Cursor)", "Tables", _
+        "Sets the caption at the cursor from the quick values: its paragraph style, and the action caption's style from the first period on. One Ctrl+Z undoes it.", _
+        "captions, quick, action caption, style, figure, table, format, fix", "Captions, Tables, Figures", "Paragraph at the cursor", "Yes")
+    s = s & "," & T("SKW_Quick.QuickCaptionFormatAll", "Quick Caption Format (All Captions)", "Tables", _
+        "Report of every table and figure caption against the quick values, each shown as title and action caption. Changes nothing, then offers to set every caption in a copy.", _
+        "captions, quick, action caption, style, figure, table, format all captions, fix", "Captions, Tables, Figures", "Whole document", "No, it reports; the fix works on a copy")
+    s = s & "," & T("SKW_Quick.CaptionNumberingCheck", "Caption Numbering Check", "Tables", _
+        "Report of every caption's number against one rule: heading number then sequence, or sequential all the way through. Finds typed numbers, the wrong sequence name, a missing heading number and restarts. Changes nothing, then offers to repair the field codes in a copy.", _
+        "captions, numbering, field codes, seq, styleref, heading number, sequential, renumber, fix", "Captions, Fields", "Whole document", "No, it reports; the fix works on a copy")
+    s = s & "," & T("SKW_Quick.FixCaptionNumberHere", "Fix Caption Number (Caption at Cursor)", "Tables", _
+        "Repairs the number of the caption at the cursor to follow the rule: its field codes, heading number, separator and restart. One Ctrl+Z undoes it.", _
+        "captions, numbering, field codes, seq, styleref, heading number, fix", "Captions, Fields", "Paragraph at the cursor", "Yes")
     s = s & "," & T("SKW_Captions.CaptionAudit", "Caption Audit", "Tables", _
         "Report of tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side and repeated captions. Changes nothing.", _
         "captions, figures, tables, numbering, seq", "Captions, Tables, Figures", "Whole document", "No, it only reports")
@@ -461,7 +482,8 @@ Private Function SkKind(ByVal run As String) As String
         "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|DeleteUnusedStyles|" & _
         "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
-        "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AssignTableRole|ShowTableRoles|"
+        "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AssignTableRole|ShowTableRoles|" & _
+        "QuickValues|QuickTableFormatHere|QuickTableFormatAll|QuickCaptionFormatHere|QuickCaptionFormatAll|CaptionNumberingCheck|FixCaptionNumberHere|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else

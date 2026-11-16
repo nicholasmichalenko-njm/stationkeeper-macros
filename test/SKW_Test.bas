@@ -1563,3 +1563,253 @@ Public Function TW_Assign(ByVal path As String) As String
     SKW_SetStandardsPath prev
     TW_Assign = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.10.0: the quick tools. A saved document with two tables, three captions with fields, one typed
+' caption number and one cross-reference. All text is fictional.
+' ---------------------------------------------------------------------
+Private Sub QuickStyles(ByVal d As Object)
+    Dim nm As Variant
+    For Each nm In Array("AA Table Head L1", "AA Table Body", "AA Table Bullet L1", "AA Caption-Table", "AA Caption-Figure")
+        d.Styles.Add CStr(nm), wdStyleTypeParagraph
+    Next
+    d.Styles.Add "AA Caption-Action", wdStyleTypeCharacter
+    d.Styles("AA Caption-Action").Font.Italic = True
+End Sub
+
+Private Sub AddField(ByVal d As Object, ByVal code As String)
+    d.Fields.Add AtEnd(d), wdFieldEmpty, code, False
+End Sub
+
+Private Sub QuickValuesForTest()
+    Set SKW_QuickTest = CreateObject("Scripting.Dictionary")
+    SKW_QuickTest("mtop") = "0.02": SKW_QuickTest("mbottom") = "0.02": SKW_QuickTest("mleft") = "0.1": SKW_QuickTest("mright") = "0.1"
+End Sub
+
+Public Function TW_QuickBuild(ByVal savePath As String) As String
+    Dim d As Object, t As Object, rg As Object, b As Object
+    SKW_Quiet = True
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.ActiveWindow.View.ShowFieldCodes = False
+    QuickStyles d
+    AddPara d, "Approach", d.Styles(wdStyleHeading1).NameLocal
+    AddPara d, "Text before the first table."
+    ' Table A: row 1 is the caption with a heading number and a count, row 2 the header, row 3 the body.
+    Set t = d.Tables.Add(AtEnd(d), 3, 2)
+    t.Cell(2, 1).Range.Text = "Item": t.Cell(2, 2).Range.Text = "FY26"
+    t.Cell(3, 1).Range.Text = "Engineer": t.Cell(3, 2).Range.Text = "12"
+    Set rg = t.Cell(3, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.InsertAfter vbCr & "A bullet in the cell"
+    t.Cell(3, 1).Range.Paragraphs(2).Style = d.Styles("AA Table Bullet L1")
+    t.Rows(1).Cells.Merge
+    t.Cell(1, 1).Range.Text = "Table "
+    Set rg = t.Cell(1, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.Collapse 0
+    d.Fields.Add rg, wdFieldEmpty, "STYLEREF 1 \s", False
+    Set rg = t.Cell(1, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.InsertAfter "-"
+    Set rg = t.Cell(1, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.Collapse 0
+    d.Fields.Add rg, wdFieldEmpty, "SEQ Table \* ARABIC \s 1", False
+    Set rg = t.Cell(1, 1).Range
+    rg.MoveEnd wdCharacter, -1
+    rg.InsertAfter vbTab & "Costs by year. Shows the U.S. total."
+    d.Content.InsertParagraphAfter
+    ' Figure caption with no heading number and no action caption.
+    AtEnd(d).InsertAfter "Figure "
+    AddField d, "SEQ Figure \* ARABIC"
+    AtEnd(d).InsertAfter vbTab & "Ground segment" & vbCr
+    ' Figure caption counted as a table, with a period as separator, an abbreviation and an action caption.
+    AtEnd(d).InsertAfter "Figure "
+    AddField d, "STYLEREF 1 \s"
+    AtEnd(d).InsertAfter "."
+    AddField d, "SEQ Table \* ARABIC \s 1"
+    AtEnd(d).InsertAfter vbTab & "Design vs. build. Build wins." & vbCr
+    Set rg = FindText(d, "Design vs. build").Paragraphs(1).Range
+    Set b = d.Range(rg.Start, FindText(d, "Design vs. build").Start - 1)
+    d.Bookmarks.Add "_RefQuick1", b
+    AddPara d, "Management", d.Styles(wdStyleHeading1).NameLocal
+    ' A caption whose number is typed, in the table caption style.
+    AddPara d, "Table 2-1" & vbTab & "Staffing", "AA Caption-Table"
+    Set t = d.Tables.Add(AtEnd(d), 2, 2)
+    t.Cell(1, 1).Range.Text = "Name": t.Cell(1, 2).Range.Text = "Count"
+    t.Cell(2, 1).Range.Text = "Alpha": t.Cell(2, 2).Range.Text = "3"
+    d.Content.InsertParagraphAfter
+    AtEnd(d).InsertAfter "See "
+    AddField d, "REF _RefQuick1 \h"
+    AtEnd(d).InsertAfter " for the comparison." & vbCr
+    d.Fields.Update
+    d.SaveAs2 FileName:=savePath, FileFormat:=wdFormatXMLDocument
+    d.Range(0, 0).Select
+    TW_QuickBuild = "saved=" & d.Name & " tables=" & d.Tables.Count & " fields=" & d.Fields.Count & " capA=" & _
+        Replace(Replace(d.Tables(1).Cell(1, 1).Range.Text, Chr(13) & Chr(7), ""), vbTab, ">") & " ref=" & FindText(d, "See ").Paragraphs(1).Range.Fields(1).Result.Text
+End Function
+
+Private Function QuickDoc() As Object
+    Dim d As Object
+    For Each d In Documents
+        If d.Name = "Quick 1.10.docx" Then Set QuickDoc = d
+    Next
+    QuickDoc.Activate
+End Function
+
+Private Function CharStyleOf(ByVal r As Object) As String
+    On Error Resume Next
+    CharStyleOf = r.CharacterStyle
+End Function
+
+' The character style on the last character of a found text.
+Private Function StyleAtEndOf(ByVal d As Object, ByVal txt As String) As String
+    Dim r As Object
+    Set r = FindText(d, txt)
+    StyleAtEndOf = CharStyleOf(d.Range(r.End - 1, r.End))
+End Function
+
+Private Function TableState(ByVal t As Object, ByVal hdr As Long) As String
+    Dim s As String, p As Object
+    s = "cap=" & ParaStyleOf(t.Cell(1, 1)) & " head=" & ParaStyleOf(t.Cell(hdr, 1)) & " body="
+    For Each p In t.Cell(hdr + 1, 1).Range.Paragraphs
+        s = s & p.Style.NameLocal & ","
+    Next
+    TableState = s & " pad=" & Format$(t.TopPadding, "0.00") & "/" & Format$(t.BottomPadding, "0.00") & "/" & Format$(t.LeftPadding, "0.00") & "/" & Format$(t.RightPadding, "0.00")
+End Function
+
+' Quick Table Format: the check, then a copy with every table set.
+Public Function TW_QuickTable(ByVal target As String) As String
+    Dim d As Object, c As Object, s As String
+    SKW_Quiet = True
+    QuickValuesForTest
+    Set d = QuickDoc()
+    s = SKW_QuickTableCheck() & " ## fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_QuickTableFixCopy(target), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " A: " & TableState(c.Tables(1), 2) & " B: " & TableState(c.Tables(2), 1)
+    s = s & " ## source A: " & TableState(d.Tables(1), 2)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    Set SKW_QuickTest = Nothing
+    TW_QuickTable = s
+End Function
+
+' Quick Caption Format: the check, then a copy with every caption set.
+Public Function TW_QuickCaption(ByVal target As String) As String
+    Dim d As Object, c As Object, s As String
+    SKW_Quiet = True
+    QuickValuesForTest
+    Set d = QuickDoc()
+    s = SKW_QuickCaptionCheck() & " ## fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_QuickCaptionFixCopy(target), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " capA=" & ParaStyleOf(c.Tables(1).Cell(1, 1)) & _
+        " title=" & StyleAtEndOf(c, "Costs by yea") & " period=" & StyleAtEndOf(c, "Costs by year.") & " end=" & StyleAtEndOf(c, "U.S. total.") & _
+        " fig1=" & FindText(c, "Ground segment").Paragraphs(1).Style.NameLocal & "|" & StyleAtEndOf(c, "Ground segment") & _
+        " fig2=" & FindText(c, "Design vs.").Paragraphs(1).Style.NameLocal & "|vs=" & StyleAtEndOf(c, "Design vs.") & "|period=" & StyleAtEndOf(c, "Design vs. build.") & _
+        "|end=" & StyleAtEndOf(c, "Build wins.") & " fields=" & c.Fields.Count
+    s = s & " ## source capA=" & ParaStyleOf(d.Tables(1).Cell(1, 1)) & " period=" & StyleAtEndOf(d, "Costs by year.")
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    Set SKW_QuickTest = Nothing
+    TW_QuickCaption = s
+End Function
+
+Private Function CodesOf(ByVal p As Object) As String
+    Dim f As Object, s As String
+    For Each f In p.Fields
+        s = s & "{" & Trim$(f.Code.Text) & "}"
+    Next
+    CodesOf = s
+End Function
+
+Private Function CapState(ByVal d As Object, ByVal txt As String) As String
+    Dim p As Object
+    Set p = FindText(d, txt).Paragraphs(1).Range
+    CapState = Replace(Replace(Replace(p.Text, vbCr, ""), Chr(7), ""), vbTab, ">") & " " & CodesOf(p)
+End Function
+
+' Caption Numbering Check and its fix in a copy, under the rule named (heading or sequential).
+Public Function TW_QuickNumber(ByVal arg As String) As String
+    Dim d As Object, c As Object, s As String, a As Variant
+    a = Split(arg, "|")
+    SKW_Quiet = True
+    QuickValuesForTest
+    SKW_QuickTest("nummode") = a(0)
+    Set d = QuickDoc()
+    s = SKW_CaptionNumberCheck() & " ## fixable=" & SKW_Fixable & " saved=" & d.Saved & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_CaptionNumberFixCopy(a(1)), vbCr, " / ")
+    Set c = ActiveDocument
+    c.ActiveWindow.View.ShowFieldCodes = False
+    s = s & " ## same=" & (c.FullName = d.FullName) & " A=" & CapState(c, "Costs by year") & " F1=" & CapState(c, "Ground segment") & _
+        " F2=" & CapState(c, "Design vs.") & " T=" & CapState(c, "Staffing") & " ref=" & FindText(c, "See ").Paragraphs(1).Range.Fields(1).Result.Text
+    s = s & " ## source F1=" & CapState(d, "Ground segment")
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    Set SKW_QuickTest = Nothing
+    TW_QuickNumber = s
+End Function
+
+' The three tools at the cursor, on the document itself.
+Public Function TW_QuickHere() As String
+    Dim d As Object, s As String
+    SKW_Quiet = True
+    QuickValuesForTest
+    Set d = QuickDoc()
+    d.Tables(2).Cell(2, 1).Range.Select
+    Selection.Collapse
+    s = "table: " & Replace(SKW_QuickTableHere(), vbCr, " / ") & " ## B: " & TableState(d.Tables(2), 1)
+    FindText(d, "Design vs.").Select
+    Selection.Collapse
+    s = s & " ## caption: " & Replace(SKW_QuickCaptionHere(), vbCr, " / ") & " ## period=" & StyleAtEndOf(d, "Design vs. build.")
+    FindText(d, "Ground segment").Select
+    Selection.Collapse
+    s = s & " ## number: " & Replace(SKW_CaptionNumberHere(), vbCr, " / ") & " ## F1=" & CapState(d, "Ground segment")
+    FindText(d, "Staffing").Select
+    Selection.Collapse
+    s = s & " ## typed: " & Replace(SKW_CaptionNumberHere(), vbCr, " / ") & " ## T=" & CapState(d, "Staffing")
+    FindText(d, "Text before").Select
+    Selection.Collapse
+    s = s & " ## none: " & Replace(SKW_QuickCaptionHere(), vbCr, " / ")
+    Set SKW_QuickTest = Nothing
+    TW_QuickHere = s
+End Function
+
+Public Function TW_QuickClose() As String
+    QuickDoc().Close SaveChanges:=0
+    TW_QuickClose = "closed"
+End Function
+
+' The quick values form: its boxes, saving, and filling from the app's workbook.
+Public Function TW_QuickForm(ByVal path As String) As String
+    Dim prev As String, s As String
+    SKW_Quiet = True
+    Set SKW_QuickTest = CreateObject("Scripting.Dictionary")
+    prev = SKW_StandardsPath()
+    Load frmSKWQuick
+    s = Left$(frmSKWQuick.Probe(), 60) & " saved0=" & SKW_QuickGet("saved")
+    frmSKWQuick.TestSet "head", "X Head"
+    frmSKWQuick.TestSet "nummode", "sequential"
+    frmSKWQuick.TestSet "headrow", "2"
+    frmSKWQuick.TestSave
+    Unload frmSKWQuick
+    s = s & " ## head=" & SKW_QuickGet("head") & " mode=" & SKW_QuickGet("nummode") & " headrow=" & SKW_QuickGet("headrow") & " saved=" & SKW_QuickGet("saved") & _
+        " body=" & SKW_QuickGet("body")
+    SKW_SetStandardsPath path
+    Load frmSKWQuick
+    s = s & " ## filled=" & frmSKWQuick.TestFill()
+    s = s & " " & Replace(Mid$(frmSKWQuick.Probe(), InStr(frmSKWQuick.Probe(), "##")), SKW_QuickDefault("keep"), "(keep)")
+    Unload frmSKWQuick
+    SKW_SetStandardsPath prev
+    Set SKW_QuickTest = Nothing
+    TW_QuickForm = s
+End Function
