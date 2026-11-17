@@ -531,6 +531,11 @@ Public Function T_Ribbon(ByVal folder As String) As String
     s = s & " addin=" & found
     On Error Resume Next
     s = s & " probe=" & Application.Run("SKR_Probe")
+    s = s & " same=" & (Application.Run("SKR_Probe") = "Stationkeeper Ribbon " & SK_VERSION)
+    s = s & " about=" & (SK_About() = SK_VERSION & "|" & ThisDocument.FullName)
+    s = s & " behind=[" & Application.Run("SKR_Behind") & "]"
+    s = s & " old=[" & Replace(Application.Run("SKR_BehindFor", "1.9.1", "C:\Team\Team Template.dotm"), vbCr, " / ") & "]"
+    s = s & " unknown=[" & Left$(Replace(Application.Run("SKR_BehindFor", "", "the template"), vbCr, " / "), 60) & "]"
     On Error GoTo 0
     s = s & " || remove: " & Replace(SK_RibbonRemove(), vbCr, " / ")
     found = "none"

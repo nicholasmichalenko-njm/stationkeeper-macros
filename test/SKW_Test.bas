@@ -2076,13 +2076,8 @@ Private Function RemapState(ByVal d As Object) As String
     RemapState = Mid$(t, 2)
 End Function
 
-Public Function TW_RemapKinds(ByVal std As String) As String
-    Dim d As Object, s As String, prev As String, ltB As Object, ltN As Object, p As Object, i As Long, r As Object, tb As Object, stage As String
-    SKW_Quiet = True
-    On Error GoTo Bad
-    stage = "setup"
-    prev = SKW_StandardsPath()
-    SKW_SetStandardsPath std
+Private Function RemapBuild() As Object
+    Dim d As Object, ltB As Object, ltN As Object, p As Object, i As Long, r As Object, tb As Object
     Set d = Documents.Add(Template:=ThisDocument.FullName)
     d.TrackRevisions = False
     d.Content.Delete
@@ -2097,7 +2092,6 @@ Public Function TW_RemapKinds(ByVal std As String) As String
     p.Range.Font.Bold = True
     p.Range.Font.Size = 9
     p.LeftIndent = 36
-    stage = "bullets"
     Set ltB = d.ListTemplates.Add(OutlineNumbered:=True)
     For i = 1 To 4
         ltB.ListLevels(i).NumberFormat = ChrW$(8226)
@@ -2110,17 +2104,26 @@ Public Function TW_RemapKinds(ByVal std As String) As String
     ' Word moved the four above to List Paragraph when they were bulleted. This one is put back in Normal, bullet and all.
     RemapPara(d, "Bullet N").Style = d.Styles(wdStyleNormal)
     RemapPara(d, "Bullet B").Range.Words(3).Font.Italic = True
-    stage = "numbers"
     Set ltN = d.ListTemplates.Add(OutlineNumbered:=True)
     ltN.ListLevels(1).NumberStyle = wdListNumberStyleArabic
     ltN.ListLevels(1).NumberFormat = "%1."
     RemapPara(d, "Numbered").Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=ltN, ContinuePreviousList:=False, ApplyLevel:=1
-    stage = "table"
     Set r = RemapPara(d, "After").Range
     Set tb = d.Tables.Add(r, 1, 1)
     tb.Cell(1, 1).Range.Text = "Cell text"
     tb.Cell(1, 1).Range.Style = d.Styles(wdStyleNormal)
     d.UndoClear
+    Set RemapBuild = d
+End Function
+
+Public Function TW_RemapKinds(ByVal std As String) As String
+    Dim d As Object, s As String, prev As String, stage As String, c As Object
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath std
+    Set d = RemapBuild()
     stage = "state"
     s = "start: " & RemapState(d)
     stage = "check"
@@ -2152,6 +2155,46 @@ Public Function TW_RemapKinds(ByVal std As String) As String
 Bad:
     TW_RemapKinds = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
     On Error Resume Next
+    SKW_SetStandardsPath prev
+    d.Close SaveChanges:=0
+End Function
+
+' 1.15.0: the Remap Style window on the same document. Picks come from lists of the document's styles.
+Public Function TW_RemapForm(ByVal std As String) As String
+    Dim d As Object, s As String, prev As String, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath std
+    Set d = RemapBuild()
+    d.Activate
+    stage = "load"
+    Load frmSKWRemap
+    s = "brand: " & frmSKWRemap.TestBrand()
+    stage = "rows"
+    s = s & " ## lp: " & frmSKWRemap.TestRows("List Paragraph")
+    stage = "pick"
+    s = s & " ## pick: " & frmSKWRemap.TestPick("Bulleted by hand, level 4", "List Bullet 3")
+    s = s & " ## apply: " & frmSKWRemap.TestApply("all", False) & " ## " & RemapState(d)
+    stage = "normal"
+    s = s & " ## normal: " & frmSKWRemap.TestRows("Normal")
+    s = s & " ## nopick: " & frmSKWRemap.TestApply("all", False)
+    s = s & " ## few: " & frmSKWRemap.TestPick("Not in a list", "Body Text") & " " & frmSKWRemap.TestAllStyles(False)
+    s = s & " ## more: " & frmSKWRemap.TestAllStyles(True)
+    s = s & " ## pick2: " & frmSKWRemap.TestPick("Not in a list", "Body Text")
+    s = s & " ## apply2: " & frmSKWRemap.TestApply("text", False) & " ## " & RemapState(d)
+    d.Undo 2
+    s = s & " ## undone: " & RemapState(d)
+    Unload frmSKWRemap
+    SKW_SetStandardsPath prev
+    d.Close SaveChanges:=0
+    TW_RemapForm = s
+    Exit Function
+Bad:
+    TW_RemapForm = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    Unload frmSKWRemap
     SKW_SetStandardsPath prev
     d.Close SaveChanges:=0
 End Function

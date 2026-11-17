@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.14.0"
+Public Const SK_VERSION As String = "1.15.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -37,6 +37,12 @@ Private Declare Function GetFileAttributesW Lib "kernel32" (ByVal lpFileName As 
 ' ---------------------------------------------------------------------
 ' Entry macros
 ' ---------------------------------------------------------------------
+' The version of this copy of Stationkeeper Macros and the file it is in. The ribbon tab asks, so it can say
+' when the menu it opens is older than the release the tab came with.
+Public Function SK_About() As String
+    SK_About = SK_VERSION & "|" & ThisDocument.FullName
+End Function
+
 Public Sub StationkeeperMacros()
     On Error GoTo Fail
     frmSKMenu.Show vbModeless

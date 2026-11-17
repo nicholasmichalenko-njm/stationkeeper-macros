@@ -36,6 +36,8 @@ The kit's own menu (open the kit, then `StationkeeperMacros`) lists the installe
 
 **The look.** The menu, the admin and the Deck Media List open with a navy band carrying the Stationkeeper satellite and the form's name, an amber line under it, a light page, and navy main buttons (Run, Save to template, Rename). The satellite is also in each window's title bar. The pictures are stored inside the forms (`frmSKBrand` for the menu and admin, `frmSKWBrand` for the tools), so nothing extra goes on a PC. Windows keeps its own title bar color and list highlight, and message boxes stay Windows' standard ones.
 
+**Which menu the tab opens (1.15.0).** The tab holds no menu. Each template carries its own copy, at the version last installed into it, and the tab opens the copy in the template your document is based on. When that copy is older than the release the tab came with, the tab says so once, names the version and the file, and says how to update it: open the new kit, run `StationkeeperMacrosInstall`, then `StationkeeperToolsInstall`, and pick that template.
+
 **The ribbon tab (optional).** `Stationkeeper Ribbon.dotm` adds a **Stationkeeper** tab after View, with **Macro menu**, **Admin** and **About and removal**. Its buttons open the menu and admin of the template your document is based on; it holds no other code.
 
 - **Add it:** keep `Stationkeeper Ribbon.dotm` beside the kit, open the kit, and run `StationkeeperRibbonInstall` (in the kit's menu as **Add the Stationkeeper Tab to Word's Ribbon**). It copies the add-in into Word's Startup folder (File > Options > Advanced > File Locations > Startup), so Word loads it every time it starts. By hand: copy the file into that folder and restart Word.
@@ -131,7 +133,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 77 tools in 1.14.0)
+## Stationkeeper Tools (0.4.0 and later; 77 tools in 1.15.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -198,7 +200,18 @@ Headers and footers belong to sections, and so do page size and orientation. The
 - A floating object in the source header (a text box, a picture set to float) that does not carry over is named in the result.
 - The source section itself is not changed.
 
-### Remap Style by what each paragraph is (1.14.0)
+### Remap Style by what each paragraph is (1.14.0, a window since 1.15.0)
+
+**The window (1.15.0).** Remap Style opens a window; nothing is typed.
+
+1. **Style to change:** a list of the styles the document's text is in. It starts on the style at the cursor.
+2. **The rows:** each kind of paragraph in that style, with its count and how many carry formatting by hand: not in a list; bulleted or numbered by hand, with its level; in a table; typed bullet.
+3. **Becomes:** beside each row, a list of the paragraph styles the document uses. Tick **All Word styles** to add Word's built-in styles it has not used yet (Body Text, for one). A bulleted or numbered row starts on the list style the Global Standards give its level; pick another for this run, or pick one where the workbook has none. A row left on "(leave alone)" is not changed.
+4. **Formatting applied by hand:** keep all, keep emphasis only, or clear.
+5. **Apply to:** the whole document, or the selected paragraphs only. The window stays open, so you can select text in the document and apply again.
+6. **Apply.** Each Apply is one Ctrl+Z. **Report...** makes the full report and changes nothing.
+
+Picks are for the run and are stored nowhere.
 
 Remap Style reads every paragraph in the style you name before it changes anything, so one style can go to several.
 

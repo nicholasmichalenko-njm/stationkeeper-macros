@@ -6,7 +6,7 @@ Attribute VB_Name = "SKW_Styles"
 '   DirectFormattingReport           report: text formatted by hand instead of by style
 '   ClearDirectFormattingSelection   clears hand formatting in the selection, keeps emphasis
 '   ImportTeamStyles                 brings in the team's style definitions
-'   RemapStyle                       changes a style to another by what each paragraph is (list, level, table), keeping formatting by hand as chosen
+'   RemapStyle                       a window: changes a style to another by what each paragraph is (list, level, table), keeping formatting by hand as chosen
 '   FontNotAllowed                   report: fonts used that are not on the team list
 '   RemoveUnusedCustomStyles         deletes custom styles nobody uses
 ' =====================================================================
@@ -470,40 +470,11 @@ Public Sub ImportTeamStyles()
     SKW_Show SKW_ImportTeamStyles("")
 End Sub
 
-' Changes a style to another without losing what the paragraphs are: a hand-bulleted or numbered paragraph goes to the Global Standards' list style for its level and keeps its bullet, and formatting applied by hand is kept, kept in part or cleared, as chosen. Reports first; applies everything, one row or the selection. One Ctrl+Z undoes it.
+' Changes a style to another without losing what the paragraphs are. A window lists the styles in the document to pick from, shows each kind of paragraph in the style (not in a list, bulleted or numbered by hand with its level, in a table) and lets you pick what each becomes. Formatting applied by hand is kept, kept in part or cleared, as chosen. One Ctrl+Z undoes each run.
 Public Sub RemapStyle()
-    Dim pairs As String, a As String, b As String, msg As String, pick As String, keep As String, scope As String, key As String
-    If SKW_IsQuiet() Or Documents.Count = 0 Then Exit Sub
-    a = InputBox("Change which style?", "Remap Style", SKW_ParaStyleName(Selection.Range))
-    Do While Len(Trim$(a)) > 0
-        b = InputBox("Paragraphs in " & a & " that are not in a list become which style?" & vbCr & vbCr & _
-            "Leave it blank to leave them alone. Bulleted and numbered paragraphs go to the list styles on the Global Standards' List numbering sheet, by level.", "Remap Style", "")
-        pairs = pairs & "|" & Trim$(a) & ">" & Trim$(b)
-        a = InputBox("Another style to change in the same run?" & vbCr & vbCr & "Leave it blank to go on.", "Remap Style", "")
-    Loop
-    If Len(pairs) = 0 Then Exit Sub
-    pairs = Mid$(pairs, 2)
-    SKW_Fixable = 0
-    msg = SKW_RemapCheck(pairs)
-    If SKW_Fixable <= 0 Or SKW_LastReport Is Nothing Then SKW_Show msg: Exit Sub
-    pick = InputBox(Split(msg & vbCr, vbCr)(0) & vbCr & vbCr & "The report lists each kind of paragraph as a numbered row." & vbCr & vbCr & _
-        "A  apply every row" & vbCr & "S  apply to the selected paragraphs only" & vbCr & "or the number of one row to apply only that row" & vbCr & vbCr & _
-        "Leave it blank to change nothing.", "Remap Style", "A")
-    pick = UCase$(Trim$(pick))
-    If Len(pick) = 0 Then Exit Sub
-    scope = "all"
-    If pick = "S" Then
-        scope = "selection"
-    ElseIf pick <> "A" Then
-        key = SKW_RemapRowKey(Val(pick))
-        If Len(key) = 0 Then SKW_Say "The report has no row " & pick & ". Nothing was changed.": Exit Sub
-    End If
-    keep = InputBox("Formatting applied by hand:" & vbCr & vbCr & "1  Keep all of it" & vbCr & _
-        "2  Keep emphasis only (bold, italic, underline, strikethrough, superscript, subscript, color, highlight); fonts, sizes, indents and spacing take the style's" & vbCr & _
-        "3  Clear it: the style's look only" & vbCr & vbCr & "Type the number.", "Remap Style", "1")
-    If Len(keep) = 0 Then Exit Sub
-    keep = IIf(keep = "2", "text", IIf(keep = "3", "none", "all"))
-    SKW_Show SKW_RemapApply(pairs, keep, scope, key)
+    If SKW_IsQuiet() Then Exit Sub
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    frmSKWRemap.Show vbModeless
 End Sub
 
 Private Function StyleSig(ByVal st As Object) As String
@@ -824,7 +795,8 @@ End Function
 '   doIt False: fills groups (key -> Array(count, withDirect, becomes, note, changes)) and changes nothing.
 '   doIt True: sets the paragraphs. onlyKey "" for every row, or one row's key. selA, selB: the selection, or -1.
 Private Function RmWalk(ByVal d As Object, ByVal pairs As String, ByVal doIt As Boolean, ByVal keep As String, ByVal onlyKey As String, _
-                        ByVal selA As Long, ByVal selB As Long, ByVal selStory As Long, ByVal groups As Object, ByRef skipped As String, ByRef notes As String) As Long
+                        ByVal selA As Long, ByVal selB As Long, ByVal selStory As Long, ByVal groups As Object, ByRef skipped As String, ByRef notes As String, _
+                        Optional ByVal ov As Object = Nothing) As Long
     Dim pr As Variant, a As String, b As String, sa As Object, sb As Object, st As Object, story As Object, rg As Object, p As Object
     Dim kd As String, knd As String, lvl As Long, key As String, target As String, why As String, will As Boolean, g As Variant
     Dim styleList As Boolean, n As Long, paras As Collection, v As Variant, nt As String, seen As Object, tname As Object
@@ -903,6 +875,15 @@ Private Function RmWalk(ByVal d As Object, ByVal pairs As String, ByVal doIt As 
                                     Case "typed"
                                         why = "the bullet is typed text, not a list"
                                 End Select
+                                ' Picks made in the window stand in for the defaults: a row with no pick is left alone.
+                                If Not ov Is Nothing Then
+                                    target = "": will = False
+                                    If ov.Exists(key) And knd <> "typed" Then
+                                        target = ov(key)
+                                        will = (Len(target) > 0)
+                                        If will Then will = Not SKW_GetStyle(d, target) Is Nothing
+                                    End If
+                                End If
                                 If Not doIt Then
                                     If Not groups.Exists(key) Then groups(key) = Array(0, 0, target, why, will Or (knd = "table" And Len(target) > 0))
                                     g = groups(key)
@@ -1004,8 +985,16 @@ Public Function SKW_RemapCheck(ByVal pairs As String) As String
 End Function
 
 ' keep: "all", "text" (emphasis only) or "none". scope: "all" or "selection". onlyKey: "" or one row's key.
-Public Function SKW_RemapApply(ByVal pairs As String, ByVal keep As String, ByVal scope As String, ByVal onlyKey As String) As String
+' targets: "" for the defaults, or the picks made in the window, one per line: a row's key, a tab, the style it becomes.
+Public Function SKW_RemapApply(ByVal pairs As String, ByVal keep As String, ByVal scope As String, ByVal onlyKey As String, Optional ByVal targets As String = "") As String
     Dim d As Object, msg As String, skipped As String, notes As String, n As Long, selA As Long, selB As Long, selStory As Long
+    Dim ov As Object, ln As Variant
+    If Len(targets) > 0 Then
+        Set ov = CreateObject("Scripting.Dictionary")
+        For Each ln In Split(targets, vbLf)
+            If InStr(ln, vbTab) > 0 Then ov(Split(ln, vbTab)(0)) = Trim$(Split(ln, vbTab)(1))
+        Next
+    End If
     Set SKW_LastReport = Nothing
     If Documents.Count = 0 Then SKW_RemapApply = "Open a document first.": Exit Function
     Set d = ActiveDocument
@@ -1019,7 +1008,7 @@ Public Function SKW_RemapApply(ByVal pairs As String, ByVal keep As String, ByVa
     msg = SKW_Begin("Remap style", True)
     If Len(msg) > 0 Then SKW_RemapApply = msg: Exit Function
     On Error GoTo Fail
-    n = RmWalk(d, pairs, True, keep, onlyKey, selA, selB, selStory, Nothing, skipped, notes)
+    n = RmWalk(d, pairs, True, keep, onlyKey, selA, selB, selStory, Nothing, skipped, notes, ov)
     SKW_Finish
     SKW_RemapApply = "Remapped " & n & " paragraph(s)" & IIf(Len(onlyKey) > 0, " in the row " & Replace(onlyKey, "|", ", "), "") & _
         IIf(selA >= 0, " in the selection", "") & ". Formatting by hand: " & _
@@ -1032,6 +1021,74 @@ Fail:
     SKW_Finish
     SKW_RemapApply = "Stopped: " & msg & ". Press Ctrl+Z to undo what was done."
 End Function
+
+' For the Remap Style window: each kind of paragraph in one style.
+' Each item: Array(key, what it is, list level, paragraphs, with formatting by hand, the Global Standards' style for it or "", why not).
+Public Function SKW_RemapRows(ByVal fromStyle As String) As Collection
+    Dim d As Object, rows As New Collection, groups As Object, skipped As String, notes As String, k As Variant, a() As String, g As Variant
+    Dim wasSaved As Boolean, msg As String
+    Set SKW_RemapRows = rows
+    If Documents.Count = 0 Or Len(Trim$(fromStyle)) = 0 Then Exit Function
+    msg = SKW_Begin("Remap style: reading", False)
+    If Len(msg) > 0 Then Exit Function
+    Set d = ActiveDocument
+    wasSaved = d.Saved
+    Set groups = CreateObject("Scripting.Dictionary")
+    RmWalk d, Trim$(fromStyle) & ">", False, "all", "", -1, -1, 0, groups, skipped, notes
+    If wasSaved And Not d.Saved Then d.Saved = True
+    SKW_Finish
+    For Each k In groups.Keys
+        a = Split(k, "|")
+        g = groups(k)
+        If a(1) <> "char" Then rows.Add Array(CStr(k), RmKindWords(a(1)), Val(a(2)), g(0), g(1), IIf(a(1) = "bullet" Or a(1) = "number", g(2), ""), g(3))
+    Next
+End Function
+
+' For the Remap Style window: paragraph style names in the document, sorted. usedOnly: only those some text is in.
+' With usedOnly False the list styles the Global Standards name are added, so they can be picked before they are used,
+' and allBuiltIn adds Word's built-in styles the document has not used yet (Body Text, List Bullet 2 and the like).
+Public Function SKW_RemapStyleNames(ByVal usedOnly As Boolean, Optional ByVal allBuiltIn As Boolean = False) As Collection
+    Dim d As Object, st As Object, c As New Collection, story As Object, hit As Boolean, r As Object, nm As String, wasSaved As Boolean
+    Set SKW_RemapStyleNames = c
+    If Documents.Count = 0 Then Exit Function
+    Set d = ActiveDocument
+    wasSaved = d.Saved
+    On Error Resume Next
+    For Each st In d.Styles
+        If (st.InUse Or (allBuiltIn And Not usedOnly)) And (st.Type = wdStyleTypeParagraph Or st.Type = 6) Then
+            hit = True
+            If usedOnly Then
+                hit = False
+                For Each story In SKW_Stories(d)
+                    If story.StoryType <> wdCommentsStory Then
+                        If SKW_StyleRanges(story, st, 1).Count > 0 Then hit = True: Exit For
+                    End If
+                Next
+            End If
+            If hit Then RmSorted c, st.NameLocal
+        End If
+    Next
+    If Not usedOnly Then
+        For Each r In SKW_WbRows("List numbering")
+            nm = ""
+            If r.Exists("style") Then nm = Trim$(r("style"))
+            If Len(nm) > 0 Then
+                If Not SKW_GetStyle(d, nm) Is Nothing Then RmSorted c, nm
+            End If
+        Next
+    End If
+    If wasSaved And Not d.Saved Then d.Saved = True
+End Function
+
+Private Sub RmSorted(ByVal c As Collection, ByVal nm As String)
+    Dim i As Long, k As Long
+    For i = 1 To c.Count
+        k = StrComp(c(i), nm, vbTextCompare)
+        If k = 0 Then Exit Sub
+        If k > 0 Then c.Add nm, , i: Exit Sub
+    Next
+    c.Add nm
+End Sub
 
 ' pairs: "From>To|From>To". Every row, formatting by hand kept. Kept for callers from before 1.14.0.
 Public Function SKW_RemapStyle(ByVal pairs As String) As String
