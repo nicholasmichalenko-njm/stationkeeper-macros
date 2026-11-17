@@ -269,7 +269,7 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblDS", "The menu opens sorted by", 8, 50, 200, 14
     Set cboDefaultSort = AddTo(pg, "Forms.ComboBox.1", "cboDefaultSort", 8, 64, 160, 20)
     cboDefaultSort.Style = fmStyleDropDownList
-    For Each v In Array("Category", "A to Z", "Most used", "Recent")
+    For Each v In Array("Category", "Name", "Most used", "Recent")
         cboDefaultSort.AddItem v
     Next
     Set chkShowUnd = Chk(pg, "chkShowUnd", "List macros nobody has described or hidden yet (useful while you set up)", 8, 96, 520, 18)
@@ -371,7 +371,7 @@ Private Sub UserForm_Initialize()
     txtMenuTitle.Text = lk("menuTitle")
     cboDefaultSort.ListIndex = 0
     For Each v In Array(0, 1, 2, 3)
-        If LCase$(cboDefaultSort.List(v)) = LCase$(lk("defaultSort")) Then cboDefaultSort.ListIndex = v
+        If LCase$(cboDefaultSort.List(v)) = LCase$(IIf(lk("defaultSort") = "A to Z", "Name", lk("defaultSort"))) Then cboDefaultSort.ListIndex = v
     Next
     chkShowUnd.Value = (lk("showUndescribed") = "1")
     chkKeepOpen.Value = (lk("keepOpen") = "1")

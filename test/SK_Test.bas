@@ -340,6 +340,8 @@ Public Function T_SkMenu() As String
     s = s & " || GATE none: " & frmSKMenu.TestGate("Module1.FitTablesToMargins")
     frmSKMenu.TestShow "All macros"
     s = s & " ## SHOW=" & frmSKMenu.TestShowChoices() & " ## STD=" & frmSKMenu.TestStd() & " ## SIZE=" & frmSKMenu.TestSize()
+    s = s & " ## APP=" & frmSKMenu.TestApp("PowerPoint") & " ; " & frmSKMenu.TestApp("Excel") & " ; " & frmSKMenu.TestApp("Word") & " ; " & frmSKMenu.TestApp("All")
+    s = s & " ## SORT=" & frmSKMenu.TestSort("Name") & " ## SORT2=" & frmSKMenu.TestSort("Category")
     Unload frmSKMenu
     T_SkMenu = s
 End Function

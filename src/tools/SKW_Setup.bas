@@ -3,6 +3,7 @@ Attribute VB_Name = "SKW_Setup"
 ' Stationkeeper Tools: setup.
 '   MakeStandardsWorkbook     makes a team standards workbook in Excel to fill in
 '   ChooseStandardsWorkbook   points the tools at the team standards workbook
+'   ChooseEffortStandardsWorkbook   lays an effort's own standards over the Global Standards
 ' SKW_ToolList gives the Stationkeeper Macros menu the title, category and
 ' description of every tool, so they show up described in the menu.
 ' =====================================================================
@@ -94,6 +95,56 @@ Public Function SKW_ChooseStandards(ByVal p As String) As String
     SKW_ChooseStandards = "The tools now use " & Mid$(p, InStrRev(p, "\") + 1) & " for " & ThisDocument.Name & "." & vbCr & vbCr & _
         SKW_StandardsSummary()
 End Function
+
+' Chooses the effort's own standards workbook, laid over the Global Standards. p "" clears it.
+Public Function SKW_ChooseEffortStandards(ByVal p As String) As String
+    Dim found As Boolean, was As String, note As String
+    If Len(Trim$(p)) = 0 Then
+        SKW_SetEffortStdPath ""
+        SKW_ChooseEffortStandards = "No effort's standards are laid over the Global Standards now. The tools use the Global Standards alone."
+        Exit Function
+    End If
+    If SKW_Workbook() Is Nothing Then
+        SKW_ChooseEffortStandards = "Choose the Global Standards workbook first. An effort's workbook holds only what the effort changes; the rest comes from the Global Standards. Nothing was changed."
+        Exit Function
+    End If
+    p = SKW_LocalPath(p)
+    If LCase$(Left$(p, 4)) = "http" Then
+        SKW_ChooseEffortStandards = "That workbook is kept in OneDrive or SharePoint, and its copy on this PC was not found in a synced folder. Nothing was changed." & vbCr & vbCr & "The address Word gave: " & p
+        Exit Function
+    End If
+    On Error Resume Next
+    found = (Len(Dir$(p)) > 0)
+    On Error GoTo 0
+    If Not found Then SKW_ChooseEffortStandards = "Not found: " & p & vbCr & "Nothing was changed.": Exit Function
+    If LCase$(p) = LCase$(SKW_StandardsPath()) Then SKW_ChooseEffortStandards = "That is the Global Standards workbook itself. Nothing was changed.": Exit Function
+    was = SKW_EffortStdPath()
+    SKW_SetEffortStdPath p
+    note = SKW_EffortStdNote()
+    If InStr(note, "stand alone") > 0 Or Len(note) = 0 Then
+        SKW_SetEffortStdPath was
+        SKW_ChooseEffortStandards = "That workbook could not be read as an effort's standards. Nothing was changed." & vbCr & _
+            "If it is open in Excel with a cell being typed in, press Enter there and choose it again."
+        Exit Function
+    End If
+    SKW_ChooseEffortStandards = "The tools now lay " & Mid$(p, InStrRev(p, "\") + 1) & " over the Global Standards for " & ThisDocument.Name & ": " & note & "." & vbCr & vbCr & _
+        "Where the effort sets a value it wins. A blank cell keeps the Global Standards' value. Every report names both workbooks."
+End Function
+
+Public Sub ChooseEffortStandardsWorkbook()
+    Dim p As String
+    If SKW_IsQuiet() Then Exit Sub   ' needs a person to choose the file
+    With Application.FileDialog(3)
+        .Title = "Choose the effort's standards workbook (Effort Formatting)"
+        .Filters.Clear
+        .Filters.Add "Excel workbooks", "*.xlsx;*.xlsm;*.xls"
+        .AllowMultiSelect = False
+        If Len(SKW_EffortStdPath()) > 0 Then .InitialFileName = SKW_EffortStdPath()
+        If .Show <> -1 Then Exit Sub
+        p = .SelectedItems(1)
+    End With
+    SKW_Say SKW_ChooseEffortStandards(p)
+End Sub
 
 Public Function SKW_StandardsSummary() As String
     Dim s As String, v As Variant
@@ -269,6 +320,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Setup.ChooseStandardsWorkbook", "Choose Standards Workbook", "Tools setup", _
         "Points the tools at your team's standards workbook. Each person does this once per template.", _
         "standards, excel, setup, rules", "Template", "Template", "No, it only reports")
+    s = s & "," & T("SKW_Setup.ChooseEffortStandardsWorkbook", "Choose Effort Standards Workbook", "Tools setup", _
+        "Lays an effort's own standards workbook (the app's Effort Formatting file) over the Global Standards. Where the effort sets a value it wins; a blank keeps the Global value. The menu's standards lines do the same.", _
+        "standards, effort, excel, setup, rules, effort formatting", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Setup.ChooseReportsFolder", "Choose Reports Folder", "Tools setup", _
         "Chooses the folder on this PC where every report is saved as it is made, named for the report, the file it checked and the time. With no folder chosen, reports open and are not saved.", _
         "reports, folder, save, where, setup", "Template", "Template", "No, it only reports")
@@ -508,7 +562,7 @@ End Function
 ' Tools that read team rules (the standards workbook now, the effort's data once linked) are
 ' "Built for Stationkeeper": they run on their own. The rest are general tools with no tie.
 Private Function SkKind(ByVal run As String) As String
-    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|PreDeliveryLeftovers|StyleInspector|" & _
+    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|ChooseEffortStandardsWorkbook|PreDeliveryLeftovers|StyleInspector|" & _
         "NonAllowedStyleReport|DirectFormattingReport|ClearDirectFormattingSelection|TableStandardsAudit|" & _
         "BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
         "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|DeleteUnusedStyles|" & _

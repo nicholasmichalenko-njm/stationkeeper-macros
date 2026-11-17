@@ -2198,3 +2198,24 @@ Bad:
     SKW_SetStandardsPath prev
     d.Close SaveChanges:=0
 End Function
+
+' 1.16.0: an effort's standards workbook laid over the Global Standards. arg: the Global workbook | the effort's.
+Public Function TW_EffortStd(ByVal arg As String) As String
+    Dim a() As String, s As String, prev As String, prevE As String
+    SKW_Quiet = True
+    a = Split(arg, "|")
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    SKW_SetEffortStdPath ""
+    SKW_SetStandardsPath a(0)
+    s = "before=" & SKW_ChapterDefault() & " lists=" & SKW_WbRows("List numbering").Count & " top=" & SKW_WbRows("Table types")(1)("cell margins: top") & " note=[" & SKW_EffortStdNote() & "]"
+    s = s & " ## same: " & Replace(SKW_ChooseEffortStandards(a(0)), vbCr, " / ")
+    s = s & " ## choose: " & Replace(SKW_ChooseEffortStandards(a(1)), vbCr, " / ")
+    s = s & " ## after=" & SKW_ChapterDefault() & " lists=" & SKW_WbRows("List numbering").Count & " top=" & SKW_WbRows("Table types")(1)("cell margins: top") & _
+        " figure=" & SKW_WbRows("Captions")(3)("separator") & " ## std: " & SKW_StdNote()
+    s = s & " ## missing: " & Replace(SKW_ChooseEffortStandards(a(1) & ".none.xlsx"), vbCr, " / ") & " kept=" & (SKW_EffortStdPath() = a(1))
+    s = s & " ## clear: " & SKW_ChooseEffortStandards("")
+    s = s & " ## back=" & SKW_ChapterDefault() & " lists=" & SKW_WbRows("List numbering").Count & " path=[" & SKW_EffortStdPath() & "]"
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    TW_EffortStd = s
+End Function

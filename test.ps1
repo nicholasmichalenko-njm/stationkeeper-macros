@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 77 tools arrive described, categorised and in the menu' (($tc -like '77 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 78 tools arrive described, categorised and in the menu' (($tc -like '78 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -556,6 +556,8 @@ try {
     [string]$quickStdSeq = Join-Path $work 'Global Standards (quick sequential).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick).xlsx') $quickStd -Force
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick sequential).xlsx') $quickStdSeq -Force
+    [string]$effStd = Join-Path $work 'Fictional Effort Formatting.xlsx'
+    Copy-Item (Join-Path $Root 'test\fixtures\Fictional Effort Formatting.xlsx') $effStd -Force
     Copy-Item (Join-Path $Root 'test\fixtures\Company Standards (app format 2).xlsx') $appStd -Force
     Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 3.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -715,6 +717,14 @@ try {
         Check '1.15.0: the lists show the styles the document uses; a tick adds Word''s built-in styles it has not used yet' (($rf -match '## few: no such row or style choices=(\d+) ## more: choices=(\d+) ##') -and ([int]$Matches[2] -gt [int]$Matches[1] + 20)) $rf
         Check '1.15.0: only the picked row changes: plain text takes the style with emphasis kept, the table cell and typed bullet stay' (($rf -match '## pick2: Not in a list -> Body Text ##') -and ($rf -match '## apply2: Remapped \d+ paragraph\(s\)\. Formatting by hand: emphasis kept') -and ($rf -match '## apply2: [^#]*## \[Plain one: Body Text boldword=True first=False\] \[Whole bold: Body Text bold=True indent=0 size=[\d.]+\] \[Bullet A: List Bullet list1\+mark\] \[Bullet B: List Bullet 2 list\d\+mark italicword=True\] \[Bullet D: List Bullet 3 list\d\+mark\] \[Bullet N: Body Text\] \[Numbered: List Number list1\+mark\] \[Typed: Normal\] \[Cell: Normal\] \[Plain two: Body Text\] ## undone')) $rf
         Check '1.15.0: each Apply is one Ctrl+Z' ($rf -match '## undone: \[Plain one: Normal boldword=True first=False\] \[Whole bold: Normal bold=True indent=36 size=[\d.]+\] \[Bullet A: List Paragraph list\d\+mark\] \[Bullet B: List Paragraph list\d\+mark italicword=True\] \[Bullet D: List Paragraph list\d\+mark\] \[Bullet N: Normal\] \[Numbered: List Paragraph list\d\+mark\] \[Typed: Normal\] \[Cell: Normal\] \[Plain two: Normal\]$') $rf
+        # 12h. 1.16.0: an effort's standards workbook laid over the Global Standards.
+        $es = RunW $word 'SKW_Test.TW_EffortStd' "$quickStd|$effStd"
+        Write-Output "EFFORTSTD: $es"
+        Check '1.16.0: with no effort chosen the Global Standards stand alone' ($es -match '^before=1\|- lists=6 top=2 note=\[\] ##') $es
+        Check '1.16.0: the effort''s values win where it sets one, a row it adds is added, and blanks keep the Global value' (($es -match '## choose: The tools now lay Fictional Effort Formatting\.xlsx over the Global Standards for [^:]+: 2 value\(s\) changed and 1 row\(s\) added by the effort; 1 row\(s\) set for one volume were not used\.') -and ($es -match '## after=1\|\. lists=7 top=5 figure=- ##')) $es
+        Check '1.16.0: every report names both workbooks' ($es -match '## std: Standards: Global Standards \(quick\)\.xlsx, with the effort''s Fictional Effort Formatting\.xlsx over it \(2 value\(s\) changed') $es
+        Check '1.16.0: the Global workbook itself and a missing file are refused, and the effort already chosen stays' (($es -match '## same: That is the Global Standards workbook itself\. Nothing was changed\.') -and ($es -match '## missing: Not found: [^#]* kept=True')) $es
+        Check '1.16.0: clearing the effort puts the Global Standards back alone' (($es -match '## clear: No effort''s standards are laid over the Global Standards now') -and ($es -match '## back=1\|- lists=6 path=\[\]$')) $es
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp
@@ -810,8 +820,10 @@ try {
             $mn = TR $word 'T_SkMenu'
             Write-Output "MENU0: $mn"
             Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
-            Check 'the Show box has three choices: All macros, Stationkeeper, Other' ($mn -match 'SHOW=All macros\|Stationkeeper\|Other(\s|$)') ''
-            Check '1.11.0: the menu has a Global Standards button, apart from the effort folder link' ($mn -match 'STD=Global Standards\.\.\. \| (The tools read |No Global Standards workbook is chosen)[^|]*\| left=10 \| apart=True') ''
+            Check '1.16.0: one row of filters; the first is Application: All, Word, Excel, PowerPoint' (($mn -match 'SHOW=All\|Word\|Excel\|PowerPoint ##') -and ($mn -match 'filters=True')) ''
+            Check '1.16.0: each application lists its own macros, and together they are the whole list' (($mn -match '## APP=PowerPoint (\d+): \[[^#]*; Excel (\d+):[^#]*; Word (\d+): \[[^#]*; All (\d+): \[') -and ([int]$Matches[1] -gt 0) -and ([int]$Matches[3] -gt [int]$Matches[1]) -and ([int]$Matches[1] + [int]$Matches[2] + [int]$Matches[3] -eq [int]$Matches[4])) ''
+            Check '1.16.0: sort by Name or by Category; What it affects is no longer a filter' (($mn -match '## SORT=Category\|Name\|Most used\|Recent -> Name: \[') -and ($mn -match '## SORT2=Category\|Name\|Most used\|Recent -> Category: \[')) ''
+            Check '1.16.0: the menu names the Global Standards and this effort''s standards on two lines, each with its own Choose, above the effort data link' ($mn -match 'STD=Global Standards: [^|]+ \| This effort''s standards: [^|]+ \| Choose\.\.\./Choose\.\.\./Clear clear=(True|False) \| order=True') ''
             Check '1.13.1: the menu opens compact, its border can be dragged, and every control stays inside at any size' (($mn -match '## SIZE=w=500 h=600 list=\d+ inside=all cols=\d+ pt;34 pt;0 pt sizable=True') -and ($mn -match '\|\| wide: w=800 h=620 grew=True list=\d+ inside=all band=True cols=\d+ pt;34 pt;84 pt') -and ($mn -match '\|\| small: w=460 h=540 inside=all')) $mn
             Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Fit All Tables\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
             Check 'filter Other: own macros only' (($mn -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'OTHER \d+:[^|]*(SK-|SK\+|Style Inspector)')) ''

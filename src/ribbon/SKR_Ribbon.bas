@@ -14,7 +14,7 @@ Attribute VB_Name = "SKR_Ribbon"
 Option Explicit
 
 Private Const APP As String = "Stationkeeper"
-Private Const VER As String = "1.15.0"
+Private Const VER As String = "1.16.0"
 Private mTold As String
 
 Public Sub SKR_Menu(ByVal control As Object)

@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.15.0"
+Public Const SKW_VERSION As String = "1.16.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
@@ -33,6 +33,9 @@ Private mStd As Object
 Private mStdPath As String
 Private mStdStamp As Date
 Private mStdRead As Boolean
+Private mEffPath As String             ' the effort's standards workbook laid over the Global Standards, or ""
+Private mEffStamp As Date
+Private mEffNote As String             ' what the overlay did, for reports
 Private mMerged As Object
 Private mMergedKey As String
 Private mRules As Object
@@ -692,6 +695,29 @@ Public Sub SKW_SetStandardsPath(ByVal p As String)
     mStdRead = False
 End Sub
 
+' The effort's own standards workbook (the app's "<effort> Effort Formatting.xlsx"): it holds only what the
+' effort sets. Where it sets a value the value wins; a blank cell falls back to the Global Standards.
+Public Function SKW_EffortStdPath() As String
+    SKW_EffortStdPath = GetSetting(SKW_APP, "EffortStandards", ThisDocument.Name, "")
+End Function
+
+Public Sub SKW_SetEffortStdPath(ByVal p As String)
+    If Len(p) = 0 Then
+        On Error Resume Next
+        DeleteSetting SKW_APP, "EffortStandards", ThisDocument.Name
+        On Error GoTo 0
+    Else
+        SaveSetting SKW_APP, "EffortStandards", ThisDocument.Name, p
+    End If
+    Set mStd = Nothing
+    mStdRead = False
+End Sub
+
+' What the effort's workbook changed, in words: "" when none is chosen.
+Public Function SKW_EffortStdNote() As String
+    If Not (SKW_Workbook() Is Nothing) Then SKW_EffortStdNote = mEffNote
+End Function
+
 Public Function SKW_HasStandards() As Boolean
     SKW_HasStandards = Not (SKW_Std() Is Nothing)
 End Function
@@ -701,6 +727,7 @@ Public Function SKW_StdNote() As String
     Dim e As Object, wb As String
     Set e = SKW_Effort()
     If Not (SKW_Workbook() Is Nothing) Then wb = Mid$(mStdPath, InStrRev(mStdPath, "\") + 1)
+    If Len(wb) > 0 And Len(mEffNote) > 0 Then wb = wb & ", with the effort's " & Mid$(mEffPath, InStrRev(mEffPath, "\") + 1) & " over it (" & mEffNote & ")"
     If e("ok") Then
         SKW_StdNote = "Rules: effort " & e("effort") & " rev " & e("revision") & _
             IIf(e("fromCache"), " (last complete copy: " & LCase$(e("state")) & ")", "") & _
@@ -727,21 +754,123 @@ Public Function SKW_Std() As Object
     Set SKW_Std = mMerged
 End Function
 
-' The standards workbook alone (read again whenever the file changes), or Nothing.
+' The standards workbook (read again whenever the file changes), or Nothing. When an effort's standards
+' workbook is chosen too, its values are laid over the Global Standards' rows.
 Public Function SKW_Workbook() As Object
-    Dim p As String, stamp As Date
+    Dim p As String, stamp As Date, ep As String, estamp As Date, eff As Object, keepErr As String
     p = SKW_StandardsPath()
     If Len(p) = 0 Then Set SKW_Workbook = Nothing: Exit Function
     On Error Resume Next
     stamp = FileDateTime(p)
     If Err.Number <> 0 Then Set SKW_Workbook = Nothing: Exit Function
+    ep = SKW_EffortStdPath()
+    If Len(ep) > 0 Then
+        Err.Clear
+        estamp = FileDateTime(ep)
+        If Err.Number <> 0 Then estamp = 0
+        Err.Clear
+    End If
     On Error GoTo 0
-    If mStdRead And p = mStdPath And stamp = mStdStamp Then Set SKW_Workbook = mStd: Exit Function
+    If mStdRead And p = mStdPath And stamp = mStdStamp And ep = mEffPath And estamp = mEffStamp Then Set SKW_Workbook = mStd: Exit Function
     Set mStd = SKW_ReadWorkbook(p)
     mStdPath = p
     mStdStamp = stamp
+    mEffPath = ep
+    mEffStamp = estamp
+    mEffNote = ""
     mStdRead = True
+    If Not mStd Is Nothing And Len(ep) > 0 Then
+        If estamp = 0 Then
+            mEffNote = "the effort's workbook was not found, so the Global Standards stand alone"
+        Else
+            keepErr = SKW_StdError
+            Set eff = SKW_ReadWorkbook(ep)
+            If eff Is Nothing Then
+                mEffNote = "the effort's workbook could not be read, so the Global Standards stand alone"
+            Else
+                mEffNote = SKW_Overlay(mStd, eff)
+            End If
+            SKW_StdError = keepErr
+        End If
+    End If
     Set SKW_Workbook = mStd
+End Function
+
+' Lays an effort's workbook over the Global Standards, sheet by sheet. A row is matched by its Name (Setting on
+' the Settings sheet, Label and Part on Captions). A cell the effort fills wins; a blank cell keeps the Global
+' value; a row only the effort has is added. Rows set for one volume are not used: a document does not say
+' which volume it is. Returns what happened, in words.
+Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As String
+    Dim k As Variant, rows As Collection, out As Collection, r As Object, e As Object, d As Object, f As Variant, idx As Object
+    Dim key As String, nCells As Long, nRows As Long, nVol As Long, used As Object, v As String
+    For Each k In eff.Keys
+        If k <> "about" And k <> "columns" Then
+            Set idx = CreateObject("Scripting.Dictionary")
+            For Each e In eff(k)
+                v = ""
+                If e.Exists("volume") Then v = Trim$(e("volume"))
+                If Len(v) > 0 Then
+                    nVol = nVol + 1
+                Else
+                    key = SKW_RowKey(e)
+                    If Len(key) > 0 Then Set idx(key) = e
+                End If
+            Next
+            If idx.Count > 0 Then
+                Set out = New Collection
+                Set used = CreateObject("Scripting.Dictionary")
+                Set rows = New Collection
+                If glob.Exists(k) Then Set rows = glob(k)
+                For Each r In rows
+                    key = SKW_RowKey(r)
+                    If Len(key) > 0 And idx.Exists(key) Then
+                        Set e = idx(key)
+                        Set d = CreateObject("Scripting.Dictionary")
+                        For Each f In r.Keys
+                            d(f) = r(f)
+                        Next
+                        For Each f In e.Keys
+                            If f <> "id" And f <> "changed" And f <> "volume" Then
+                                If Len(Trim$(e(f))) > 0 Then
+                                    If Not d.Exists(f) Then
+                                        d(f) = e(f): nCells = nCells + 1
+                                    ElseIf CStr(d(f)) <> CStr(e(f)) Then
+                                        d(f) = e(f): nCells = nCells + 1
+                                    End If
+                                End If
+                            End If
+                        Next
+                        d("from") = "effort"
+                        out.Add d
+                        used(key) = True
+                    Else
+                        out.Add r
+                    End If
+                Next
+                For Each f In idx.Keys
+                    If Not used.Exists(f) Then
+                        Set d = idx(f)
+                        d("from") = "effort"
+                        out.Add d
+                        nRows = nRows + 1
+                    End If
+                Next
+                Set glob(k) = out
+            End If
+        End If
+    Next
+    SKW_Overlay = nCells & " value(s) changed and " & nRows & " row(s) added by the effort" & _
+        IIf(nVol > 0, "; " & nVol & " row(s) set for one volume were not used", "")
+End Function
+
+Private Function SKW_RowKey(ByVal r As Object) As String
+    On Error Resume Next
+    If r.Exists("name") Then SKW_RowKey = LCase$(Trim$(r("name")))
+    If Len(SKW_RowKey) = 0 And r.Exists("setting") Then SKW_RowKey = LCase$(Trim$(r("setting")))
+    If Len(SKW_RowKey) = 0 And r.Exists("label") Then
+        SKW_RowKey = LCase$(Trim$(r("label")))
+        If r.Exists("part") Then SKW_RowKey = SKW_RowKey & "|" & LCase$(Trim$(r("part")))
+    End If
 End Function
 
 ' Workbook sheets with the effort's sections laid over them. A section the effort sets replaces the

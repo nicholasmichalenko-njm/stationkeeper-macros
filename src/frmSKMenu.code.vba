@@ -9,12 +9,16 @@ Option Explicit
 Private WithEvents txtSearch As MSForms.TextBox
 Private WithEvents lstMacros As MSForms.ListBox
 Private WithEvents cboSort As MSForms.ComboBox
-Private WithEvents cboAffects As MSForms.ComboBox
 Private WithEvents btnRun As MSForms.CommandButton
 Private WithEvents btnPin As MSForms.CommandButton
 Private WithEvents btnClose As MSForms.CommandButton
 Private WithEvents btnReports As MSForms.CommandButton
 Private WithEvents btnStd As MSForms.CommandButton
+Private WithEvents btnEff As MSForms.CommandButton
+Private WithEvents btnEffClear As MSForms.CommandButton
+Private lblStdG As MSForms.Label
+Private lblStdE As MSForms.Label
+Private mKind As String          ' tests: list only the macros made for Stationkeeper, or only the others
 Private WithEvents chkKeep As MSForms.CheckBox
 Private WithEvents cboShow As MSForms.ComboBox
 Private WithEvents cboCat As MSForms.ComboBox
@@ -108,13 +112,14 @@ Private Sub UserForm_Initialize()
     Set txtSearch = AddCtl("Forms.TextBox.1", "txtSearch", 10, 22, 160, 20)
     txtSearch.Font.Size = 10
 
-    AddLabel "lblShow", "Show", 176, 8, 100, 14
+    AddLabel "lblShow", "Application", 176, 8, 100, 14
     Set cboShow = AddCtl("Forms.ComboBox.1", "cboShow", 176, 22, 100, 20)
     cboShow.Style = fmStyleDropDownList
-    cboShow.AddItem "All macros"
-    cboShow.AddItem "Stationkeeper"
-    cboShow.AddItem "Other"
-    cboShow.ControlTipText = "Stationkeeper: made for Stationkeeper. Other: not made for Stationkeeper."
+    cboShow.AddItem "All"
+    cboShow.AddItem "Word"
+    cboShow.AddItem "Excel"
+    cboShow.AddItem "PowerPoint"
+    cboShow.ControlTipText = "The application a macro works in"
 
     AddLabel "lblCat", "Category", 282, 8, 100, 14
     Set cboCat = AddCtl("Forms.ComboBox.1", "cboCat", 282, 22, 110, 20)
@@ -124,13 +129,9 @@ Private Sub UserForm_Initialize()
     Set cboSort = AddCtl("Forms.ComboBox.1", "cboSort", 398, 22, 72, 20)
     cboSort.Style = fmStyleDropDownList
     cboSort.AddItem "Category"
-    cboSort.AddItem "A to Z"
+    cboSort.AddItem "Name"
     cboSort.AddItem "Most used"
     cboSort.AddItem "Recent"
-
-    AddLabel "lblAff", "What it affects", 476, 8, 160, 14
-    Set cboAffects = AddCtl("Forms.ComboBox.1", "cboAffects", 476, 22, 174, 20)
-    cboAffects.Style = fmStyleDropDownList
 
     Set lstMacros = AddCtl("Forms.ListBox.1", "lstMacros", 10, 50, 300, 298)
     lstMacros.ColumnCount = 3
@@ -191,9 +192,18 @@ Private Sub UserForm_Initialize()
     btnClose.Caption = "Close"
     btnClose.Cancel = True
     ' The Global Standards workbook the tools read. It is not the effort's folder: that is the link strip above.
-    Set btnStd = AddCtl("Forms.CommandButton.1", "btnStd", 346, 442, 116, 24)
-    btnStd.Caption = "Global Standards..."
+    Set btnStd = AddCtl("Forms.CommandButton.1", "btnStd", 346, 442, 116, 22)
+    btnStd.Caption = "Choose..."
     btnStd.ControlTipText = StdTip()
+    Set lblStdG = AddLabel("lblStdG", "", 10, 400, 300, 14)
+    Set lblStdE = AddLabel("lblStdE", "", 10, 420, 300, 14)
+    Set btnEff = AddCtl("Forms.CommandButton.1", "btnEff", 346, 420, 84, 22)
+    btnEff.Caption = "Choose..."
+    btnEff.ControlTipText = "The effort's own standards workbook (Effort Formatting). Where it sets a value it wins; a blank keeps the Global Standards' value."
+    Set btnEffClear = AddCtl("Forms.CommandButton.1", "btnEffClear", 432, 420, 56, 22)
+    btnEffClear.Caption = "Clear"
+    btnEffClear.ControlTipText = "Stop laying an effort's standards over the Global Standards"
+    StdLines
 
     ' The question panel (over the description) for macros tied to Stationkeeper.
     Set fraAsk = AddCtl("Forms.Frame.1", "fraAsk", 322, 88, 328, 244)
@@ -233,39 +243,14 @@ Private Sub UserForm_Initialize()
         End If
     Next
 
-    ' Affects filter: every value in use, A to Z.
-    For Each e In mItems
-        For Each a In Split(e("affects"), ",")
-            If Len(Trim$(a)) > 0 Then SK_AddUnique affs, Trim$(a)
-        Next
-    Next
-    If affs.Count > 0 Then
-        ReDim arr(1 To affs.Count)
-        For i = 1 To affs.Count: arr(i) = affs(i): Next
-        For i = 2 To affs.Count
-            tmp = arr(i): j = i - 1
-            Do While j >= 1
-                If LCase$(arr(j)) <= LCase$(tmp) Then Exit Do
-                arr(j + 1) = arr(j): j = j - 1
-            Loop
-            arr(j + 1) = tmp
-        Next
-    End If
-    cboAffects.AddItem "Anything"
-    For i = 1 To affs.Count: cboAffects.AddItem arr(i): Next
-    cboAffects.ListIndex = 0
-
     v = SK_GetPref("sort", mModel("look")("defaultSort"))
+    If v = "A to Z" Then v = "Name"                        ' its name before 1.16.0
     cboSort.ListIndex = 0
     For i = 0 To cboSort.ListCount - 1
         If LCase$(cboSort.List(i)) = LCase$(v) Then cboSort.ListIndex = i
     Next
     chkKeep.Value = (SK_GetPref("keepOpen", mModel("look")("keepOpen")) = "1")
-    v = SK_GetPref("show", "All macros")
-    If v = "My macros" Then v = "Other"                    ' names before 1.3.0
-    If v = "Stationkeeper tools" Then v = "Stationkeeper"
-    ' Choices retired in 1.9.1 fall back to All macros; save that once so the old name is gone.
-    If v = "Needs effort data" Or v = "Ready to run now" Then v = "All macros": SK_SetPref "show", v
+    v = SK_GetPref("app", "All")
     cboShow.ListIndex = 0
     For i = 0 To cboShow.ListCount - 1
         If LCase$(cboShow.List(i)) = LCase$(v) Then cboShow.ListIndex = i
@@ -340,26 +325,21 @@ Private Sub Layout()
     frmSKBrand.Fit Me
     u = w - 20
 
-    ' Filters, row 1: Search, Show, Sort by.
+    ' One row of filters: Search, Application, Category, Sort by.
     Place "lblSearch", 10, o + 8, 60, 14
-    Place "txtSearch", 10, o + 22, u - 192, 20
-    Place "lblCount", 10 + (u - 192) - 120, o + 8, 120, 14
-    Place "lblShow", 10 + u - 186, o + 8, 100, 14
-    Place "cboShow", 10 + u - 186, o + 22, 100, 20
+    Place "txtSearch", 10, o + 22, u - 306, 20
+    Place "lblCount", 10 + (u - 306) - 90, o + 8, 90, 14
+    Place "lblShow", 10 + u - 300, o + 8, 92, 14
+    Place "cboShow", 10 + u - 300, o + 22, 92, 20
+    Place "lblCat", 10 + u - 202, o + 8, 116, 14
+    Place "cboCat", 10 + u - 202, o + 22, 116, 20
     Place "lblSort", 10 + u - 80, o + 8, 80, 14
     Place "cboSort", 10 + u - 80, o + 22, 80, 20
-    ' Row 2: Category, What it affects.
-    half = (u - 6) / 2
-    Place "lblCat", 10, o + 46, half, 14
-    Place "cboCat", 10, o + 60, half, 20
-    Place "lblAff", 16 + half, o + 46, half, 14
-    Place "cboAffects", 16 + half, o + 60, half, 20
 
     ' From the bottom up: buttons, status, the folder offer, the link strip, the legend.
     y = h - 8 - 24
-    Place "btnStd", 10, y, 110, 24
-    Place "btnReports", 126, y, 96, 24
-    Place "chkKeep", 230, y + 3, 130, 18
+    Place "btnReports", 10, y, 96, 24
+    Place "chkKeep", 114, y + 3, 130, 18
     Place "btnClose", w - 10 - 70, y, 70, 24
     y = y - 18
     Place "lblStatus", 10, y, u, 14
@@ -371,12 +351,20 @@ Private Sub Layout()
     Place "btnLink", w - 10 - 204, y + 2, 84, 22
     Place "btnRefresh", w - 10 - 116, y + 2, 56, 22
     Place "btnUnlink", w - 10 - 56, y + 2, 56, 22
+    ' Above the effort data link: the two standards workbooks, each with its own Choose.
+    y = y - 26
+    Place "lblStdE", 10, y + 4, u - 156, 14
+    Place "btnEff", w - 10 - 146, y, 84, 22
+    Place "btnEffClear", w - 10 - 56, y, 56, 22
+    y = y - 24
+    Place "lblStdG", 10, y + 4, u - 156, 14
+    Place "btnStd", w - 10 - 146, y, 84, 22
     y = y - 18
     Place "lblLegend", 10, y, u, 14
     pb = y - 4
 
     ' The list beside the description.
-    y = o + 88
+    y = o + 50
     ph = pb - y
     lw = Int(u * 0.44)
     If lw < 190 Then lw = 190
@@ -527,7 +515,6 @@ Private Sub RefreshList()
 
     If mBusy Then Exit Sub
     q = Trim$(txtSearch.Text)
-    If cboAffects.ListIndex > 0 Then aff = cboAffects.Text
     flt = cboShow.Text
     mode = cboSort.Text
     n = mItems.Count
@@ -547,7 +534,7 @@ Private Sub RefreshList()
                     keys(cnt) = Format$(100000 - s, "000000") & "|" & LCase$(e("title"))
                 Else
                     Select Case mode
-                        Case "A to Z"
+                        Case "Name"
                             keys(cnt) = LCase$(e("title"))
                         Case "Most used"
                             keys(cnt) = Format$(999999 - SK_Uses(e("run")), "000000") & "|" & LCase$(e("title"))
@@ -733,13 +720,10 @@ Private Sub cboSort_Change()
     RefreshList
 End Sub
 
-Private Sub cboAffects_Change()
-    RefreshList
-End Sub
 
 Private Sub cboShow_Change()
     If mBusy Then Exit Sub
-    SK_SetPref "show", cboShow.Text
+    SK_SetPref "app", cboShow.Text
     RefreshList
 End Sub
 
@@ -789,14 +773,30 @@ Private Sub cboCat_Change()
     RefreshList
 End Sub
 
+' The application a macro works in: the tools say it by their module's name; a team macro says it in its
+' category or in what it affects; otherwise it is a Word macro (this is a Word template).
+Private Function AppOf(ByVal e As Object) As String
+    Dim m As String, t As String
+    On Error Resume Next
+    m = UCase$(SK_ModulePart(e("run")))
+    t = LCase$(e("category") & " " & e("affects"))
+    If Left$(m, 4) = "SKP_" Or InStr(t, "powerpoint") > 0 Then
+        AppOf = "PowerPoint"
+    ElseIf Left$(m, 4) = "SKX_" Or InStr(t, "excel") > 0 Then
+        AppOf = "Excel"
+    Else
+        AppOf = "Word"
+    End If
+End Function
+
 Private Function ShowPasses(ByVal e As Object, ByVal flt As String) As Boolean
     Dim k As String
+    ShowPasses = True
+    If flt = "Word" Or flt = "Excel" Or flt = "PowerPoint" Then ShowPasses = (AppOf(e) = flt)
+    If Not ShowPasses Or Len(mKind) = 0 Then Exit Function
     k = SK_SkKind(e("stationkeeper"))
-    Select Case flt
-        Case "Other": ShowPasses = (k = "none" And Not IsSkTool(e))
-        Case "Stationkeeper": ShowPasses = (k <> "none" Or IsSkTool(e))
-        Case Else: ShowPasses = True
-    End Select
+    If mKind = "Other" Then ShowPasses = (k = "none" And Not IsSkTool(e))
+    If mKind = "Stationkeeper" Then ShowPasses = (k <> "none" Or IsSkTool(e))
 End Function
 
 Private Sub ShowLink()
@@ -974,9 +974,23 @@ Private Function StdTip() As String
 End Function
 
 ' Runs the tools' Choose Standards Workbook. The link strip above is for an effort's folder; this is the workbook.
+Private Function EffPath() As String
+    EffPath = GetSetting("Stationkeeper Tools", "EffortStandards", ThisDocument.Name, "")
+End Function
+
+' The two lines that say which standards the tools read.
+Private Sub StdLines()
+    Dim g As String, e As String
+    g = StdPath(): e = EffPath()
+    lblStdG.Caption = "Global Standards: " & IIf(Len(g) > 0, Mid$(g, InStrRev(g, "\") + 1), "not chosen")
+    lblStdG.ControlTipText = StdTip()
+    lblStdE.Caption = "This effort's standards: " & IIf(Len(e) > 0, Mid$(e, InStrRev(e, "\") + 1), "none (the Global Standards stand alone)")
+    lblStdE.ControlTipText = IIf(Len(e) > 0, "Laid over the Global Standards: " & e, "Choose the effort's Effort Formatting workbook to lay its values over the Global Standards.")
+    btnStd.ControlTipText = StdTip()
+    btnEffClear.Enabled = (Len(e) > 0)
+End Sub
+
 Private Sub btnStd_Click()
-    Dim was As String
-    was = StdPath()
     On Error Resume Next
     Application.Run "SKW_Setup.ChooseStandardsWorkbook"
     If Err.Number <> 0 Then
@@ -985,13 +999,63 @@ Private Sub btnStd_Click()
         Exit Sub
     End If
     On Error GoTo 0
-    btnStd.ControlTipText = StdTip()
-    If StdPath() <> was And Len(StdPath()) > 0 Then lblStatus.Caption = "Global Standards: " & Mid$(StdPath(), InStrRev(StdPath(), "\") + 1)
+    StdLines
+End Sub
+
+Private Sub btnEff_Click()
+    On Error Resume Next
+    Application.Run "SKW_Setup.ChooseEffortStandardsWorkbook"
+    If Err.Number <> 0 Then
+        Err.Clear
+        lblStatus.Caption = "Stationkeeper Tools are not in this template. Install them from the admin first."
+        Exit Sub
+    End If
+    On Error GoTo 0
+    StdLines
+End Sub
+
+Private Sub btnEffClear_Click()
+    Dim msg As String
+    On Error Resume Next
+    msg = Application.Run("SKW_Setup.SKW_ChooseEffortStandards", "")
+    On Error GoTo 0
+    StdLines
+    lblStatus.Caption = "This effort's standards: none. The tools use the Global Standards alone."
 End Sub
 
 ' Tests: the Global Standards button.
 Public Function TestStd() As String
-    TestStd = btnStd.Caption & " | " & btnStd.ControlTipText & " | left=" & btnStd.Left & " | apart=" & (btnStd.Top > btnLink.Top + 60)
+    StdLines
+    TestStd = lblStdG.Caption & " | " & lblStdE.Caption & " | " & btnStd.Caption & "/" & btnEff.Caption & "/" & btnEffClear.Caption & " clear=" & btnEffClear.Enabled & _
+        " | order=" & (lblStdG.Top < lblStdE.Top And lblStdE.Top < lblLink.Top) & " filters=" & (cboShow.Top = cboCat.Top And cboCat.Top = cboSort.Top)
+End Function
+
+' Tests: the list under an Application choice: count, then the first titles.
+Public Function TestApp(ByVal appName As String) As String
+    Dim s As String, i As Long
+    txtSearch.Text = ""
+    SetShowChoice appName
+    s = cboShow.Text & " " & lstMacros.ListCount & ":"
+    For i = 0 To lstMacros.ListCount - 1
+        If i < 3 Then s = s & " [" & lstMacros.List(i, 0) & "]"
+    Next
+    TestApp = s
+End Function
+
+' Tests: the first titles under a Sort choice.
+Public Function TestSort(ByVal sortName As String) As String
+    Dim s As String, i As Long
+    txtSearch.Text = ""
+    SetShowChoice "All"
+    For i = 0 To cboSort.ListCount - 1
+        s = s & IIf(i > 0, "|", "") & cboSort.List(i)
+        If cboSort.List(i) = sortName Then cboSort.ListIndex = i
+    Next
+    s = s & " -> " & cboSort.Text & ":"
+    For i = 0 To lstMacros.ListCount - 1
+        If i < 3 Then s = s & " [" & lstMacros.List(i, 0) & "]"
+    Next
+    TestSort = s
 End Function
 
 ' Tests: the reports button.
@@ -1017,13 +1081,16 @@ Public Function TestSearch(ByVal q As String) As String
     TestSearch = s
 End Function
 
-' Picks a Show choice by name; a name that is not in the list picks All macros.
+' Picks an Application choice by name. For the tests, "Stationkeeper" and "Other" list only the macros made
+' for Stationkeeper or only the others, across every application; "All macros" lists everything.
 Private Sub SetShowChoice(ByVal flt As String)
     Dim i As Long, pick As Long
+    mKind = ""
+    If flt = "Stationkeeper" Or flt = "Other" Then mKind = flt
     For i = 0 To cboShow.ListCount - 1
         If LCase$(cboShow.List(i)) = LCase$(flt) Then pick = i
     Next
-    cboShow.ListIndex = pick
+    If cboShow.ListIndex = pick Then RefreshList Else cboShow.ListIndex = pick
 End Sub
 
 ' The Show choices, joined with "|".

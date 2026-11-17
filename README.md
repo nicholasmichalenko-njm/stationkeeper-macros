@@ -32,6 +32,24 @@ The kit's own menu (open the kit, then `StationkeeperMacros`) lists the installe
 
 ## The Stationkeeper look and the ribbon tab (1.6.0)
 
+**Finding a macro (1.16.0).** One row of filters:
+
+| Filter | Choices |
+|---|---|
+| Search | Type any words: name, description, category, what it affects |
+| Application | All, Word, Excel, PowerPoint |
+| Category | The categories set in the admin |
+| Sort by | Category, Name, Most used, Recent |
+
+The "What it affects" filter is gone; Search still finds those words. The Show filter (Stationkeeper or Other) is gone; the diamond marks in the list still say which macros are made for Stationkeeper.
+
+**The standards the tools read (1.16.0).** Two lines at the bottom of the menu, each with its own **Choose...**:
+
+- **Global Standards:** the app's `Global Standards.xlsx`. Always needed.
+- **This effort's standards:** optional. The app writes an effort's own values to `<effort name> Effort Formatting.xlsx`: only what the effort changes. Choose it and its values are laid over the Global Standards: where the effort sets a value it wins, a blank cell keeps the Global value, a row only the effort has is added. **Clear** goes back to the Global Standards alone. Rows the effort sets for one volume are not used, because a document does not say which volume it is. Every report names both workbooks.
+
+Below them, the **effort data** link (Link a folder...) is a third, separate thing: the folder of data the app publishes for an effort, used by the macros marked as needing Stationkeeper data.
+
 **The menu's size (1.13.1).** The menu opens compact (500 by 600 points; it was 672 wide). Drag any edge or corner to resize it: the list, the description and the buttons follow, and the size is kept for the next time on that PC. The Category column in the list shows once the menu is wide enough.
 
 **The look.** The menu, the admin and the Deck Media List open with a navy band carrying the Stationkeeper satellite and the form's name, an amber line under it, a light page, and navy main buttons (Run, Save to template, Rename). The satellite is also in each window's title bar. The pictures are stored inside the forms (`frmSKBrand` for the menu and admin, `frmSKWBrand` for the tools), so nothing extra goes on a PC. Windows keeps its own title bar color and list highlight, and message boxes stay Windows' standard ones.
@@ -133,7 +151,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 77 tools in 1.15.0)
+## Stationkeeper Tools (0.4.0 and later; 78 tools in 1.16.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
