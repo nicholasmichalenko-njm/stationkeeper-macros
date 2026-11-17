@@ -1588,11 +1588,6 @@ Private Sub AddField(ByVal d As Object, ByVal code As String)
     d.Fields.Add AtEnd(d), wdFieldEmpty, code, False
 End Sub
 
-Private Sub QuickValuesForTest()
-    Set SKW_QuickTest = CreateObject("Scripting.Dictionary")
-    SKW_QuickTest("mtop") = "0.02": SKW_QuickTest("mbottom") = "0.02": SKW_QuickTest("mleft") = "0.1": SKW_QuickTest("mright") = "0.1"
-End Sub
-
 Public Function TW_QuickBuild(ByVal savePath As String) As String
     Dim d As Object, t As Object, rg As Object, b As Object
     SKW_Quiet = True
@@ -1691,10 +1686,12 @@ Private Function TableState(ByVal t As Object, ByVal hdr As Long) As String
 End Function
 
 ' Quick Table Format: the check, then a copy with every table set.
-Public Function TW_QuickTable(ByVal target As String) As String
-    Dim d As Object, c As Object, s As String
+Public Function TW_QuickTable(ByVal arg As String) As String
+    Dim d As Object, c As Object, s As String, prev As String, target As String
     SKW_Quiet = True
-    QuickValuesForTest
+    target = Split(arg, "|")(0)
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath Split(arg, "|")(1)
     Set d = QuickDoc()
     s = SKW_QuickTableCheck() & " ## fixable=" & SKW_Fixable & " ## " & ReportText()
     CloseReport
@@ -1705,15 +1702,17 @@ Public Function TW_QuickTable(ByVal target As String) As String
     s = s & " ## source A: " & TableState(d.Tables(1), 2)
     If c.FullName <> d.FullName Then c.Close SaveChanges:=0
     d.Activate
-    Set SKW_QuickTest = Nothing
+    SKW_SetStandardsPath prev
     TW_QuickTable = s
 End Function
 
 ' Quick Caption Format: the check, then a copy with every caption set.
-Public Function TW_QuickCaption(ByVal target As String) As String
-    Dim d As Object, c As Object, s As String
+Public Function TW_QuickCaption(ByVal arg As String) As String
+    Dim d As Object, c As Object, s As String, prev As String, target As String
     SKW_Quiet = True
-    QuickValuesForTest
+    target = Split(arg, "|")(0)
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath Split(arg, "|")(1)
     Set d = QuickDoc()
     s = SKW_QuickCaptionCheck() & " ## fixable=" & SKW_Fixable & " ## " & ReportText()
     CloseReport
@@ -1731,7 +1730,7 @@ Public Function TW_QuickCaption(ByVal target As String) As String
     s = s & " ## source capA=" & ParaStyleOf(d.Tables(1).Cell(1, 1)) & " period=" & StyleAtEndOf(d, "Costs by year.")
     If c.FullName <> d.FullName Then c.Close SaveChanges:=0
     d.Activate
-    Set SKW_QuickTest = Nothing
+    SKW_SetStandardsPath prev
     TW_QuickCaption = s
 End Function
 
@@ -1749,13 +1748,13 @@ Private Function CapState(ByVal d As Object, ByVal txt As String) As String
     CapState = Replace(Replace(Replace(p.Text, vbCr, ""), Chr(7), ""), vbTab, ">") & " " & CodesOf(p)
 End Function
 
-' Caption Numbering Check and its fix in a copy, under the rule named (heading or sequential).
+' Caption Numbering Check and its fix in a copy, under the standards workbook named.
 Public Function TW_QuickNumber(ByVal arg As String) As String
-    Dim d As Object, c As Object, s As String, a As Variant
+    Dim d As Object, c As Object, s As String, a As Variant, prev As String
     a = Split(arg, "|")
     SKW_Quiet = True
-    QuickValuesForTest
-    SKW_QuickTest("nummode") = a(0)
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath a(0)
     Set d = QuickDoc()
     s = SKW_CaptionNumberCheck() & " ## fixable=" & SKW_Fixable & " saved=" & d.Saved & " ## " & ReportText()
     CloseReport
@@ -1768,15 +1767,16 @@ Public Function TW_QuickNumber(ByVal arg As String) As String
     s = s & " ## source F1=" & CapState(d, "Ground segment")
     If c.FullName <> d.FullName Then c.Close SaveChanges:=0
     d.Activate
-    Set SKW_QuickTest = Nothing
+    SKW_SetStandardsPath prev
     TW_QuickNumber = s
 End Function
 
 ' The three tools at the cursor, on the document itself.
-Public Function TW_QuickHere() As String
-    Dim d As Object, s As String
+Public Function TW_QuickHere(ByVal std As String) As String
+    Dim d As Object, s As String, prev As String
     SKW_Quiet = True
-    QuickValuesForTest
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath std
     Set d = QuickDoc()
     d.Tables(2).Cell(2, 1).Range.Select
     Selection.Collapse
@@ -1793,7 +1793,12 @@ Public Function TW_QuickHere() As String
     FindText(d, "Text before").Select
     Selection.Collapse
     s = s & " ## none: " & Replace(SKW_QuickCaptionHere(), vbCr, " / ")
-    Set SKW_QuickTest = Nothing
+    SKW_SetStandardsPath prev
+    ' With a workbook that is not the app's Global Standards, every quick tool says so and changes nothing.
+    d.Tables(1).Cell(2, 1).Range.Select
+    Selection.Collapse
+    s = s & " ## nostd: " & SKW_QuickTableHere() & " | " & SKW_QuickTableCheck() & " | " & SKW_QuickCaptionHere() & " | " & SKW_QuickCaptionCheck() & _
+        " | " & SKW_CaptionNumberCheck() & " | " & SKW_CaptionNumberHere()
     TW_QuickHere = s
 End Function
 
@@ -1802,28 +1807,19 @@ Public Function TW_QuickClose() As String
     TW_QuickClose = "closed"
 End Function
 
-' The quick values form: its boxes, saving, and filling from the app's workbook.
-Public Function TW_QuickForm(ByVal path As String) As String
+' 1.11.0: a workbook Word's picker names by its OneDrive or SharePoint web address is found in the synced
+' folder on this PC; one that is not synced is refused with the reason, and the workbook in use stays.
+Public Function TW_LocalPath(ByVal folder As String) As String
     Dim prev As String, s As String
     SKW_Quiet = True
-    Set SKW_QuickTest = CreateObject("Scripting.Dictionary")
     prev = SKW_StandardsPath()
-    Load frmSKWQuick
-    s = Left$(frmSKWQuick.Probe(), 66) & " saved0=" & SKW_QuickGet("saved")
-    frmSKWQuick.TestSet "head", "X Head"
-    frmSKWQuick.TestSet "nummode", "sequential"
-    frmSKWQuick.TestSet "headrow", "2"
-    frmSKWQuick.TestSet "captab", "0"
-    frmSKWQuick.TestSave
-    Unload frmSKWQuick
-    s = s & " ## head=" & SKW_QuickGet("head") & " mode=" & SKW_QuickGet("nummode") & " headrow=" & SKW_QuickGet("headrow") & " saved=" & SKW_QuickGet("saved") & _
-        " body=" & SKW_QuickGet("body") & " captab=" & SKW_QuickGet("captab")
-    SKW_SetStandardsPath path
-    Load frmSKWQuick
-    s = s & " ## filled=" & frmSKWQuick.TestFill()
-    s = s & " " & Replace(Mid$(frmSKWQuick.Probe(), InStr(frmSKWQuick.Probe(), "##")), SKW_QuickDefault("keep"), "(keep)")
-    Unload frmSKWQuick
+    SKW_TestRoots = folder
+    s = "plain=" & SKW_LocalPath("C:\Some Folder\Book.xlsx")
+    s = s & " ## found=" & Mid$(SKW_LocalPath("https://kestrel.sharepoint.com/sites/Proposals/Shared%20Documents/Team%20library/Team%20standards.xlsx?web=1"), Len(folder) + 1)
+    s = s & " ## choose=" & Left$(Replace(SKW_ChooseStandards("https://kestrel.sharepoint.com/sites/Proposals/Shared%20Documents/Team%20standards.xlsx"), vbCr, " / "), 60)
+    s = s & " ## missing=" & Left$(Replace(SKW_ChooseStandards("https://kestrel.sharepoint.com/sites/Proposals/Shared%20Documents/No%20Such%20Book.xlsx"), vbCr, " / "), 150)
+    s = s & " ## kept=" & (SKW_StandardsPath() = folder & "\Team standards.xlsx")
+    SKW_TestRoots = ""
     SKW_SetStandardsPath prev
-    Set SKW_QuickTest = Nothing
-    TW_QuickForm = s
+    TW_LocalPath = s
 End Function

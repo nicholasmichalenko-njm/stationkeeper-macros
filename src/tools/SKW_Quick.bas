@@ -1,127 +1,170 @@
 Attribute VB_Name = "SKW_Quick"
 ' =====================================================================
-' Stationkeeper Tools: quick tools (1.10.0).
-' For working in a document before the standards are entered in the
-' Stationkeeper app. Each tool reads a few "quick values" saved on this
-' PC (Quick Values opens the form). They are not the Global Standards
-' and are never written to them. Every report says so.
-'   QuickValues                  the form: styles, cell margins, numbering rule
+' Stationkeeper Tools: quick tools (1.10.0; one source in 1.11.0).
+' Fast fixes for tables and captions. Every value comes from the
+' Stationkeeper app's Global Standards workbook, and from nowhere else:
+'   Table looks   the header and body rows' Tag styles, the keep list
+'   Table types   the cell margins (the first type)
+'   Captions      per label and part: Style, After number, Chapter level,
+'                 Separator, Identifier, and the added column Action style
+'   Settings      caption_abbreviations (optional)
+' With no workbook, or a sheet missing, a tool says so and changes nothing.
 '   QuickTableFormatHere / All   header row style, body row style, cell margins
-'   QuickCaptionFormatHere / All caption styles, and the action caption style
-'   CaptionNumberingCheck        caption field codes against one rule; fix in a copy
+'   QuickCaptionFormatHere / All caption style, what follows the number, the action caption style
+'   CaptionNumberingCheck        caption field codes against the Captions sheet; fix in a copy
 '   FixCaptionNumberHere         the caption at the cursor
 ' =====================================================================
 Option Explicit
 
-Public SKW_QuickTest As Object   ' tests: values held here in place of the registry
-
-Private Const SEC As String = "Quick"
+Private Const NEED_STD As String = "This tool reads the Global Standards workbook and nothing else. Run Choose Standards Workbook and pick the Stationkeeper app's Global Standards.xlsx."
+Private mKey As String, mHead As String, mBody As String, mKeep As String, mMar(0 To 3) As Single
+Private Const ABBREV As String = "U.S.; vs.; No.; Inc.; Co.; Corp.; Ltd.; e.g.; i.e.; etc.; Fig.; Rev.; Vol.; Sec.; Para.; Ref.; approx.; St.; Dr.; Mr.; Ms."
 
 ' ---------------------------------------------------------------------
-' The quick values
+' Reading the Global Standards workbook
 ' ---------------------------------------------------------------------
-Public Function SKW_QuickKeys() As Variant
-    SKW_QuickKeys = Array("head", "body", "keep", "tstyle", "mtop", "mbottom", "mleft", "mright", "headrow", _
-        "captable", "capfigure", "captablechar", "capfigurechar", "capaction", "abbrev", "captab", _
-        "nummode", "numhead", "numsep", "numlevel", "tlabel", "flabel")
+' A named value of the workbook's Settings sheet (Name, Value).
+Private Function WbSetting(ByVal key As String) As String
+    Dim r As Object
+    For Each r In SKW_WbRows("Settings")
+        If r.Exists("name") Then
+            If LCase$(Trim$(r("name"))) = LCase$(key) Then
+                If r.Exists("value") Then WbSetting = Trim$(r("value"))
+                Exit Function
+            End If
+        End If
+    Next
 End Function
 
-Public Function SKW_QuickDefault(ByVal key As String) As String
+' A cell of a workbook row, with =name looked up on the Settings sheet.
+Private Function WbVal(ByVal r As Object, ByVal key As String) As String
+    Dim v As String
+    If r.Exists(key) Then v = Trim$(r(key))
+    If Left$(v, 1) = "=" Then v = WbSetting(Mid$(v, 2))
+    WbVal = v
+End Function
+
+Private Function WbApproved(ByVal r As Object) As Boolean
+    Dim s As String
+    If r.Exists("status") Then s = LCase$(Trim$(r("status")))
+    WbApproved = (Len(s) = 0 Or s = "approved")
+End Function
+
+' The table values, read once per change of the workbook: the header and body looks' Tag styles and the
+' keep list from Table looks, through the first table type, and that type's cell margins in points.
+Private Sub LoadTable()
+    Dim types As Collection, roles As Object, m As Variant, i As Long, k As String
+    k = SKW_StandardsPath() & "|" & SKW_StdChanged()
+    If k = mKey Then Exit Sub
+    mKey = k
+    mHead = "": mBody = "": mKeep = ""
+    For i = 0 To 3
+        mMar(i) = -1
+    Next
+    On Error GoTo Done
+    If Not SKW_AppStandards() Then Exit Sub
+    Set types = SKW_TableTypes()
+    If types.Count = 0 Then Exit Sub
+    Set roles = SKW_TableRoles(types(1)("type"))
+    mHead = roles("header")("paragraph style")
+    mBody = roles("long text")("paragraph style")
+    mKeep = roles("keep")("recognize")
+    m = Split(types(1)("margins pt") & ";;;", ";")
+    For i = 0 To 3
+        If Len(Trim$(m(i))) > 0 And IsNumeric(Trim$(m(i))) Then mMar(i) = CSng(Trim$(m(i)))
+    Next
+Done:
+End Sub
+
+' The values the tools read by name.
+Public Function SKW_QuickGet(ByVal key As String) As String
+    Dim v As String
     Select Case LCase$(key)
-        Case "head": SKW_QuickDefault = "AA Table Head L1"
-        Case "body": SKW_QuickDefault = "AA Table Body"
-        Case "keep": SKW_QuickDefault = "AA Table Head L2; AA Table Bullet L1; AA Table Bullet L2; AA Table Bullet L3; AA Table Notes; AA Table Notes Number List"
-        Case "headrow": SKW_QuickDefault = "auto"
-        Case "captable": SKW_QuickDefault = "AA Caption-Table"
-        Case "capfigure": SKW_QuickDefault = "AA Caption-Figure"
-        Case "capaction": SKW_QuickDefault = "AA Caption-Action"
-        Case "abbrev": SKW_QuickDefault = "U.S.; vs.; No.; Inc.; Co.; Corp.; Ltd.; e.g.; i.e.; etc.; Fig.; Rev.; Vol.; Sec.; Para.; Ref.; approx.; St.; Dr.; Mr.; Ms."
-        Case "captab": SKW_QuickDefault = "1"
-        Case "nummode": SKW_QuickDefault = "heading"
-        Case "numhead": SKW_QuickDefault = "STYLEREF 1 \s"
-        Case "numsep": SKW_QuickDefault = "-"
-        Case "numlevel": SKW_QuickDefault = "1"
-        Case "tlabel": SKW_QuickDefault = "Table"
-        Case "flabel": SKW_QuickDefault = "Figure"
+        Case "head": LoadTable: SKW_QuickGet = mHead
+        Case "body": LoadTable: SKW_QuickGet = mBody
+        Case "keep": LoadTable: SKW_QuickGet = mKeep
+        Case "tlabel": SKW_QuickGet = SKW_Setting("TableLabel", "Table")
+        Case "flabel": SKW_QuickGet = SKW_Setting("FigureLabel", "Figure")
+        Case "abbrev"
+            v = WbSetting("caption_abbreviations")
+            If Len(v) > 0 Then SKW_QuickGet = v Else SKW_QuickGet = ABBREV
     End Select
 End Function
 
-Public Function SKW_QuickGet(ByVal key As String) As String
-    Dim v As String
-    key = LCase$(key)
-    If Not SKW_QuickTest Is Nothing Then
-        If SKW_QuickTest.Exists(key) Then SKW_QuickGet = SKW_QuickTest(key) Else SKW_QuickGet = SKW_QuickDefault(key)
-        Exit Function
-    End If
-    v = GetSetting(SKW_APP, SEC, key, Chr$(1))
-    If v = Chr$(1) Then SKW_QuickGet = SKW_QuickDefault(key) Else SKW_QuickGet = v
-End Function
-
-Public Sub SKW_QuickSet(ByVal key As String, ByVal v As String)
-    key = LCase$(key)
-    If Not SKW_QuickTest Is Nothing Then
-        SKW_QuickTest(key) = v
-    Else
-        SaveSetting SKW_APP, SEC, key, v
-    End If
-End Sub
-
-' The values the Global Standards workbook can give today: the header and body tag styles and the
-' first table type's cell margins. Empty when the workbook has no Table looks sheet.
-Public Function SKW_QuickFromStandards() As Object
-    Dim res As Object, types As Collection, roles As Object, m As Variant, i As Long, k As Variant
-    Set res = CreateObject("Scripting.Dictionary")
-    Set SKW_QuickFromStandards = res
-    On Error GoTo Done
-    If Not SKW_AppStandards() Then Exit Function
-    Set types = SKW_TableTypes()
-    If types.Count = 0 Then Exit Function
-    Set roles = SKW_TableRoles(types(1)("type"))
-    If Len(roles("header")("paragraph style")) > 0 Then res("head") = roles("header")("paragraph style")
-    If Len(roles("long text")("paragraph style")) > 0 Then res("body") = roles("long text")("paragraph style")
-    m = Split(types(1)("margins pt") & ";;;", ";")
-    k = Array("mtop", "mbottom", "mleft", "mright")
-    For i = 0 To 3
-        If Len(Trim$(m(i))) > 0 Then res(k(i)) = Replace(Format$(Val(m(i)) / 72, "0.###"), ",", ".")
-    Next
-Done:
-End Function
-
-' Opens the form. True when the values were saved.
-Public Function SKW_QuickAsk() As Boolean
-    frmSKWQuick.Show 1
-    SKW_QuickAsk = frmSKWQuick.Saved
-    Unload frmSKWQuick
-End Function
-
-Private Function Ready() As Boolean
-    If SKW_IsQuiet() Then Ready = True: Exit Function
-    If SKW_QuickGet("saved") = "1" Then Ready = True: Exit Function
-    Ready = SKW_QuickAsk()
-End Function
-
-' Opens the quick values: the styles, cell margins and caption numbering rule the quick tools use. Saved on this PC. They are not the Global Standards.
-Public Sub QuickValues()
-    If SKW_IsQuiet() Then Exit Sub
-    If SKW_QuickAsk() Then SKW_Say "Quick values saved on this PC. The quick tools use them from the next run."
-End Sub
-
-Private Function Inches(ByVal key As String) As Single
-    Dim v As String
-    v = Trim$(SKW_QuickGet(key))
-    If Len(v) = 0 Then Inches = -1 Else Inches = Val(Replace(v, ",", ".")) * 72
+' The first table type's cell margin for a side (0 top, 1 bottom, 2 left, 3 right), in points. -1 when the type sets none.
+Private Function MarginPts(ByVal side As Long) As Single
+    LoadTable
+    MarginPts = mMar(side)
 End Function
 
 Private Function MarginsText() As String
-    Dim k As Variant, s As String
-    For Each k In Array("mtop", "mbottom", "mleft", "mright")
-        s = s & IIf(Len(s) > 0, ", ", "") & Mid$(k, 2) & " " & IIf(Len(Trim$(SKW_QuickGet(CStr(k)))) > 0, Trim$(SKW_QuickGet(CStr(k))) & " in", "as it is")
+    Dim i As Long, s As String, nm As Variant
+    nm = Array("top", "bottom", "left", "right")
+    For i = 0 To 3
+        s = s & IIf(Len(s) > 0, ", ", "") & nm(i) & " " & IIf(MarginPts(i) >= 0, Trim$(Str$(Round(MarginPts(i), 2))) & " pt", "as it is")
     Next
     MarginsText = s
 End Function
 
-Private Function QuickLine() As String
-    QuickLine = "Quick values saved on this PC, not the Global Standards. "
+' Where the values come from, for a report's first lines.
+Private Function SourceLine() As String
+    SourceLine = "Every value comes from the Global Standards" & IIf(Len(SKW_StdChanged()) > 0, " (" & SKW_StdChanged() & "). ", ". ")
+    If SKW_Effort()("ok") Then SourceLine = SourceLine & "An effort is linked (" & SKW_Effort()("effort") & _
+        "): its own standards cannot be read yet, so these are the Global Standards and the effort may differ. "
+End Function
+
+' The Captions sheet's Approved rows: label, part, level (0: no heading number), sep, id, after, style, action.
+Private Function CapRows() As Collection
+    Dim c As New Collection, r As Object, d As Object
+    Set CapRows = c
+    On Error GoTo Done
+    For Each r In SKW_WbRows("Captions")
+        If WbApproved(r) And Len(WbVal(r, "label")) > 0 Then
+            Set d = CreateObject("Scripting.Dictionary")
+            d("label") = WbVal(r, "label")
+            d("part") = LCase$(WbVal(r, "part"))
+            d("level") = CLng(Val(WbVal(r, "chapter level")))
+            d("sep") = WbVal(r, "separator")
+            If Len(d("sep")) = 0 Then d("sep") = "-"
+            d("id") = WbVal(r, "identifier")
+            If Len(d("id")) = 0 Then d("id") = d("label")
+            d("after") = LCase$(WbVal(r, "after number"))
+            d("style") = WbVal(r, "style")
+            d("action") = WbVal(r, "action style")
+            If Len(d("action")) = 0 Then d("action") = WbSetting("caption_action_style")
+            c.Add d
+        End If
+    Next
+Done:
+End Function
+
+' The Captions row for a label: the one whose Chapter level is lvl; with lvl below zero, the body row
+' (or the first row for the label). Nothing when the sheet has no such row.
+Private Function CapRow(ByVal rows As Collection, ByVal label As String, ByVal lvl As Long) As Object
+    Dim d As Object, first As Object
+    For Each d In rows
+        If LCase$(d("label")) = LCase$(Trim$(label)) Then
+            If lvl >= 0 Then
+                If d("level") = lvl Then Set CapRow = d: Exit Function
+            Else
+                If first Is Nothing Then Set first = d
+                If d("part") = "body" Then Set CapRow = d: Exit Function
+            End If
+        End If
+    Next
+    If lvl < 0 Then Set CapRow = first
+End Function
+
+' What the standards put between a caption's number and its title. Chr(0): the standards do not say.
+Private Function AfterText(ByVal code As String) As String
+    Select Case LCase$(Trim$(code))
+        Case "tab": AfterText = vbTab
+        Case "period_tab": AfterText = "." & vbTab
+        Case "period_space": AfterText = ". "
+        Case "colon_space": AfterText = ": "
+        Case "space": AfterText = " "
+        Case Else: AfterText = Chr$(0)
+    End Select
 End Function
 
 Private Function StyleIn(ByVal d As Object, ByVal nm As String) As Object
@@ -181,10 +224,10 @@ Private Function HeaderRowOf(ByVal d As Object, ByVal t As Object) As Long
     Next
 End Function
 
-' Reads one table against the quick values, and sets it when doIt. Returns the findings ("" when it is right).
+' Reads one table against the Global Standards, and sets it when doIt. Returns the findings ("" when it is right).
 Private Function QuickTable(ByVal d As Object, ByVal t As Object, ByVal doIt As Boolean, ByRef hdr As Long, ByRef look As String) As String
     Dim c As Object, p As Object, ri As Long, want As String, nm As String, keep As Object, v As Variant, s As String
-    Dim stHead As Object, stBody As Object, stTable As Object, nHead As Long, nBody As Long, st As Object, cur As String
+    Dim stHead As Object, stBody As Object, nHead As Long, nBody As Long, st As Object
     Dim pts As Single, k As Variant, i As Long, mar As Boolean, descr As String, np As Long
     look = ""
     On Error Resume Next
@@ -194,31 +237,17 @@ Private Function QuickTable(ByVal d As Object, ByVal t As Object, ByVal doIt As 
     hdr = HeaderRowOf(d, t)
     Set stHead = StyleIn(d, SKW_QuickGet("head"))
     Set stBody = StyleIn(d, SKW_QuickGet("body"))
-    Set stTable = StyleIn(d, SKW_QuickGet("tstyle"))
-    If stHead Is Nothing And Len(Trim$(SKW_QuickGet("head"))) > 0 Then look = "Style " & Trim$(SKW_QuickGet("head")) & " is not in this document"
+    If stHead Is Nothing And Len(Trim$(SKW_QuickGet("head"))) > 0 Then look = "Style " & Trim$(SKW_QuickGet("head")) & " is not in this document (Apply Table Roles makes it from its look)"
     If stBody Is Nothing And Len(Trim$(SKW_QuickGet("body"))) > 0 Then look = look & IIf(Len(look) > 0, "; ", "") & "Style " & Trim$(SKW_QuickGet("body")) & " is not in this document"
-    If stTable Is Nothing And Len(Trim$(SKW_QuickGet("tstyle"))) > 0 Then look = look & IIf(Len(look) > 0, "; ", "") & "Table style " & Trim$(SKW_QuickGet("tstyle")) & " is not in this document"
     Set keep = CreateObject("Scripting.Dictionary")
     keep.CompareMode = 1
     For Each v In Split(SKW_QuickGet("keep"), ";")
         If Len(Trim$(v)) > 0 Then keep(Trim$(v)) = True
     Next
-    ' The table style first: a table style can change what the cells show.
-    If Not stTable Is Nothing Then
-        On Error Resume Next
-        cur = ""
-        cur = t.Style
-        On Error GoTo 0
-        If Not Same(cur, stTable.NameLocal) Then
-            s = "Table style is " & IIf(Len(cur) > 0, cur, "(none)")
-            If doIt Then t.Range.Style = stTable
-        End If
-    End If
     ' Cell margins. Word keeps left and right margins in steps of its own (0.08 in is held as 5.4 points), so a
     ' difference under 0.4 point is no difference.
-    k = Array("mtop", "mbottom", "mleft", "mright")
     For i = 0 To 3
-        pts = Inches(CStr(k(i)))
+        pts = MarginPts(i)
         If pts >= 0 Then
             On Error Resume Next
             Select Case i
@@ -267,18 +296,24 @@ Private Function QuickTable(ByVal d As Object, ByVal t As Object, ByVal doIt As 
 End Function
 
 Private Function TableIntro() As String
-    TableIntro = QuickLine() & "Header row: " & IIf(Len(Trim$(SKW_QuickGet("head"))) > 0, Trim$(SKW_QuickGet("head")), "as it is") & _
-        ". Body rows: " & IIf(Len(Trim$(SKW_QuickGet("body"))) > 0, Trim$(SKW_QuickGet("body")), "as they are") & _
-        ". Cell margins: " & MarginsText() & ". Table style: " & IIf(Len(Trim$(SKW_QuickGet("tstyle"))) > 0, Trim$(SKW_QuickGet("tstyle")), "as it is") & _
-        ". The header row is " & IIf(SKW_QuickGet("headrow") = "2", "always row 2", "row 2 when row 1 holds a caption number, else row 1") & _
-        ". A caption row is left alone. Styles left alone in body rows: " & SKW_QuickGet("keep") & "."
+    TableIntro = SourceLine() & "Header row: " & IIf(Len(SKW_QuickGet("head")) > 0, SKW_QuickGet("head"), "as it is") & _
+        ". Body rows: " & IIf(Len(SKW_QuickGet("body")) > 0, SKW_QuickGet("body"), "as they are") & _
+        ". Cell margins: " & MarginsText() & ". The header row is row 2 when row 1 holds a caption number, else row 1" & _
+        ". A caption row is left alone. Styles left alone in body rows: " & IIf(Len(SKW_QuickGet("keep")) > 0, SKW_QuickGet("keep"), "none") & _
+        ". Only the header row, the body rows and the cell margins are set: Apply Table Roles sets every role, fill and edge."
 End Function
 
-' Sets the table at the cursor from the quick values: the header row's style, the body rows' style and the cell margins. One Ctrl+Z undoes it.
+' 1.10.0 and 1.10.1 kept "quick values" in the registry. They are not read any more; this removes them.
+Private Sub DropOldValues()
+    On Error Resume Next
+    DeleteSetting SKW_APP, "Quick"
+End Sub
+
+' Sets the table at the cursor from the Global Standards: the header row's style, the body rows' style and the cell margins. One Ctrl+Z undoes it.
 Public Sub QuickTableFormatHere()
+    DropOldValues
     If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
     If Not Selection.Information(wdWithInTable) Then SKW_Say "Put the cursor in a table first.": Exit Sub
-    If Not Ready() Then Exit Sub
     SKW_Show SKW_QuickTableHere()
 End Sub
 
@@ -288,6 +323,7 @@ Public Function SKW_QuickTableHere() As String
     If Documents.Count > 0 Then
         If Not Selection.Information(wdWithInTable) Then SKW_QuickTableHere = "Put the cursor in a table first.": Exit Function
     End If
+    If Not SKW_AppStandards() Then SKW_QuickTableHere = NEED_STD & " It needs the Table looks sheet.": Exit Function
     msg = SKW_Begin("Quick table format", True)
     If Len(msg) > 0 Then SKW_QuickTableHere = msg: Exit Function
     Set d = ActiveDocument
@@ -295,16 +331,16 @@ Public Function SKW_QuickTableHere() As String
     s = QuickTable(d, t, True, hdr, look)
     SKW_Finish
     If hdr = 0 Then SKW_QuickTableHere = look & ". Nothing was changed.": Exit Function
-    SKW_QuickTableHere = IIf(Len(s) > 0, "Table set from the quick values (header row " & hdr & "). It had: " & s & ".", _
-        "The table already matches the quick values (header row " & hdr & "). Nothing was changed.") & _
+    SKW_QuickTableHere = IIf(Len(s) > 0, "Table set from the Global Standards (header row " & hdr & "). It had: " & s & ".", _
+        "The table already matches the Global Standards (header row " & hdr & "). Nothing was changed.") & _
         IIf(Len(look) > 0, vbCr & "Look at: " & look & ".", "") & IIf(Len(s) > 0, vbCr & "One Ctrl+Z undoes it.", "")
 End Function
 
-' Report of every table against the quick values: the header row's style, the body rows' style and the cell margins. Changes nothing, then offers to set every table in a copy.
+' Report of every table against the Global Standards: the header row's style, the body rows' style and the cell margins. Changes nothing, then offers to set every table in a copy.
 Public Sub QuickTableFormatAll()
+    DropOldValues
     Dim s As String
     If SKW_IsQuiet() Then Exit Sub
-    If Not Ready() Then Exit Sub
     SKW_Fixable = 0
     s = SKW_QuickTableCheck()
     If SKW_OfferFix(s, "The fix sets every table's header row, body rows and cell margins in a copy of the document. Your document is not changed.") Then
@@ -317,6 +353,7 @@ Public Function SKW_QuickTableCheck() As String
     Dim nBad As Long, nSkip As Long, nLook As Long
     Set SKW_LastReport = Nothing
     SKW_Fixable = 0
+    If Not SKW_AppStandards() Then SKW_QuickTableCheck = NEED_STD & " It needs the Table looks sheet.": Exit Function
     msg = SKW_Begin("Quick table format", False)
     If Len(msg) > 0 Then SKW_QuickTableCheck = msg: Exit Function
     Set d = ActiveDocument
@@ -345,6 +382,7 @@ Public Function SKW_QuickTableFixCopy(ByVal target As String) As String
     Dim c As Object, t As Object, s As String, hdr As Long, look As String, n As Long, nSkip As Long, msg As String, ed As String
     Set SKW_LastReport = Nothing
     On Error GoTo Fail
+    If Not SKW_AppStandards() Then SKW_QuickTableFixCopy = NEED_STD & " It needs the Table looks sheet.": Exit Function
     msg = CopyOpen("tables formatted", target, c)
     If Len(msg) > 0 Then SKW_QuickTableFixCopy = msg: Exit Function
     SKW_ProgressTitle "Quick table format: setting a copy"
@@ -498,20 +536,38 @@ Private Function CaptionParas(ByVal d As Object) As Collection
     Set CaptionParas = back
 End Function
 
-' "table", "figure" or "" for a caption paragraph: by its label word, then by what its SEQ counts.
-Private Function CapKind(ByVal p As Object, ByVal sq As Object) As String
-    Dim lab As String, id As String
+' The Captions row a caption follows: by its label word (or, for a label the sheet lacks, by what its
+' number counts), then by the heading level its number takes. note: why the row is a guess.
+Private Function RowOf(ByVal p As Object, ByVal sq As Object, ByVal sr As Object, ByVal rows As Collection, ByRef note As String) As Object
+    Dim lab As String, d As Object, id As String, n As Long, some As Boolean
+    note = ""
     lab = CapLabel(p)
-    id = SeqParts(sq.Code.Text)("id")
-    If Same(lab, SKW_QuickGet("tlabel")) Then
-        CapKind = "table"
-    ElseIf Same(lab, SKW_QuickGet("flabel")) Then
-        CapKind = "figure"
-    ElseIf Same(id, SKW_QuickGet("tlabel")) Then
-        CapKind = "table"
-    ElseIf Same(id, SKW_QuickGet("flabel")) Then
-        CapKind = "figure"
+    If CapRow(rows, lab, -1) Is Nothing Then
+        id = SeqParts(sq.Code.Text)("id")
+        lab = ""
+        For Each d In rows
+            If LCase$(d("id")) = LCase$(id) And Len(lab) = 0 Then lab = d("label")
+        Next
+        If Len(lab) = 0 Then Exit Function
     End If
+    If Not sr Is Nothing Then
+        n = RefLevel(sr.Code.Text)
+        If n > 0 Then
+            Set RowOf = CapRow(rows, lab, n)
+            If RowOf Is Nothing Then
+                Set RowOf = CapRow(rows, lab, -1)
+                ' A label the sheet numbers by heading, at a level it does not name, is left for a person.
+                ' A label the sheet counts straight through has one row: a heading number is then a finding.
+                For Each d In rows
+                    If LCase$(d("label")) = LCase$(lab) And d("level") > 0 Then some = True
+                Next
+                If some Then note = "Takes its heading number from level " & n & ", and the Captions sheet has no " & lab & " row at that level"
+            End If
+            Exit Function
+        End If
+        note = "Takes its heading number from " & Norm(sr.Code.Text) & ", a style by name"
+    End If
+    Set RowOf = CapRow(rows, lab, -1)
 End Function
 
 ' =====================================================================
@@ -615,26 +671,24 @@ Private Sub MatchLayout(ByVal p As Object, ByVal st As Object)
     End With
 End Sub
 
-' Reads one caption against the quick values and sets it when doIt. Returns the findings.
-Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Boolean, ByRef kind As String, _
+' Reads one caption against its Captions row and sets it when doIt. Returns the findings.
+Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Boolean, ByVal rows As Collection, ByRef kind As String, _
                         ByRef title As String, ByRef action As String, ByRef look As String) As String
-    Dim sq As Object, sr As Object, pos As Long, pe As Long, sp As Long, s As String, ch As String
-    Dim stP As Object, stC As Object, stA As Object, wantP As String, wantC As String, wantA As String, tr As Object, sepTxt As String, r As Object
+    Dim sq As Object, sr As Object, pos As Long, pe As Long, sp As Long, s As String, ch As String, row As Object, note As String
+    Dim stP As Object, stA As Object, wantP As String, wantA As String, tr As Object, sepTxt As String, r As Object, want As String
     kind = "": title = "": action = "": look = ""
     NumberFields p, sq, sr
     If sq Is Nothing Then Exit Function
     ' A number that repeats the one before it (\c) sits in running text: it is not a caption.
     If SeqParts(sq.Code.Text)("c") Then Exit Function
-    kind = CapKind(p, sq)
-    If Len(kind) = 0 Then Exit Function
-    wantP = Trim$(SKW_QuickGet(IIf(kind = "table", "captable", "capfigure")))
-    wantC = Trim$(SKW_QuickGet(IIf(kind = "table", "captablechar", "capfigurechar")))
-    wantA = Trim$(SKW_QuickGet("capaction"))
+    Set row = RowOf(p, sq, sr, rows, note)
+    If row Is Nothing Then Exit Function
+    kind = row("label")
+    wantP = row("style")
+    wantA = row("action")
     Set stP = StyleIn(d, wantP)
-    Set stC = StyleIn(d, wantC)
     Set stA = StyleIn(d, wantA)
     If stP Is Nothing And Len(wantP) > 0 Then look = "Style " & wantP & " is not in this document"
-    If stC Is Nothing And Len(wantC) > 0 Then look = look & IIf(Len(look) > 0, "; ", "") & "Style " & wantC & " is not in this document"
     pe = p.End - 1
     pos = FEnd(sq)
     Do While pos < pe
@@ -643,7 +697,7 @@ Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
         If InStr(" .:-" & vbTab & Chr$(160) & Chr$(30) & ChrW$(8211) & ChrW$(8212), ch) = 0 Then Exit Do
         pos = pos + 1
     Loop
-    ' The paragraph style first: the character styles go on top of it.
+    ' The paragraph style first: the character style goes on top of it.
     If Not stP Is Nothing Then
         If Not Same(SKW_ParaStyleName(p), stP.NameLocal) Then
             s = "Paragraph style is " & SKW_ParaStyleName(p)
@@ -651,15 +705,16 @@ Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
         End If
     End If
     If pos >= pe Then look = look & IIf(Len(look) > 0, "; ", "") & "No title after the number": CapOne = s: Exit Function
-    ' One tab between the number and the title, so every title starts at the style's tab stop.
-    If SKW_QuickGet("captab") <> "0" Then
+    ' What follows the number is the Captions row's After number, so every title starts at the same place.
+    want = AfterText(row("after"))
+    If want <> Chr$(0) Then
         sepTxt = d.Range(FEnd(sq), pos).Text
-        If sepTxt <> vbTab Then
-            s = s & IIf(Len(s) > 0, "; ", "") & "The number is followed by " & SepWords(sepTxt) & ", not one tab"
+        If sepTxt <> want Then
+            s = s & IIf(Len(s) > 0, "; ", "") & "The number is followed by " & SepWords(sepTxt) & ", not " & SepWords(want)
             If doIt Then
                 Set r = d.Range(FEnd(sq), pos)
-                If r.End > r.Start Then r.Text = vbTab Else r.InsertBefore vbTab
-                pos = FEnd(sq) + 1
+                If r.End > r.Start Then r.Text = want Else r.InsertBefore want
+                pos = FEnd(sq) + Len(want)
                 pe = p.End - 1
             End If
         End If
@@ -679,35 +734,23 @@ Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
         title = d.Range(pos, sp).Text
         action = Trim$(Mid$(d.Range(sp, pe).Text, 2))
         If stA Is Nothing Then
-            If Len(wantA) > 0 Then look = look & IIf(Len(look) > 0, "; ", "") & "Style " & wantA & " is not in this document"
+            look = look & IIf(Len(look) > 0, "; ", "") & IIf(Len(wantA) > 0, "Style " & wantA & " is not in this document", _
+                "The Captions sheet names no Action style for " & row("label") & ", so the action caption is not styled")
         Else
             ' The period goes with the action caption, so a list built from the title's style shows no period.
             If Not Same(CharStyleAt(d, sp), stA.NameLocal) Or Not Same(CharStyleAt(d, pe - 1), stA.NameLocal) Then
                 s = s & IIf(Len(s) > 0, "; ", "") & "The period and action caption are not in " & stA.NameLocal
                 If doIt Then d.Range(sp, pe).Style = stA
             End If
-            If stC Is Nothing Then
-                If Same(CharStyleAt(d, pos), stA.NameLocal) Or Same(CharStyleAt(d, sp - 1), stA.NameLocal) Then
-                    s = s & IIf(Len(s) > 0, "; ", "") & "The title carries " & stA.NameLocal
-                    If doIt Then d.Range(pos, sp).Style = d.Styles(wdStyleDefaultParagraphFont)
-                End If
-            End If
-        End If
-        If Not stC Is Nothing Then
-            If Not Same(CharStyleAt(d, pos), stC.NameLocal) Or Not Same(CharStyleAt(d, sp - 1), stC.NameLocal) Then
-                s = s & IIf(Len(s) > 0, "; ", "") & "The title is not in " & stC.NameLocal
-                If doIt Then d.Range(p.Start, sp).Style = stC
+            If Same(CharStyleAt(d, pos), stA.NameLocal) Or Same(CharStyleAt(d, sp - 1), stA.NameLocal) Then
+                s = s & IIf(Len(s) > 0, "; ", "") & "The title carries " & stA.NameLocal
+                If doIt Then d.Range(pos, sp).Style = d.Styles(wdStyleDefaultParagraphFont)
             End If
         End If
     Else
         title = tr.Text
         If Right$(RTrim$(title), 1) = "." Then look = look & IIf(Len(look) > 0, "; ", "") & "Ends in a period with no action caption"
-        If Not stC Is Nothing Then
-            If Not Same(CharStyleAt(d, pos), stC.NameLocal) Or Not Same(CharStyleAt(d, pe - 1), stC.NameLocal) Then
-                s = s & IIf(Len(s) > 0, "; ", "") & "The title is not in " & stC.NameLocal
-                If doIt Then d.Range(p.Start, pe).Style = stC
-            End If
-        ElseIf Not stA Is Nothing Then
+        If Not stA Is Nothing Then
             If Same(CharStyleAt(d, pos), stA.NameLocal) Then
                 s = s & IIf(Len(s) > 0, "; ", "") & "The title carries " & stA.NameLocal & " and has no action caption"
                 If doIt Then d.Range(pos, pe).Style = d.Styles(wdStyleDefaultParagraphFont)
@@ -717,49 +760,55 @@ Private Function CapOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
     CapOne = s
 End Function
 
-Private Function CaptionIntro() As String
-    CaptionIntro = QuickLine() & "Table captions: " & IIf(Len(Trim$(SKW_QuickGet("captable"))) > 0, Trim$(SKW_QuickGet("captable")), "as they are") & _
-        ". Figure captions: " & IIf(Len(Trim$(SKW_QuickGet("capfigure"))) > 0, Trim$(SKW_QuickGet("capfigure")), "as they are") & _
-        ". Action caption: " & IIf(Len(Trim$(SKW_QuickGet("capaction"))) > 0, Trim$(SKW_QuickGet("capaction")), "as it is") & _
-        ". The action caption starts at the first period followed by a space, and the period goes with it. " & _
+Private Function CaptionIntro(ByVal rows As Collection) As String
+    Dim d As Object, s As String
+    For Each d In rows
+        s = s & IIf(Len(s) > 0, "; ", "") & d("label") & IIf(Len(d("part")) > 0, " (" & d("part") & ")", "") & ": style " & _
+            IIf(Len(d("style")) > 0, d("style"), "as it is") & ", after the number " & _
+            IIf(AfterText(d("after")) = Chr$(0), "as it is", SepWords(AfterText(d("after")))) & ", action caption " & _
+            IIf(Len(d("action")) > 0, d("action"), "not styled")
+    Next
+    CaptionIntro = SourceLine() & "The Captions sheet: " & s & ". The action caption starts at the first period followed by a space, and the period goes with it. " & _
         "A period after an abbreviation (" & SKW_QuickGet("abbrev") & ") or before a lower-case word does not count. A caption with no period has no action caption. " & _
-        IIf(SKW_QuickGet("captab") <> "0", "One tab sits between the number and the title. ", "") & _
         "A caption already in its style takes its tab stops and indents from the style."
 End Function
 
-' Sets the caption at the cursor from the quick values: its paragraph style, one tab after the number, the style's tab stops and indents, and the action caption's style from the first period on. One Ctrl+Z undoes it.
+' Sets the caption at the cursor from the Global Standards: its paragraph style, what follows the number, the style's tab stops and indents, and the action caption's style from the first period on. One Ctrl+Z undoes it.
 Public Sub QuickCaptionFormatHere()
+    DropOldValues
     If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
-    If Not Ready() Then Exit Sub
     SKW_Show SKW_QuickCaptionHere()
 End Sub
 
 Public Function SKW_QuickCaptionHere() As String
     Dim d As Object, msg As String, p As Object, s As String, kind As String, title As String, action As String, look As String, was As Boolean
+    Dim rows As Collection
     Set SKW_LastReport = Nothing
+    Set rows = CapRows()
+    If rows.Count = 0 Then SKW_QuickCaptionHere = NEED_STD & " It needs the Captions sheet.": Exit Function
     msg = SKW_Begin("Quick caption format", True)
     If Len(msg) > 0 Then SKW_QuickCaptionHere = msg: Exit Function
     Set d = ActiveDocument
     was = d.ActiveWindow.View.ShowFieldCodes
     d.ActiveWindow.View.ShowFieldCodes = False
     Set p = Selection.Paragraphs(1).Range
-    s = CapOne(d, p, True, kind, title, action, look)
+    s = CapOne(d, p, True, rows, kind, title, action, look)
     d.ActiveWindow.View.ShowFieldCodes = was
     SKW_Finish
     If Len(kind) = 0 Then
-        SKW_QuickCaptionHere = "The paragraph at the cursor is not a table or figure caption: it has no caption number field. Nothing was changed."
+        SKW_QuickCaptionHere = "The paragraph at the cursor is not a caption the Captions sheet knows: it has no caption number field, or its label has no row. Nothing was changed."
         Exit Function
     End If
-    SKW_QuickCaptionHere = IIf(Len(s) > 0, "Caption set from the quick values. It had: " & s & ".", "The caption already matches the quick values. Nothing was changed.") & _
+    SKW_QuickCaptionHere = IIf(Len(s) > 0, "Caption set from the Global Standards. It had: " & s & ".", "The caption already matches the Global Standards. Nothing was changed.") & _
         vbCr & "Title: " & title & IIf(Len(action) > 0, vbCr & "Action caption: " & action, vbCr & "No action caption.") & _
         IIf(Len(look) > 0, vbCr & "Look at: " & look & ".", "") & IIf(Len(s) > 0, vbCr & "One Ctrl+Z undoes it.", "")
 End Function
 
-' Report of every table and figure caption against the quick values, with each caption shown as title and action caption. Changes nothing, then offers to set every caption in a copy.
+' Report of every caption against the Global Standards' Captions sheet, with each caption shown as title and action caption. Changes nothing, then offers to set every caption in a copy.
 Public Sub QuickCaptionFormatAll()
+    DropOldValues
     Dim s As String
     If SKW_IsQuiet() Then Exit Sub
-    If Not Ready() Then Exit Sub
     SKW_Fixable = 0
     s = SKW_QuickCaptionCheck()
     If SKW_OfferFix(s, "The fix sets every caption's styles in a copy of the document. Your document is not changed.") Then
@@ -768,10 +817,12 @@ Public Sub QuickCaptionFormatAll()
 End Sub
 
 Public Function SKW_QuickCaptionCheck() As String
-    Dim d As Object, msg As String, rows As New Collection, caps As Collection, i As Long, p As Object, s As String
-    Dim kind As String, title As String, action As String, look As String, nBad As Long, nT As Long, nF As Long, nAct As Long, nLook As Long, was As Boolean
+    Dim d As Object, msg As String, rows As New Collection, caps As Collection, i As Long, p As Object, s As String, std As Collection
+    Dim kind As String, title As String, action As String, look As String, nBad As Long, n As Long, nAct As Long, nLook As Long, was As Boolean
     Set SKW_LastReport = Nothing
     SKW_Fixable = 0
+    Set std = CapRows()
+    If std.Count = 0 Then SKW_QuickCaptionCheck = NEED_STD & " It needs the Captions sheet.": Exit Function
     msg = SKW_Begin("Quick caption format", False)
     If Len(msg) > 0 Then SKW_QuickCaptionCheck = msg: Exit Function
     Set d = ActiveDocument
@@ -783,28 +834,30 @@ Public Function SKW_QuickCaptionCheck() As String
     For i = caps.Count To 1 Step -1
         SKW_Step
         Set p = caps(i)
-        s = CapOne(d, p, False, kind, title, action, look)
+        s = CapOne(d, p, False, std, kind, title, action, look)
         If Len(kind) > 0 Then
-            If kind = "table" Then nT = nT + 1 Else nF = nF + 1
+            n = n + 1
             If Len(action) > 0 Then nAct = nAct + 1
             If Len(s) > 0 Then nBad = nBad + 1
             If Len(look) > 0 Then nLook = nLook + 1
-            rows.Add SKW_Row(IIf(kind = "table", "Table", "Figure"), SKW_Page(p), title, action, IIf(Len(s) > 0, s, "Matches"), look)
+            rows.Add SKW_Row(kind, SKW_Page(p), title, action, IIf(Len(s) > 0, s, "Matches"), look)
         End If
     Next
     d.ActiveWindow.View.ShowFieldCodes = was
     SKW_Fixable = nBad
     SKW_Finish
-    msg = nT & " table caption(s) and " & nF & " figure caption(s) read, " & nAct & " with an action caption, " & nBad & " to set, " & nLook & " to look at."
-    SKW_Report "Quick Caption Format", msg & " " & CaptionIntro() & " Captions in text boxes, headers and footers are not read. Changes nothing.", _
-        Array("Kind", "Page", "Title", "Action caption", "Finding", "Look at"), rows
+    msg = n & " caption(s) read, " & nAct & " with an action caption, " & nBad & " to set, " & nLook & " to look at."
+    SKW_Report "Quick Caption Format", msg & " " & CaptionIntro(std) & " Captions in text boxes, headers and footers are not read. Changes nothing.", _
+        Array("Label", "Page", "Title", "Action caption", "Finding", "Look at"), rows
     SKW_QuickCaptionCheck = msg
 End Function
 
 Public Function SKW_QuickCaptionFixCopy(ByVal target As String) As String
     Dim c As Object, caps As Collection, p As Object, s As String, kind As String, title As String, action As String, look As String
-    Dim n As Long, msg As String, ed As String
+    Dim n As Long, msg As String, ed As String, std As Collection
     Set SKW_LastReport = Nothing
+    Set std = CapRows()
+    If std.Count = 0 Then SKW_QuickCaptionFixCopy = NEED_STD & " It needs the Captions sheet.": Exit Function
     On Error GoTo Fail
     msg = CopyOpen("captions formatted", target, c)
     If Len(msg) > 0 Then SKW_QuickCaptionFixCopy = msg: Exit Function
@@ -815,7 +868,7 @@ Public Function SKW_QuickCaptionFixCopy(ByVal target As String) As String
     SKW_Steps caps.Count, "Caption"
     For Each p In caps
         SKW_Step
-        s = CapOne(c, p, True, kind, title, action, look)
+        s = CapOne(c, p, True, std, kind, title, action, look)
         If Len(s) > 0 Then n = n + 1
     Next
     SKW_Status "Saving the copy..."
@@ -840,55 +893,43 @@ Private Function SepPlain(ByVal s As String) As String
     SepPlain = Replace(Replace(s, Chr$(30), "-"), ChrW$(8209), "-")
 End Function
 
-Private Function RuleText() As String
-    If LCase$(SKW_QuickGet("nummode")) = "sequential" Then
-        RuleText = "sequential all the way through (Table 1, Table 2), with no heading number and no restart"
-    Else
-        RuleText = "heading number, then sequence (" & Norm(SKW_QuickGet("numhead")) & ", then """ & SKW_QuickGet("numsep") & """, then a count that restarts under heading level " & _
-            Val(SKW_QuickGet("numlevel")) & ")"
-    End If
+Private Function RuleText(ByVal rows As Collection) As String
+    Dim d As Object, s As String
+    For Each d In rows
+        s = s & IIf(Len(s) > 0, "; ", "") & d("label") & IIf(Len(d("part")) > 0, " (" & d("part") & ")", "") & ": " & _
+            IIf(d("level") > 0, "the number of heading level " & d("level") & ", then """ & d("sep") & """, then a count that restarts under that heading", _
+                "counted straight through, with no heading number and no restart") & ", counted as " & d("id")
+    Next
+    RuleText = s
 End Function
 
-' Reads one caption's number fields against the rule and repairs them when doIt. Returns the findings.
+' Reads one caption's number fields against its Captions row and repairs them when doIt. Returns the findings.
 ' look: something left alone on purpose. hasHead: the caption has a heading number.
-Private Function NumOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Boolean, ByRef look As String, ByRef hasHead As Boolean) As String
-    Dim sq As Object, sr As Object, q As Object, seqMode As Boolean, lvl As Long, wantLvl As Long, n As Long
-    Dim lab As String, wantId As String, s As String, sep As String, wantSep As String, newCode As String, r As Object, sepBad As Boolean
+Private Function NumOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Boolean, ByVal rows As Collection, ByRef look As String, ByRef hasHead As Boolean) As String
+    Dim sq As Object, sr As Object, q As Object, lvl As Long, row As Object, note As String
+    Dim wantId As String, s As String, sep As String, wantSep As String, newCode As String, r As Object, sepBad As Boolean
     look = "": hasHead = False
     NumberFields p, sq, sr
     If sq Is Nothing Then Exit Function
     Set q = SeqParts(sq.Code.Text)
     If q("c") Then look = "Repeats the number before it (\c), so it is not a caption's own number: left alone": Exit Function
     hasHead = Not sr Is Nothing
-    seqMode = (LCase$(SKW_QuickGet("nummode")) = "sequential")
-    wantLvl = Val(SKW_QuickGet("numlevel"))
-    If wantLvl < 1 Or wantLvl > 9 Then wantLvl = 1
-    wantSep = SKW_QuickGet("numsep")
-    lab = CapLabel(p)
-    wantId = q("id")
-    If Same(lab, SKW_QuickGet("tlabel")) Then wantId = SKW_QuickGet("tlabel")
-    If Same(lab, SKW_QuickGet("flabel")) Then wantId = SKW_QuickGet("flabel")
-    If Not Same(q("id"), wantId) Then s = "Counts as " & q("id") & " under the label " & lab
+    Set row = RowOf(p, sq, sr, rows, note)
+    If row Is Nothing Then look = "The Captions sheet has no row for the label " & CapLabel(p) & ": left alone": Exit Function
+    If Len(note) > 0 Then look = note & ": left alone": Exit Function
+    lvl = row("level")
+    wantId = row("id")
+    wantSep = row("sep")
+    If Not Same(q("id"), wantId) Then s = "Counts as " & q("id") & ", not " & wantId
     If Len(q("fmt")) > 0 And UCase$(q("fmt")) <> "ARABIC" Then s = s & IIf(Len(s) > 0, "; ", "") & "Number format is " & q("fmt")
-    If seqMode Then
+    If lvl = 0 Then
         If Len(q("s")) > 0 Then s = s & IIf(Len(s) > 0, "; ", "") & "Restarts under heading level " & q("s")
         If Len(q("r")) > 0 Then s = s & IIf(Len(s) > 0, "; ", "") & "Restarts at " & q("r")
         If hasHead Then s = s & IIf(Len(s) > 0, "; ", "") & "Has a heading number"
-        lvl = 0
     Else
         If sr Is Nothing Then
             s = s & IIf(Len(s) > 0, "; ", "") & "No heading number"
-            lvl = wantLvl
         Else
-            n = RefLevel(sr.Code.Text)
-            If n > 0 Then
-                lvl = n
-                If n <> wantLvl Then look = "Takes its heading number from level " & n & ", not level " & wantLvl & " (an appendix?): its level is kept"
-            Else
-                lvl = Val(q("s"))
-                If lvl < 1 Then lvl = wantLvl
-                If NormRef(sr.Code.Text) <> NormRef(SKW_QuickGet("numhead")) Then look = "Takes its heading number from " & Norm(sr.Code.Text) & ": kept"
-            End If
             sep = d.Range(FEnd(sr), FStart(sq)).Text
             If SepPlain(sep) <> SepPlain(wantSep) Then
                 sepBad = True
@@ -907,11 +948,11 @@ Private Function NumOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
     ' The repair: the smallest change that makes the codes right. The caption's text is not touched.
     newCode = SeqCode(wantId, lvl)
     If Norm(sq.Code.Text) <> Norm(newCode) Then sq.Code.Text = newCode
-    If seqMode Then
+    If lvl = 0 Then
         If hasHead Then d.Range(FStart(sr), FStart(sq)).Delete
     ElseIf sr Is Nothing Then
         Set r = d.Range(FStart(sq), FStart(sq))
-        d.Fields.Add r, wdFieldEmpty, Norm(SKW_QuickGet("numhead")), False
+        d.Fields.Add r, wdFieldEmpty, "STYLEREF " & lvl & " \s", False
         NumberFields p, sq, sr
         If Not sq Is Nothing And Len(wantSep) > 0 Then
             Set r = d.Range(FStart(sq), FStart(sq))
@@ -926,14 +967,20 @@ Private Function NumOne(ByVal d As Object, ByVal p As Object, ByVal doIt As Bool
 End Function
 
 ' A caption whose number is typed: "Table 3-2" as plain text in a caption style. Returns the typed number, or "".
-Private Function TypedNumber(ByVal p As Object, ByRef labLen As Long) As String
+Private Function TypedNumber(ByVal p As Object, ByVal rows As Collection, ByRef labLen As Long) As String
     Static re As Object
-    Dim m As Object, txt As String
+    Dim m As Object, txt As String, d As Object, labs As String, seen As Object
     If re Is Nothing Then
         Set re = CreateObject("VBScript.RegExp")
         re.IgnoreCase = True
     End If
-    re.Pattern = "^((?:" & SKW_QuickGet("tlabel") & "|" & SKW_QuickGet("flabel") & ")[ \u00A0]+)([A-Za-z]?[0-9]+(?:[-.\u2011\u2013][0-9]+)*)"
+    Set seen = CreateObject("Scripting.Dictionary")
+    seen.CompareMode = 1
+    For Each d In rows
+        If Not seen.Exists(d("label")) Then seen(d("label")) = True: labs = labs & IIf(Len(labs) > 0, "|", "") & d("label")
+    Next
+    If Len(labs) = 0 Then Exit Function
+    re.Pattern = "^((?:" & labs & ")[ \u00A0]+)([A-Za-z]?[0-9]+(?:[-.\u2011\u2013][0-9]+)*)"
     txt = ParaText(p)
     If Not re.Test(txt) Then Exit Function
     Set m = re.Execute(txt)(0)
@@ -942,14 +989,16 @@ Private Function TypedNumber(ByVal p As Object, ByRef labLen As Long) As String
 End Function
 
 ' Paragraphs in the caption styles that hold no caption number field but start with a typed number. Last first.
-Private Function TypedCaptions(ByVal d As Object) As Collection
+Private Function TypedCaptions(ByVal d As Object, ByVal rows As Collection) As Collection
     Dim c As New Collection, back As New Collection, seen As Object, nm As Variant, st As Object, r As Object, p As Object, sq As Object, sr As Object
-    Dim names As Object, n As Long, i As Long, starts As Object, keys As Variant, j As Long, tmp As Variant
+    Dim names As Object, n As Long, i As Long, starts As Object, keys As Variant, j As Long, tmp As Variant, row As Object
     Set seen = CreateObject("Scripting.Dictionary")
     Set names = CreateObject("Scripting.Dictionary")
     names.CompareMode = 1
-    For Each nm In Array(SKW_QuickGet("captable"), SKW_QuickGet("capfigure"), SKW_Setting("CaptionStyle", "Caption"))
-        If Len(Trim$(nm)) > 0 Then names(Trim$(nm)) = True
+    ' The caption styles the Captions sheet names, and Word's own Caption style.
+    names(SKW_Setting("CaptionStyle", "Caption")) = True
+    For Each row In rows
+        If Len(row("style")) > 0 Then names(row("style")) = True
     Next
     Set starts = CreateObject("Scripting.Dictionary")
     For Each nm In names.Keys
@@ -961,7 +1010,7 @@ Private Function TypedCaptions(ByVal d As Object) As Collection
                         seen(p.Range.Start) = True
                         NumberFields p.Range, sq, sr
                         If sq Is Nothing Then
-                            If Len(TypedNumber(p.Range, n)) > 0 Then Set starts(p.Range.Start) = p.Range
+                            If Len(TypedNumber(p.Range, rows, n)) > 0 Then Set starts(p.Range.Start) = p.Range
                         End If
                     End If
                 Next
@@ -982,18 +1031,18 @@ Private Function TypedCaptions(ByVal d As Object) As Collection
 End Function
 
 ' Puts fields in place of a typed caption number.
-Private Function FixTyped(ByVal d As Object, ByVal p As Object) As Boolean
-    Dim num As String, labLen As Long, r As Object, lab As String, look As String, hh As Boolean
-    num = TypedNumber(p, labLen)
+Private Function FixTyped(ByVal d As Object, ByVal p As Object, ByVal rows As Collection) As Boolean
+    Dim num As String, labLen As Long, r As Object, row As Object, look As String, hh As Boolean
+    num = TypedNumber(p, rows, labLen)
     If Len(num) = 0 Then Exit Function
     If d.Range(p.Start, p.Start + labLen + Len(num)).Fields.Count > 0 Then Exit Function
-    lab = CapLabel(p)
-    If Same(lab, SKW_QuickGet("tlabel")) Then lab = SKW_QuickGet("tlabel") Else lab = SKW_QuickGet("flabel")
+    Set row = CapRow(rows, CapLabel(p), -1)
+    If row Is Nothing Then Exit Function
     ' The field takes the typed number's place in one step. Deleting first lets Word's smart cut take the space with it.
     Set r = d.Range(p.Start + labLen, p.Start + labLen + Len(num))
-    d.Fields.Add r, wdFieldEmpty, Trim$(SeqCode(lab, 0)), False
+    d.Fields.Add r, wdFieldEmpty, Trim$(SeqCode(row("id"), 0)), False
     ' The heading number, separator and restart come from the same repair every caption gets.
-    NumOne d, p, True, look, hh
+    NumOne d, p, True, rows, look, hh
     FixTyped = True
 End Function
 
@@ -1013,15 +1062,16 @@ Private Sub UpdateNumbers(ByVal d As Object)
     Next
 End Sub
 
-Private Function NumberIntro() As String
-    NumberIntro = QuickLine() & "The rule: " & RuleText() & ". A number counts as right when its field codes follow the rule, whatever number shows now."
+Private Function NumberIntro(ByVal rows As Collection) As String
+    NumberIntro = SourceLine() & "The Captions sheet: " & RuleText(rows) & ". A number counts as right when its field codes follow its row, whatever number shows now. " & _
+        "A caption with no heading number is read against the body row for its label."
 End Function
 
-' Report of every caption's number against one rule for the document: heading number then sequence, or sequential all the way through. Finds typed numbers, the wrong sequence name, a missing or wrong heading number and restarts. Changes nothing, then offers to repair the field codes in a copy.
+' Report of every caption's number against the Global Standards' Captions sheet: heading number then sequence, or counted straight through. Finds typed numbers, the wrong sequence name, a missing or wrong heading number and restarts. Changes nothing, then offers to repair the field codes in a copy.
 Public Sub CaptionNumberingCheck()
+    DropOldValues
     Dim s As String
     If SKW_IsQuiet() Then Exit Sub
-    If Not Ready() Then Exit Sub
     SKW_Fixable = 0
     s = SKW_CaptionNumberCheck()
     If SKW_OfferFix(s, "The fix repairs the caption field codes in a copy of the document and updates the numbers and cross-references there. Caption text is not changed. Your document is not changed.") Then
@@ -1032,9 +1082,11 @@ End Sub
 Public Function SKW_CaptionNumberCheck() As String
     Dim d As Object, msg As String, rows As New Collection, caps As Collection, typed As Collection, i As Long, p As Object, s As String
     Dim look As String, hh As Boolean, nBad As Long, nHead As Long, nPlain As Long, nLook As Long, nTyped As Long, changed As Object
-    Dim f As Object, bm As String, nRef As Long, n As Long, was As Boolean, st As Long, wasSaved As Boolean
+    Dim f As Object, bm As String, nRef As Long, n As Long, was As Boolean, st As Long, wasSaved As Boolean, std As Collection
     Set SKW_LastReport = Nothing
     SKW_Fixable = 0
+    Set std = CapRows()
+    If std.Count = 0 Then SKW_CaptionNumberCheck = NEED_STD & " It needs the Captions sheet.": Exit Function
     msg = SKW_Begin("Caption numbering check", False)
     If Len(msg) > 0 Then SKW_CaptionNumberCheck = msg: Exit Function
     Set d = ActiveDocument
@@ -1047,19 +1099,19 @@ Public Function SKW_CaptionNumberCheck() As String
     For i = caps.Count To 1 Step -1
         SKW_Step
         Set p = caps(i)
-        s = NumOne(d, p, False, look, hh)
+        s = NumOne(d, p, False, std, look, hh)
         If hh Then nHead = nHead + 1 Else nPlain = nPlain + 1
         If Len(s) > 0 Then nBad = nBad + 1: changed(p.Start) = True
         If Len(look) > 0 Then nLook = nLook + 1
         If Len(s) > 0 Or Len(look) > 0 Then rows.Add SKW_Row(SKW_Page(p), SKW_Excerpt(ParaText(p), 70), IIf(Len(s) > 0, s, ""), look)
     Next
     SKW_Status "Looking for typed numbers..."
-    Set typed = TypedCaptions(d)
+    Set typed = TypedCaptions(d, std)
     For i = typed.Count To 1 Step -1
         Set p = typed(i)
         nTyped = nTyped + 1
         changed(p.Start) = True
-        rows.Add SKW_Row(SKW_Page(p), SKW_Excerpt(ParaText(p), 70), "Number " & TypedNumber(p, n) & " is typed, so it does not renumber", "")
+        rows.Add SKW_Row(SKW_Page(p), SKW_Excerpt(ParaText(p), 70), "Number " & TypedNumber(p, std, n) & " is typed, so it does not renumber", "")
     Next
     ' Cross-references that point at a caption whose number the fix would change.
     SKW_Status "Reading the cross-references..."
@@ -1084,7 +1136,7 @@ Public Function SKW_CaptionNumberCheck() As String
     SKW_Fixable = nBad + nTyped
     SKW_Finish
     msg = caps.Count & " caption number(s) read: " & nBad & " do not follow the rule, " & nTyped & " typed, " & nLook & " to look at."
-    SKW_Report "Caption Numbering Check", msg & " " & NumberIntro() & " In this document " & nHead & " caption(s) have a heading number and " & nPlain & " do not. " & _
+    SKW_Report "Caption Numbering Check", msg & " " & NumberIntro(std) & " In this document " & nHead & " caption(s) have a heading number and " & nPlain & " do not. " & _
         nRef & " cross-reference(s) point at a caption the fix would change; they are updated with it. Captions in text boxes, headers and footers are not read. Changes nothing.", _
         Array("Page", "Caption", "Finding", "Look at"), rows
     SKW_CaptionNumberCheck = msg
@@ -1092,23 +1144,25 @@ End Function
 
 Public Function SKW_CaptionNumberFixCopy(ByVal target As String) As String
     Dim c As Object, caps As Collection, typed As Collection, p As Object, s As String, look As String, hh As Boolean
-    Dim n As Long, nT As Long, msg As String, ed As String
+    Dim n As Long, nT As Long, msg As String, ed As String, std As Collection
     Set SKW_LastReport = Nothing
+    Set std = CapRows()
+    If std.Count = 0 Then SKW_CaptionNumberFixCopy = NEED_STD & " It needs the Captions sheet.": Exit Function
     On Error GoTo Fail
     msg = CopyOpen("captions renumbered", target, c)
     If Len(msg) > 0 Then SKW_CaptionNumberFixCopy = msg: Exit Function
     SKW_ProgressTitle "Caption numbering: repairing a copy"
     c.ActiveWindow.View.ShowFieldCodes = False
     Application.ScreenUpdating = False
-    Set typed = TypedCaptions(c)
+    Set typed = TypedCaptions(c, std)
     For Each p In typed
-        If FixTyped(c, p) Then nT = nT + 1
+        If FixTyped(c, p, std) Then nT = nT + 1
     Next
     Set caps = CaptionParas(c)
     SKW_Steps caps.Count, "Caption"
     For Each p In caps
         SKW_Step
-        s = NumOne(c, p, True, look, hh)
+        s = NumOne(c, p, True, std, look, hh)
         If Len(s) > 0 Then n = n + 1
     Next
     UpdateNumbers c
@@ -1128,36 +1182,39 @@ Fail:
     SKW_CaptionNumberFixCopy = "Stopped: " & ed & ". Your document is not changed."
 End Function
 
-' Repairs the number of the caption at the cursor to follow the rule: its field codes, heading number, separator and restart. One Ctrl+Z undoes it.
+' Repairs the number of the caption at the cursor to follow its row on the Global Standards' Captions sheet: its field codes, heading number, separator and restart. One Ctrl+Z undoes it.
 Public Sub FixCaptionNumberHere()
+    DropOldValues
     If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
-    If Not Ready() Then Exit Sub
     SKW_Show SKW_CaptionNumberHere()
 End Sub
 
 Public Function SKW_CaptionNumberHere() As String
     Dim d As Object, msg As String, p As Object, s As String, look As String, hh As Boolean, sq As Object, sr As Object, n As Long, did As Boolean, num As String
+    Dim std As Collection
     Set SKW_LastReport = Nothing
+    Set std = CapRows()
+    If std.Count = 0 Then SKW_CaptionNumberHere = NEED_STD & " It needs the Captions sheet.": Exit Function
     msg = SKW_Begin("Fix caption number", True)
     If Len(msg) > 0 Then SKW_CaptionNumberHere = msg: Exit Function
     Set d = ActiveDocument
     Set p = Selection.Paragraphs(1).Range
     NumberFields p, sq, sr
     If sq Is Nothing Then
-        num = TypedNumber(p, n)
-        If Len(num) > 0 Then did = FixTyped(d, p)
+        num = TypedNumber(p, std, n)
+        If Len(num) > 0 Then did = FixTyped(d, p, std)
         SKW_Finish
         If did Then
-            SKW_CaptionNumberHere = "The typed number " & num & " is now a field that follows the rule: " & RuleText() & "." & vbCr & _
+            SKW_CaptionNumberHere = "The typed number " & num & " is now a field that follows the Captions sheet." & vbCr & _
                 "Run Safe Update All Fields to renumber the captions after it." & vbCr & "One Ctrl+Z undoes it."
         Else
-            SKW_CaptionNumberHere = "The paragraph at the cursor has no caption number: no field, and no typed number after " & SKW_QuickGet("tlabel") & " or " & SKW_QuickGet("flabel") & ". Nothing was changed."
+            SKW_CaptionNumberHere = "The paragraph at the cursor has no caption number: no field, and no typed number after a label the Captions sheet names. Nothing was changed."
         End If
         Exit Function
     End If
-    s = NumOne(d, p, True, look, hh)
+    s = NumOne(d, p, True, std, look, hh)
     SKW_Finish
-    SKW_CaptionNumberHere = IIf(Len(s) > 0, "Caption number repaired. It had: " & s & ".", "The caption number already follows the rule. Nothing was changed.") & _
-        vbCr & "The rule: " & RuleText() & "." & IIf(Len(look) > 0, vbCr & "Look at: " & look & ".", "") & _
+    SKW_CaptionNumberHere = IIf(Len(s) > 0, "Caption number repaired. It had: " & s & ".", "The caption number already follows the Captions sheet. Nothing was changed.") & _
+        IIf(Len(look) > 0, vbCr & "Look at: " & look & ".", "") & _
         IIf(Len(s) > 0, vbCr & "Run Safe Update All Fields to renumber the captions after it." & vbCr & "One Ctrl+Z undoes it.", "")
 End Function

@@ -14,6 +14,7 @@ Private WithEvents btnRun As MSForms.CommandButton
 Private WithEvents btnPin As MSForms.CommandButton
 Private WithEvents btnClose As MSForms.CommandButton
 Private WithEvents btnReports As MSForms.CommandButton
+Private WithEvents btnStd As MSForms.CommandButton
 Private WithEvents chkKeep As MSForms.CheckBox
 Private WithEvents cboShow As MSForms.ComboBox
 Private WithEvents cboCat As MSForms.ComboBox
@@ -169,7 +170,7 @@ Private Sub UserForm_Initialize()
     Set btnSuggest = AddCtl("Forms.CommandButton.1", "btnSuggest", 444, 418, 206, 22)
     btnSuggest.Caption = "Use this folder"
 
-    Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 448, 450, 14)
+    Set lblStatus = AddLabel("lblStatus", "Type to search. Up and Down move, Enter runs, Esc closes.", 10, 448, 332, 14)
     lblStatus.ForeColor = &H808080
     Set btnClose = AddCtl("Forms.CommandButton.1", "btnClose", 570, 442, 80, 24)
     Set btnReports = AddCtl("Forms.CommandButton.1", "btnReports", 466, 442, 98, 24)
@@ -177,6 +178,10 @@ Private Sub UserForm_Initialize()
     btnReports.ControlTipText = IIf(Len(SK_ReportsDir()) > 0, "Reports are saved in " & SK_ReportsDir(), "Reports open and are not saved. Choose a folder to keep them.")
     btnClose.Caption = "Close"
     btnClose.Cancel = True
+    ' The Global Standards workbook the tools read. It is not the effort's folder: that is the link strip above.
+    Set btnStd = AddCtl("Forms.CommandButton.1", "btnStd", 346, 442, 116, 24)
+    btnStd.Caption = "Global Standards..."
+    btnStd.ControlTipText = StdTip()
 
     ' The question panel (over the description) for macros tied to Stationkeeper.
     Set fraAsk = AddCtl("Forms.Frame.1", "fraAsk", 322, 88, 328, 244)
@@ -782,6 +787,40 @@ Private Sub btnReports_Click()
     lblStatus.Caption = s
     btnReports.ControlTipText = IIf(Len(SK_ReportsDir()) > 0, "Reports are saved in " & SK_ReportsDir(), "Reports open and are not saved. Choose a folder to keep them.")
 End Sub
+
+' The workbook the Stationkeeper Tools read, as they keep it for this template.
+Private Function StdPath() As String
+    StdPath = GetSetting("Stationkeeper Tools", "Standards", ThisDocument.Name, "")
+End Function
+
+Private Function StdTip() As String
+    If Len(StdPath()) > 0 Then
+        StdTip = "The tools read " & StdPath()
+    Else
+        StdTip = "No Global Standards workbook is chosen. Choose the Stationkeeper app's Global Standards.xlsx."
+    End If
+End Function
+
+' Runs the tools' Choose Standards Workbook. The link strip above is for an effort's folder; this is the workbook.
+Private Sub btnStd_Click()
+    Dim was As String
+    was = StdPath()
+    On Error Resume Next
+    Application.Run "SKW_Setup.ChooseStandardsWorkbook"
+    If Err.Number <> 0 Then
+        Err.Clear
+        lblStatus.Caption = "Stationkeeper Tools are not in this template. Install them from the admin first."
+        Exit Sub
+    End If
+    On Error GoTo 0
+    btnStd.ControlTipText = StdTip()
+    If StdPath() <> was And Len(StdPath()) > 0 Then lblStatus.Caption = "Global Standards: " & Mid$(StdPath(), InStrRev(StdPath(), "\") + 1)
+End Sub
+
+' Tests: the Global Standards button.
+Public Function TestStd() As String
+    TestStd = btnStd.Caption & " | " & btnStd.ControlTipText & " | left=" & btnStd.Left & " | status width=" & lblStatus.Width
+End Function
 
 ' Tests: the reports button.
 Public Function TestReports() As String

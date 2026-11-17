@@ -9,8 +9,10 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.10.1"
+Public Const SKW_VERSION As String = "1.11.0"
 
+Public SKW_StdError As String            ' why the standards workbook could not be read, last time
+Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
 Public SKW_Quiet As Boolean              ' tests: no message boxes, reports made hidden
 Public SKW_ForceCoauthored As Boolean    ' tests: behave as if the file is co-authored
 Public SKW_LastReport As Object          ' the last report document made
@@ -596,6 +598,90 @@ End Function
 ' workbook (one per template, chosen per person), then built-in defaults.
 ' The workbook is read once and kept until the file changes.
 ' ---------------------------------------------------------------------
+' ---------------------------------------------------------------------
+' A file kept in OneDrive or SharePoint: Word's file picker hands back its web address
+' (https://...), which the tools cannot read as a file. This finds the same file in the
+' synced folder on this PC. It asks nothing of the network: it reads where this PC's
+' sync folders are (the registry and the OneDrive environment variables) and looks there.
+' ---------------------------------------------------------------------
+Private Function SKW_FileThere(ByVal p As String) As Boolean
+    On Error Resume Next
+    If Len(p) = 0 Then Exit Function
+    SKW_FileThere = (Len(Dir$(p)) > 0)
+End Function
+
+Private Function SKW_UrlText(ByVal s As String) As String
+    Dim i As Long, res As String, h As String
+    i = 1
+    Do While i <= Len(s)
+        If Mid$(s, i, 1) = "%" And i + 2 <= Len(s) Then
+            h = Mid$(s, i + 1, 2)
+            If h Like "[0-9A-Fa-f][0-9A-Fa-f]" Then
+                res = res & Chr$(CLng("&H" & h))
+                i = i + 3
+            Else
+                res = res & "%"
+                i = i + 1
+            End If
+        Else
+            res = res & Mid$(s, i, 1)
+            i = i + 1
+        End If
+    Loop
+    SKW_UrlText = res
+End Function
+
+' The folders this PC syncs: mount points of its OneDrive and SharePoint libraries.
+Private Function SKW_SyncRoots() As Collection
+    Const HKCU As Long = &H80000001
+    Const KEY As String = "Software\SyncEngines\Providers\OneDrive"
+    Dim c As New Collection, reg As Object, subs As Variant, k As Variant, mp As Variant, v As Variant
+    Set SKW_SyncRoots = c
+    If Len(SKW_TestRoots) > 0 Then
+        For Each v In Split(SKW_TestRoots, ";")
+            If Len(Trim$(v)) > 0 Then c.Add Trim$(v)
+        Next
+        Exit Function
+    End If
+    On Error Resume Next
+    Set reg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
+    If Not reg Is Nothing Then
+        reg.EnumKey HKCU, KEY, subs
+        If IsArray(subs) Then
+            For Each k In subs
+                mp = ""
+                reg.GetStringValue HKCU, KEY & "\" & k, "MountPoint", mp
+                If Len(mp & "") > 0 Then c.Add CStr(mp)
+            Next
+        End If
+    End If
+    For Each v In Array("OneDriveCommercial", "OneDrive", "OneDriveConsumer")
+        If Len(Environ$(CStr(v))) > 0 Then c.Add Environ$(CStr(v))
+    Next
+End Function
+
+Public Function SKW_LocalPath(ByVal p As String) As String
+    Dim parts As Variant, root As Variant, n As Long, i As Long, tail As String, cand As String, first As Long
+    SKW_LocalPath = p
+    If LCase$(Left$(p, 4)) <> "http" Then Exit Function
+    parts = Split(SKW_UrlText(Split(Split(p, "?")(0), "#")(0)), "/")
+    ' parts: "https:", "", host, then the path. The synced folder holds some tail of that path.
+    first = 3
+    If UBound(parts) < first Then Exit Function
+    For Each root In SKW_SyncRoots()
+        For n = first To UBound(parts)
+            tail = ""
+            For i = n To UBound(parts)
+                tail = tail & "\" & parts(i)
+            Next
+            cand = CStr(root)
+            If Right$(cand, 1) = "\" Then cand = Left$(cand, Len(cand) - 1)
+            cand = cand & tail
+            If SKW_FileThere(cand) Then SKW_LocalPath = cand: Exit Function
+        Next
+    Next
+End Function
+
 Public Function SKW_StandardsPath() As String
     SKW_StandardsPath = GetSetting(SKW_APP, "Standards", ThisDocument.Name, "")
 End Function
@@ -1079,6 +1165,7 @@ Private Function SKW_ReadWorkbook(ByVal path As String) As Object
     Dim xl As Object, wb As Object, ws As Object, v As Variant, r As Long, c As Long, res As Object
     Dim rows As Collection, d As Object, h As String, hasAny As Boolean, ed As String
     Set res = CreateObject("Scripting.Dictionary")
+    SKW_StdError = ""
     On Error GoTo Fail
     SKW_Status "Reading the standards workbook..."
     Set xl = CreateObject("Excel.Application")
@@ -1114,7 +1201,8 @@ Fail:
     If Not wb Is Nothing Then wb.Close False
     If Not xl Is Nothing Then xl.Quit
     Set SKW_ReadWorkbook = Nothing
-    SKW_Say "Could not read the standards workbook (" & ed & "). The tools use built-in defaults."
+    SKW_StdError = ed
+    SKW_Say "Could not read the standards workbook (" & ed & ")."
 End Function
 
 Private Function SKW_Cell(ByVal v As Variant) As String

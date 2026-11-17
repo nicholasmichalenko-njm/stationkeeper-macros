@@ -129,7 +129,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 74 tools in 1.10.0)
+## Stationkeeper Tools (0.4.0 and later; 73 tools in 1.11.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -137,31 +137,53 @@ Checking and fixing tools for Word documents, PowerPoint decks and Excel workboo
 
 **Team rules live in one Excel workbook, or come from the linked Stationkeeper effort (see The Stationkeeper link).** `MakeStandardsWorkbook` makes one with starting values (allowed styles, table types, placeholders, settings, plus sheets later tools use) and opens it to fill in. Each person runs `ChooseStandardsWorkbook` once per template to point the tools at the shared copy. Without a workbook the tools use sensible defaults and say so on every report.
 
-### Quick tools (1.10.0, caption layout in 1.10.1)
+### Quick tools (1.10.0; one source in 1.11.0)
 
-For working in a document before the standards are entered in the Stationkeeper app. Each tool reads a few **quick values** saved on this PC. They are not the Global Standards and are never written to them, and every report says so.
+Fast fixes for tables and captions. **Every value comes from the Stationkeeper app's Global Standards workbook and from nowhere else.** With no workbook chosen, or a sheet missing, a tool says so and changes nothing. (1.10.0 and 1.10.1 kept their own "quick values" on the PC. That was a second source of truth and is gone.)
 
 | Tool | What it does | Changes the document? |
 |---|---|---|
-| Quick Values | The form: table styles and cell margins, caption styles, the caption numbering rule. Opens by itself the first time a quick tool runs. Fill from the standards takes the header and body styles and the cell margins from the Global Standards workbook when it has them | No |
-| Quick Table Format (Table at Cursor) | Header row style, body rows style, cell margins, an optional table style | Yes, one Ctrl+Z |
+| Quick Table Format (Table at Cursor) | Header row style, body rows style, cell margins | Yes, one Ctrl+Z |
 | Quick Table Format (All Tables) | The same as a report for every table, then the fix in a copy | No, report; the fix works on a copy |
-| Quick Caption Format (Caption at Cursor) | The caption's paragraph style, one tab after the number, the style's tab stops and indents, and the action caption's character style | Yes, one Ctrl+Z |
+| Quick Caption Format (Caption at Cursor) | The caption's paragraph style, what follows the number, the style's tab stops and indents, and the action caption's character style | Yes, one Ctrl+Z |
 | Quick Caption Format (All Captions) | Every caption shown as title and action caption, then the fix in a copy | No, report; the fix works on a copy |
-| Caption Numbering Check | Every caption's field codes against one rule, then the repair in a copy | No, report; the fix works on a copy |
+| Caption Numbering Check | Every caption's field codes against the Captions sheet, then the repair in a copy | No, report; the fix works on a copy |
 | Fix Caption Number (Caption at Cursor) | Repairs one caption's number; makes a typed number fields | Yes, one Ctrl+Z |
 
-- **The header row** is row 2 when row 1 holds a caption number field, else row 1. Always row 2 is a choice in the form. A caption row is left alone.
-- **Styles left alone in body rows** (bullets, notes, a second header level) are a list in the form.
-- **The action caption** starts at the first period followed by a space in the caption's title. The period goes with the action caption, so a list of tables or figures built from the title shows no period before its dot leader. A period after an abbreviation on the form's list (U.S., vs., No.), after single letters, or before a lower-case word does not count. A caption with no period has no action caption. A caption that ends in a period with nothing after it is reported and not changed.
-- **One tab after the number (1.10.1).** Whatever sits between a caption's number and its title (spaces, a period and a space, two tabs, nothing) becomes one tab, so every title starts at the caption style's tab stop. "Leave what is there" is a choice in the form. A cross-reference's bookmark is not widened.
-- **Tab stops and indents come from the caption style (1.10.1).** A caption in its style whose tab stops or indents were set by hand is found, and the fix gives it the style's. Nothing else on the paragraph is touched. Set the tab stop and a hanging indent once, in the caption paragraph style.
-- **The numbering rule** is one of two. Heading number, then sequence: `STYLEREF 1 \s`, a separator, and `SEQ Table \* ARABIC \s 1` (Table 3-2). Sequential all the way through: `SEQ Table \* ARABIC` (Table 1, Table 2).
-- **What the numbering check finds:** a typed number, a sequence name that does not match the label (a figure counted as a table), a missing heading number, a wrong separator, a count that does not restart under the heading, a restart under the sequential rule, and the cross-references that point at a caption the fix would change.
-- **What it leaves alone and names:** a caption that takes its heading number from another level or from a named style (an appendix), and a number that repeats the one before it (`\c`).
+**What to fill in the workbook**
+
+| Sheet | Row | Column | Used for |
+|---|---|---|---|
+| Table looks | `header` | Tag style | The header row's paragraph style |
+| Table looks | `body` | Tag style | The body rows' paragraph style |
+| Table looks | `keep` (a row you add) | Recognize (a column you add) | Styles left alone in body rows, separated by `;` |
+| Table types | the first row | Cell margins: top, bottom, left, right | Cell margins, in points |
+| Captions | one row per label and part (Table body, Table appendix, Figure body, Figure appendix) | Label | The word the caption starts with |
+| Captions | | Style | The caption's paragraph style |
+| Captions | | After number | What sits between the number and the title: `tab`, `period_tab`, `period_space`, `colon_space` |
+| Captions | | Chapter level | The heading level whose number leads the caption number. Blank: counted straight through |
+| Captions | | Separator | Between the heading number and the count, such as `-` |
+| Captions | | Identifier | What the caption counts as (the SEQ name) |
+| Captions | | **Action style** (a column you add) | The action caption's character style |
+| Settings | `caption_abbreviations` (optional, a row you add) | Value | Periods that do not end a title, separated by `;`. Without it a built-in list is used (U.S., vs., No. and others) |
+
+- Only **Approved** rows count. The app keeps the columns and rows you add and never sends them to Word.
+- **The header row** is row 2 when row 1 holds a caption number field, else row 1. A caption row is left alone.
+- **The action caption** starts at the first period followed by a space in the caption's title. The period goes with the action caption, so a list of tables or figures built from the title shows no period before its dot leader. A period after an abbreviation, after single letters, or before a lower-case word does not count. A caption with no period has no action caption. A caption that ends in a period with nothing after it is reported and not changed.
+- **A caption follows the row for its label and the heading level its number takes.** A caption under a level-7 appendix heading follows the appendix row. A caption with no heading number follows the body row.
+- **What the numbering check finds:** a typed number, a number counted under the wrong name, a missing heading number, a wrong separator, a count that does not restart under its heading, a heading number or restart where the row says counted straight through, and the cross-references that point at a caption the fix would change.
+- **What it leaves alone and names:** a caption that takes its heading number from a level the sheet has no row for, or from a style by name, and a number that repeats the one before it (`\c`).
+- **Tab stops and indents come from the caption style.** A caption in its style whose tab stops or indents were set by hand takes the style's.
 - The repair changes field codes only. Caption text is not touched. In the copy, numbers, cross-references and lists of tables and figures are updated.
-- A quick tool does not mark a table assigned. Once the standards are in, Table Roles Check shows any difference and its fix puts it right.
+- Quick Table Format sets only the header row, body rows and cell margins. Apply Table Roles sets every role, fill and edge from the same workbook, and makes a missing Tag style.
+- With an effort linked, reports say the values are the Global Standards and the effort may differ.
 - Captions in text boxes, headers and footers are not read. Cell margins are set on the table; a cell with margins of its own keeps them.
+
+### Choosing a workbook kept in OneDrive or SharePoint (1.11.0)
+
+The menu's **Global Standards...** button (bottom row) runs Choose Standards Workbook. The link strip above it is for an effort's data folder and does not take a workbook.
+
+Word's file picker names such a file by its web address. Choose Standards Workbook now finds the same file in the synced folder on this PC and uses that. It asks nothing of the network. A workbook that is not synced to the PC is refused with the reason, and the workbook already in use stays. A workbook that cannot be read is refused with Excel's reason.
 
 ### One workbook with the Stationkeeper app (1.9.0, Global Standards in 1.9.1)
 

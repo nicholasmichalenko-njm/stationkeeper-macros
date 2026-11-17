@@ -69,11 +69,26 @@ End Sub
 
 ' ---------------------------------------------------------------------
 Public Function SKW_ChooseStandards(ByVal p As String) As String
-    If Len(Dir$(p)) = 0 Then SKW_ChooseStandards = "Not found: " & p: Exit Function
+    Dim found As Boolean, was As String
+    ' A workbook in OneDrive or SharePoint comes back from the picker as a web address: use its copy on this PC.
+    p = SKW_LocalPath(p)
+    If LCase$(Left$(p, 4)) = "http" Then
+        SKW_ChooseStandards = "That workbook is kept in OneDrive or SharePoint, and its copy on this PC was not found in a synced folder. " & _
+            "Nothing was changed. Make sure the folder is synced to this PC (it shows in File Explorer), then choose the workbook again. " & _
+            "Or keep a copy of the workbook in a folder on this PC and choose that." & vbCr & vbCr & "The address Word gave: " & p
+        Exit Function
+    End If
+    On Error Resume Next
+    found = (Len(Dir$(p)) > 0)
+    On Error GoTo 0
+    If Not found Then SKW_ChooseStandards = "Not found: " & p & vbCr & "Nothing was changed.": Exit Function
+    was = SKW_StandardsPath()
     SKW_SetStandardsPath p
     If SKW_Workbook() Is Nothing Then
-        SKW_SetStandardsPath ""
-        SKW_ChooseStandards = "That workbook could not be read, so the tools keep their built-in defaults."
+        ' The workbook the tools had before stays in use.
+        SKW_SetStandardsPath was
+        SKW_ChooseStandards = "That workbook could not be read" & IIf(Len(SKW_StdError) > 0, " (" & SKW_StdError & ")", "") & _
+            ". Nothing was changed." & vbCr & "If it is open in Excel with a cell being typed in, press Enter there and choose it again."
         Exit Function
     End If
     SKW_ChooseStandards = "The tools now use " & Mid$(p, InStrRev(p, "\") + 1) & " for " & ThisDocument.Name & "." & vbCr & vbCr & _
@@ -82,6 +97,14 @@ End Function
 
 Public Function SKW_StandardsSummary() As String
     Dim s As String, v As Variant
+    ' The Stationkeeper app's Global Standards workbook is named by its own sheets.
+    If SKW_WbRows("Table looks").Count > 0 Or SKW_WbRows("Captions").Count > 0 Then
+        For Each v In Array("Table looks", "Table types", "Captions", "Styles", "Settings")
+            s = s & v & ": " & SKW_WbRows(CStr(v)).Count & IIf(v = "Settings", "", ", ")
+        Next
+        SKW_StandardsSummary = "It is a Global Standards workbook from the Stationkeeper app. Rows read: " & s
+        Exit Function
+    End If
     For Each v In Array("Allowed styles", "Table types", "Placeholders", "Banned phrases", "Fonts", "Acronyms", "Style map", "Page limits", "Settings")
         s = s & v & ": " & SKW_Rows(CStr(v)).Count & IIf(v = "Settings", "", ", ")
     Next
@@ -294,26 +317,23 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Tables.ShowTableRoles", "Show Table Roles", "Tables", _
         "Shows each row's role beside it: Word's Draft view with the style area open, so every paragraph's style name sits at the left. Run it again to go back.", _
         "tables, roles, show, review, style area, draft view", "Tables", "Whole document", "No, it only changes the view")
-    s = s & "," & T("SKW_Quick.QuickValues", "Quick Values", "Tools setup", _
-        "Opens the quick values: the styles, cell margins and caption numbering rule the quick tools use. Saved on this PC. They are not the Global Standards.", _
-        "quick, values, styles, cell margins, captions, numbering, setup", "Tables, Captions", "Template", "No, it only saves values on this PC")
     s = s & "," & T("SKW_Quick.QuickTableFormatHere", "Quick Table Format (Table at Cursor)", "Tables", _
-        "Sets the table at the cursor from the quick values: the header row's style, the body rows' style and the cell margins. One Ctrl+Z undoes it.", _
-        "tables, quick, header row, body, cell margins, style, format, fix", "Tables", "Table at the cursor", "Yes")
+        "Sets the table at the cursor from the Global Standards: the header row's style, the body rows' style and the cell margins. One Ctrl+Z undoes it.", _
+        "tables, quick, global standards, header row, body, cell margins, style, format, fix", "Tables", "Table at the cursor", "Yes")
     s = s & "," & T("SKW_Quick.QuickTableFormatAll", "Quick Table Format (All Tables)", "Tables", _
-        "Report of every table against the quick values: the header row's style, the body rows' style and the cell margins. Changes nothing, then offers to set every table in a copy.", _
-        "tables, quick, header row, body, cell margins, style, format all tables, fix", "Tables", "Whole document", "No, it reports; the fix works on a copy")
+        "Report of every table against the Global Standards: the header row's style, the body rows' style and the cell margins. Changes nothing, then offers to set every table in a copy.", _
+        "tables, quick, global standards, header row, body, cell margins, style, format all tables, fix", "Tables", "Whole document", "No, it reports; the fix works on a copy")
     s = s & "," & T("SKW_Quick.QuickCaptionFormatHere", "Quick Caption Format (Caption at Cursor)", "Tables", _
-        "Sets the caption at the cursor from the quick values: its paragraph style, one tab after the number, the style's tab stops and indents, and the action caption's style. One Ctrl+Z undoes it.", _
+        "Sets the caption at the cursor from the Global Standards: its paragraph style, what follows the number, the style's tab stops and indents, and the action caption's style. One Ctrl+Z undoes it.", _
         "captions, quick, action caption, style, figure, table, format, fix", "Captions, Tables, Figures", "Paragraph at the cursor", "Yes")
     s = s & "," & T("SKW_Quick.QuickCaptionFormatAll", "Quick Caption Format (All Captions)", "Tables", _
-        "Report of every table and figure caption against the quick values, each shown as title and action caption. Changes nothing, then offers to set every caption in a copy.", _
+        "Report of every caption against the Global Standards' Captions sheet, each shown as title and action caption. Changes nothing, then offers to set every caption in a copy.", _
         "captions, quick, action caption, style, figure, table, format all captions, fix", "Captions, Tables, Figures", "Whole document", "No, it reports; the fix works on a copy")
     s = s & "," & T("SKW_Quick.CaptionNumberingCheck", "Caption Numbering Check", "Tables", _
-        "Report of every caption's number against one rule: heading number then sequence, or sequential all the way through. Finds typed numbers, the wrong sequence name, a missing heading number and restarts. Changes nothing, then offers to repair the field codes in a copy.", _
+        "Report of every caption's number against the Global Standards' Captions sheet: heading number then sequence, or counted straight through. Finds typed numbers, the wrong sequence name, a missing heading number and restarts. Changes nothing, then offers to repair the field codes in a copy.", _
         "captions, numbering, field codes, seq, styleref, heading number, sequential, renumber, fix", "Captions, Fields", "Whole document", "No, it reports; the fix works on a copy")
     s = s & "," & T("SKW_Quick.FixCaptionNumberHere", "Fix Caption Number (Caption at Cursor)", "Tables", _
-        "Repairs the number of the caption at the cursor to follow the rule: its field codes, heading number, separator and restart. One Ctrl+Z undoes it.", _
+        "Repairs the number of the caption at the cursor to follow the Global Standards' Captions sheet: its field codes, heading number, separator and restart. One Ctrl+Z undoes it.", _
         "captions, numbering, field codes, seq, styleref, heading number, fix", "Captions, Fields", "Paragraph at the cursor", "Yes")
     s = s & "," & T("SKW_Captions.CaptionAudit", "Caption Audit", "Tables", _
         "Report of tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side and repeated captions. Changes nothing.", _
@@ -483,7 +503,7 @@ Private Function SkKind(ByVal run As String) As String
         "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
         "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AssignTableRole|ShowTableRoles|" & _
-        "QuickValues|QuickTableFormatHere|QuickTableFormatAll|QuickCaptionFormatHere|QuickCaptionFormatAll|CaptionNumberingCheck|FixCaptionNumberHere|"
+        "QuickTableFormatHere|QuickTableFormatAll|QuickCaptionFormatHere|QuickCaptionFormatAll|CaptionNumberingCheck|FixCaptionNumberHere|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else
