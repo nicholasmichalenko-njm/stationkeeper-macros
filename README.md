@@ -151,7 +151,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 78 tools in 1.16.0)
+## Stationkeeper Tools (0.4.0 and later; 81 tools in 1.17.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -217,6 +217,28 @@ Headers and footers belong to sections, and so do page size and orientation. The
 - **From a Quick Part:** the main header or footer is filled. First-page and even-page ones are left as they are, and the report says so. The Quick Part is found by name in the templates Word has loaded.
 - A floating object in the source header (a text box, a picture set to float) that does not carry over is named in the result.
 - The source section itself is not changed.
+
+### Capture into the Global Standards workbook (1.17.0)
+
+The Stationkeeper app reads its Global Standards workbook again whenever the file changes. These tools write rows to it in the app's own shape, so what you capture in Word reaches the app.
+
+| Tool | What it writes | How |
+|---|---|---|
+| Capture Styles to the Global Standards | The document's styles that the **Styles** sheet lacks | Added as **Draft** rows. The app holds a Draft: it reaches no template until you approve it in the app. A style already on the sheet is never changed |
+| Capture Banned Phrase | The selected words, or a phrase you type, on the **Phrases** sheet | Banned or Avoid, with what to use instead and why. A phrase already there is left as it is |
+| Capture Heading Numbering | The document's numbering for Heading 1 to 9 on the **Heading numbering** sheet | A report of what differs first. Writing changes the rows that differ and keeps each row's status, so an Approved row changes the standard for everyone |
+
+The rules every write keeps:
+- **Report first, write on a yes.**
+- **Nothing is removed.** Rows are added or changed, never taken out.
+- **Only columns the workbook has are filled.** A style's other values go in the row's Other Word settings, where the app reads them.
+- **Not while Excel has the workbook open.** The tool says so and writes nothing.
+- **A dated copy first**, in `%LOCALAPPDATA%\Stationkeeper Macros\Workbook backups`.
+- The app gives a new row its ID and stamps Changed when it reads the workbook.
+
+**Banned Phrases Review** now reads the Phrases sheet first. The app's "Use instead" is advice, so those phrases are flagged with a comment and not replaced.
+
+Not captured yet, and why: **acronyms** (the app syncs its acronym file whole, and when both sides changed the newer file replaces the other, so a macro writing to it could lose the app's own changes); **Quick Parts** (they live in Word files, and the app's Bring in parts reads them); **page numbering by part** (not in the workbook).
 
 ### Remap Style by what each paragraph is (1.14.0, a window since 1.15.0)
 

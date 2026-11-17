@@ -323,6 +323,15 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Setup.ChooseEffortStandardsWorkbook", "Choose Effort Standards Workbook", "Tools setup", _
         "Lays an effort's own standards workbook (the app's Effort Formatting file) over the Global Standards. Where the effort sets a value it wins; a blank keeps the Global value. The menu's standards lines do the same.", _
         "standards, effort, excel, setup, rules, effort formatting", "Template", "Template", "No, it only reports")
+    s = s & "," & T("SKW_Capture.CaptureStyles", "Capture Styles to the Global Standards", "Standards", _
+        "Adds the document's styles that the Global Standards' Styles sheet lacks, as Draft rows the Stationkeeper app holds until they are approved there. Reports first; writes only on a yes. A style already on the sheet is never changed. A dated copy of the workbook is kept first.", _
+        "standards, styles, capture, global standards, excel, draft", "Styles", "Whole document", "No, it writes to the workbook on a yes")
+    s = s & "," & T("SKW_Capture.CaptureBannedPhrase", "Capture Banned Phrase", "Standards", _
+        "Adds the selected words, or a phrase you type, to the Global Standards' Phrases sheet as Banned or Avoid, with what to use instead and why. A phrase already there is left as it is. A dated copy of the workbook is kept first.", _
+        "standards, banned phrases, phrases, capture, global standards, excel", "Text", "Selection", "No, it writes to the workbook")
+    s = s & "," & T("SKW_Capture.CaptureHeadingNumbering", "Capture Heading Numbering", "Standards", _
+        "Compares the document's heading numbering (Heading 1 to 9) with the Global Standards' Heading numbering sheet, then writes the document's numbering to the sheet on a yes. Changing an Approved row changes the standard for everyone. A dated copy of the workbook is kept first.", _
+        "standards, heading numbering, section numbering, capture, global standards, excel", "Lists, Pages and sections", "Whole document", "No, it writes to the workbook on a yes")
     s = s & "," & T("SKW_Setup.ChooseReportsFolder", "Choose Reports Folder", "Tools setup", _
         "Chooses the folder on this PC where every report is saved as it is made, named for the report, the file it checked and the time. With no folder chosen, reports open and are not saved.", _
         "reports, folder, save, where, setup", "Template", "Template", "No, it only reports")
@@ -562,7 +571,7 @@ End Function
 ' Tools that read team rules (the standards workbook now, the effort's data once linked) are
 ' "Built for Stationkeeper": they run on their own. The rest are general tools with no tie.
 Private Function SkKind(ByVal run As String) As String
-    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|ChooseEffortStandardsWorkbook|PreDeliveryLeftovers|StyleInspector|" & _
+    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|ChooseEffortStandardsWorkbook|CaptureStyles|CaptureBannedPhrase|CaptureHeadingNumbering|PreDeliveryLeftovers|StyleInspector|" & _
         "NonAllowedStyleReport|DirectFormattingReport|ClearDirectFormattingSelection|TableStandardsAudit|" & _
         "BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
         "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|DeleteUnusedStyles|" & _

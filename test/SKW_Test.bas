@@ -2219,3 +2219,99 @@ Public Function TW_EffortStd(ByVal arg As String) As String
     SKW_SetEffortStdPath prevE
     TW_EffortStd = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.17.0: capture into the Global Standards workbook. arg: a workbook with a Phrases sheet | one without.
+' The workbooks are copies in the work folder, made fresh for each run.
+' ---------------------------------------------------------------------
+Private Function CapRowOf(ByVal sheet As String, ByVal keyName As String, ByVal want As String) As Object
+    Dim r As Object
+    For Each r In SKW_WbRows(sheet)
+        If r.Exists(keyName) Then
+            If LCase$(r(keyName)) = LCase$(want) Then Set CapRowOf = r: Exit Function
+        End If
+    Next
+    Set CapRowOf = CreateObject("Scripting.Dictionary")
+End Function
+
+Private Function CapVal(ByVal r As Object, ByVal k As String) As String
+    If r.Exists(k) Then CapVal = r(k) Else CapVal = "(none)"
+End Function
+
+Public Function TW_Capture(ByVal arg As String) As String
+    Dim a() As String, d As Object, s As String, prev As String, prevE As String, st As Object, lt As Object, r As Object, f As Integer, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    a = Split(arg, "|")
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    SKW_SetEffortStdPath ""
+    SKW_SetStandardsPath a(0)
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.Content.InsertAfter "Section one" & vbCr & "Body in a custom style"
+    Set st = d.Styles.Add("ZZ Body", wdStyleTypeParagraph)
+    st.BaseStyle = d.Styles(wdStyleNormal).NameLocal
+    st.Font.Name = "Arial": st.Font.Size = 10: st.Font.Bold = True
+    st.ParagraphFormat.SpaceAfter = 6: st.ParagraphFormat.LeftIndent = 18
+    d.Paragraphs(2).Style = st
+    Set lt = d.ListTemplates.Add(OutlineNumbered:=True)
+    lt.ListLevels(1).NumberFormat = "Section %1"
+    lt.ListLevels(1).NumberStyle = wdListNumberStyleArabic
+    lt.ListLevels(1).NumberPosition = 0
+    lt.ListLevels(1).TextPosition = 54
+    lt.ListLevels(1).LinkedStyle = d.Styles(wdStyleHeading1).NameLocal
+    d.Paragraphs(1).Style = d.Styles(wdStyleHeading1)
+    stage = "styles check"
+    s = "before: styles=" & SKW_WbRows("Styles").Count & " phrases=" & SKW_WbRows("Phrases").Count & " headings=" & SKW_WbRows("Heading numbering").Count
+    s = s & " ## check: " & SKW_CaptureStylesCheck("ZZ Body|Normal") & " fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    stage = "styles write"
+    s = s & " ## write: " & SKW_CaptureStylesWrite("ZZ Body") & " backup=" & (Len(Dir$(SKW_LastBookBackup)) > 0)
+    Set r = CapRowOf("Styles", "name", "ZZ Body")
+    s = s & " ## row: status=" & CapVal(r, "status") & " type=" & CapVal(r, "type") & " size=" & CapVal(r, "size (pt)") & " font=" & CapVal(r, "font") & _
+        " bold=" & CapVal(r, "bold") & " id=[" & CapVal(r, "id") & "] other=" & CapVal(r, "other word settings") & " styles=" & SKW_WbRows("Styles").Count
+    s = s & " ## again: " & SKW_CaptureStylesWrite("ZZ Body")
+    s = s & " ## recheck: " & SKW_CaptureStylesCheck("ZZ Body") & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    stage = "phrase"
+    s = s & " ## phrase: " & SKW_CapturePhrase("game-changing", "avoid", "name the change", "Vague")
+    Set r = CapRowOf("Phrases", "phrase", "game-changing")
+    s = s & " ## prow: level=" & CapVal(r, "level") & " instead=" & CapVal(r, "use instead") & " why=" & CapVal(r, "why") & " phrases=" & SKW_WbRows("Phrases").Count & _
+        " kept=" & CapVal(CapRowOf("Phrases", "phrase", "world-class"), "level") & " tool=" & SKW_BannedPhrases().Count
+    s = s & " ## dup: " & SKW_CapturePhrase("Game-Changing", "banned", "", "")
+    stage = "headings"
+    s = s & " ## hcheck: " & SKW_CaptureHeadingsCheck() & " fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## hwrite: " & SKW_CaptureHeadingsWrite()
+    Set r = CapRowOf("Heading numbering", "style", "Heading 1")
+    s = s & " ## hrow: text=" & CapVal(r, "text") & " at=" & CapVal(r, "text at") & " status=" & CapVal(r, "status") & " name=" & CapVal(r, "name") & _
+        " headings=" & SKW_WbRows("Heading numbering").Count & " h2=" & CapVal(CapRowOf("Heading numbering", "style", "Heading 2"), "text")
+    stage = "locked"
+    f = FreeFile
+    Open a(0) For Binary Access Read Write Lock Read Write As #f
+    s = s & " ## locked: " & SKW_CapturePhrase("held-open", "banned", "", "")
+    Close #f
+    s = s & " after=" & SKW_WbRows("Phrases").Count
+    stage = "no sheet"
+    SKW_SetStandardsPath a(1)
+    s = s & " ## nosheet: " & SKW_CapturePhrase("no-sheet", "banned", "", "")
+    SKW_SetStandardsPath ""
+    s = s & " ## nostd: " & SKW_CapturePhrase("no-book", "banned", "", "")
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    d.Close SaveChanges:=0
+    TW_Capture = s
+    Exit Function
+Bad:
+    TW_Capture = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    Close #f
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    d.Close SaveChanges:=0
+End Function

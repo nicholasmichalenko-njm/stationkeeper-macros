@@ -305,7 +305,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(19 modules and 4 forms)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(20 modules and 4 forms)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 78 tools arrive described, categorised and in the menu' (($tc -like '78 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 81 tools arrive described, categorised and in the menu' (($tc -like '81 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -558,6 +558,8 @@ try {
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick sequential).xlsx') $quickStdSeq -Force
     [string]$effStd = Join-Path $work 'Fictional Effort Formatting.xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Fictional Effort Formatting.xlsx') $effStd -Force
+    [string]$capStd = Join-Path $work 'Global Standards (capture).xlsx'
+    Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (capture).xlsx') $capStd -Force
     Copy-Item (Join-Path $Root 'test\fixtures\Company Standards (app format 2).xlsx') $appStd -Force
     Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 3.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -725,6 +727,18 @@ try {
         Check '1.16.0: every report names both workbooks' ($es -match '## std: Standards: Global Standards \(quick\)\.xlsx, with the effort''s Fictional Effort Formatting\.xlsx over it \(2 value\(s\) changed') $es
         Check '1.16.0: the Global workbook itself and a missing file are refused, and the effort already chosen stays' (($es -match '## same: That is the Global Standards workbook itself\. Nothing was changed\.') -and ($es -match '## missing: Not found: [^#]* kept=True')) $es
         Check '1.16.0: clearing the effort puts the Global Standards back alone' (($es -match '## clear: No effort''s standards are laid over the Global Standards now') -and ($es -match '## back=1\|- lists=6 path=\[\]$')) $es
+        # 12i. 1.17.0: capture into the Global Standards workbook (a fresh copy in the work folder).
+        $cp = RunW $word 'SKW_Test.TW_Capture' "$capStd|$quickStd"
+        Write-Output "CAPTURE: $cp"
+        Check '1.17.0: the styles check names the styles the Styles sheet lacks and what would be written, and writes nothing' (($cp -match '^before: styles=1 phrases=1 headings=9 ## check: 2 style\(s\) of this document are not on the Global Standards'' Styles sheet; 0 already are\. fixable=2') -and ($cp -match '\| ZZ Body \| paragraph \| Not there \| Added as a Draft row: Type: paragraph; Based on: Normal; Font: Arial; Size \(pt\): 10; Bold: True')) $cp
+        Check '1.17.0: a captured style is a Draft row in the app''s shape: its own columns filled, the rest in Other Word settings, no ID' (($cp -match '## write: 1 style\(s\) added to the Global Standards'' Styles sheet as Draft rows\.') -and ($cp -match '## row: status=Draft type=paragraph size=10 font=Arial bold=True id=\[(\(none\))?\] other=\{[^#]*"based_on": "Normal"[^#]*"after": 6[^#]*"left": 18[^#]*\} styles=2')) $cp
+        Check '1.17.0: a dated copy of the workbook is kept before the write' ($cp -match 'backup=True ## row:') $cp
+        Check '1.17.0: a style already on the sheet is never written again' (($cp -match '## again: Every one of those styles is already on the Styles sheet\. Nothing was written\.') -and ($cp -match '## recheck: 0 style\(s\)[^#]*; 1 already are\.[^#]*## [^#]*\| ZZ Body \| paragraph \| Already there \(Draft\) \| Left as it is')) $cp
+        Check '1.17.0: a phrase is added to the Phrases sheet with its level, the rows already there stay, and the banned phrases tool reads the sheet' (($cp -match '## phrase: "game-changing" added to the Global Standards'' Phrases sheet as Avoid\.') -and ($cp -match '## prow: level=Avoid instead=name the change why=Vague phrases=2 kept=Banned tool=2') -and ($cp -match '## dup: "Game-Changing" is already on the Phrases sheet\. Nothing was written\.')) $cp
+        Check '1.17.0: the heading numbering check says what differs from the sheet' (($cp -match '## hcheck: 1 heading level\(s\) are numbered differently[^#]*and 0 are not on the sheet\. Left out: Heading 2 \(not numbered in this document\)') -and ($cp -match '\| Heading 1 \| Differs \| Text: %1 becomes Section %1; Text at: 0?\.5 becomes 0\.75')) $cp
+        Check '1.17.0: writing changes only the rows that differ; a row keeps its status and name, and no row is removed' (($cp -match '## hwrite: 1 heading level\(s\) changed and 0 added') -and ($cp -match '## hrow: text=Section %1 at=0?\.75 status=Approved name=Heading 1 headings=9 h2=%1\.%2')) $cp
+        Check '1.17.0: nothing is written while the workbook is held open' ($cp -match '## locked: The Global Standards workbook is open in Excel or held by another program\.[^#]*Nothing was written\. after=2') $cp
+        Check '1.17.0: a workbook without the sheet, and no workbook, are refused with the reason' (($cp -match '## nosheet: The workbook has no Phrases sheet\.') -and ($cp -match '## nostd: No Global Standards workbook is chosen\.')) $cp
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

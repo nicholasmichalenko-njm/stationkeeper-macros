@@ -24,6 +24,23 @@ End Sub
 
 Public Function SKW_BannedPhrases() As Collection
     Dim c As New Collection, r As Object, d As Object, v As Variant
+    ' The Stationkeeper app's Phrases sheet first (Phrase, Level, Use instead, Why). Its "Use instead" is advice,
+    ' not replacement text, so these phrases are flagged with a comment and never replaced.
+    For Each r In SKW_WbRows("Phrases")
+        If r.Exists("phrase") Then
+            If Len(r("phrase")) > 0 Then
+                Set d = CreateObject("Scripting.Dictionary")
+                d("phrase") = r("phrase"): d("replacement") = "": d("match case") = "No": d("whole word") = "Yes"
+                d("rule id") = IIf(r.Exists("level"), r("level"), "Banned")
+                d("reason") = IIf(r.Exists("why"), r("why"), "")
+                If r.Exists("use instead") Then
+                    If Len(r("use instead")) > 0 Then d("reason") = d("reason") & IIf(Len(d("reason")) > 0, ". ", "") & "Use instead: " & r("use instead")
+                End If
+                c.Add d
+            End If
+        End If
+    Next
+    If c.Count > 0 Then Set SKW_BannedPhrases = c: Exit Function
     For Each r In SKW_Rows("Banned phrases")
         If r.Exists("phrase") Then
             If Len(r("phrase")) > 0 Then c.Add r
