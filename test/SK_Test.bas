@@ -339,7 +339,7 @@ Public Function T_SkMenu() As String
     s = s & " || GATE needsT: " & frmSKMenu.TestGate("Module1.UpdateAllFields")
     s = s & " || GATE none: " & frmSKMenu.TestGate("Module1.FitTablesToMargins")
     frmSKMenu.TestShow "All macros"
-    s = s & " ## SHOW=" & frmSKMenu.TestShowChoices() & " ## STD=" & frmSKMenu.TestStd()
+    s = s & " ## SHOW=" & frmSKMenu.TestShowChoices() & " ## STD=" & frmSKMenu.TestStd() & " ## SIZE=" & frmSKMenu.TestSize()
     Unload frmSKMenu
     T_SkMenu = s
 End Function

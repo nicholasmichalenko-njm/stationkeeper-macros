@@ -32,6 +32,8 @@ The kit's own menu (open the kit, then `StationkeeperMacros`) lists the installe
 
 ## The Stationkeeper look and the ribbon tab (1.6.0)
 
+**The menu's size (1.13.1).** The menu opens compact (500 by 600 points; it was 672 wide). Drag any edge or corner to resize it: the list, the description and the buttons follow, and the size is kept for the next time on that PC. The Category column in the list shows once the menu is wide enough.
+
 **The look.** The menu, the admin and the Deck Media List open with a navy band carrying the Stationkeeper satellite and the form's name, an amber line under it, a light page, and navy main buttons (Run, Save to template, Rename). The satellite is also in each window's title bar. The pictures are stored inside the forms (`frmSKBrand` for the menu and admin, `frmSKWBrand` for the tools), so nothing extra goes on a PC. Windows keeps its own title bar color and list highlight, and message boxes stay Windows' standard ones.
 
 **The ribbon tab (optional).** `Stationkeeper Ribbon.dotm` adds a **Stationkeeper** tab after View, with **Macro menu**, **Admin** and **About and removal**. Its buttons open the menu and admin of the template your document is based on; it holds no other code.

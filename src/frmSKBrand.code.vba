@@ -6,6 +6,7 @@
 '     a navy band with the satellite and the name, an amber line under it,
 '     a light page, navy main buttons; the icon in the title bar.
 '   SetIcon frm      the satellite in the title bar (call from Activate too)
+'   Sizable frm      a border the user can drag (call from Activate); Fit frm widens the band after a resize
 ' The kit's copy is frmSKBrand; the tools carry their own copy, frmSKWBrand,
 ' so either can be installed or removed alone.
 ' =====================================================================
@@ -14,10 +15,24 @@ Option Explicit
 #If VBA7 Then
 Private Declare PtrSafe Function FindWindowA Lib "user32" (ByVal lpClassName As String, ByVal lpWindowName As String) As LongPtr
 Private Declare PtrSafe Function SendMessageA Lib "user32" (ByVal hWnd As LongPtr, ByVal wMsg As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
+Private Declare PtrSafe Function DrawMenuBar Lib "user32" (ByVal hWnd As LongPtr) As Long
+#If Win64 Then
+Private Declare PtrSafe Function GetWindowLongPtrA Lib "user32" (ByVal hWnd As LongPtr, ByVal nIndex As Long) As LongPtr
+Private Declare PtrSafe Function SetWindowLongPtrA Lib "user32" (ByVal hWnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+#Else
+Private Declare PtrSafe Function GetWindowLongPtrA Lib "user32" Alias "GetWindowLongA" (ByVal hWnd As LongPtr, ByVal nIndex As Long) As LongPtr
+Private Declare PtrSafe Function SetWindowLongPtrA Lib "user32" Alias "SetWindowLongA" (ByVal hWnd As LongPtr, ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+#End If
 #Else
 Private Declare Function FindWindowA Lib "user32" (ByVal lpClassName As String, ByVal lpWindowName As String) As Long
 Private Declare Function SendMessageA Lib "user32" (ByVal hWnd As Long, ByVal wMsg As Long, ByVal wParam As Long, ByVal lParam As Long) As Long
+Private Declare Function DrawMenuBar Lib "user32" (ByVal hWnd As Long) As Long
+Private Declare Function GetWindowLongPtrA Lib "user32" Alias "GetWindowLongA" (ByVal hWnd As Long, ByVal nIndex As Long) As Long
+Private Declare Function SetWindowLongPtrA Lib "user32" Alias "SetWindowLongA" (ByVal hWnd As Long, ByVal nIndex As Long, ByVal dwNewLong As Long) As Long
 #End If
+
+Private Const GWL_STYLE As Long = -16
+Private Const WS_THICKFRAME As Long = &H40000
 
 Private Const WM_SETICON As Long = &H80
 Private Const BAND_H As Single = 50
@@ -109,6 +124,56 @@ Public Sub SetIcon(ByVal frm As Object)
     If h = 0 Then Exit Sub
     SendMessageA h, WM_SETICON, 0, hIcon
     SendMessageA h, WM_SETICON, 1, hIcon
+End Sub
+
+#If VBA7 Then
+Private Function WindowOf(ByVal frm As Object) As LongPtr
+#Else
+Private Function WindowOf(ByVal frm As Object) As Long
+#End If
+    On Error Resume Next
+    WindowOf = FindWindowA("ThunderDFrame", frm.Caption)
+    If WindowOf = 0 Then WindowOf = FindWindowA("ThunderXFrame", frm.Caption)
+End Function
+
+' Gives the form a border the user can drag to resize it. The window has to exist: call it from Activate.
+' The form lays its own controls out again in its Resize event.
+Public Sub Sizable(ByVal frm As Object)
+#If VBA7 Then
+    Dim h As LongPtr, st As LongPtr
+#Else
+    Dim h As Long, st As Long
+#End If
+    On Error Resume Next
+    h = WindowOf(frm)
+    If h = 0 Then Exit Sub
+    st = GetWindowLongPtrA(h, GWL_STYLE)
+    If (st And WS_THICKFRAME) = WS_THICKFRAME Then Exit Sub
+    SetWindowLongPtrA h, GWL_STYLE, st Or WS_THICKFRAME
+    DrawMenuBar h
+End Sub
+
+Public Function IsSizable(ByVal frm As Object) As Boolean
+#If VBA7 Then
+    Dim h As LongPtr
+#Else
+    Dim h As Long
+#End If
+    On Error Resume Next
+    h = WindowOf(frm)
+    If h = 0 Then Exit Function
+    IsSizable = ((GetWindowLongPtrA(h, GWL_STYLE) And WS_THICKFRAME) = WS_THICKFRAME)
+End Function
+
+' The band follows the form's width after a resize.
+Public Sub Fit(ByVal frm As Object)
+    Dim w As Single
+    On Error Resume Next
+    w = frm.InsideWidth
+    frm.Controls("lblSKBand").Width = w
+    frm.Controls("lblSKLine").Width = w
+    frm.Controls("lblSKTitle").Width = w - 64
+    frm.Controls("lblSKSubtitle").Width = w - 64
 End Sub
 
 ' For the tests: what the dressing put on a form.

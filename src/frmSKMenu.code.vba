@@ -48,6 +48,17 @@ Private mAskRun As String        ' the macro waiting on the question panel
 Private mAskKind As String       ' "ask" or "needs"
 Private mDocPath As String       ' the folder of the document the menu was opened from
 Private mSuggest As String       ' an effort folder to offer (the document's own), or ""
+Private mReady As Boolean        ' the controls exist and the form is dressed: Resize may lay them out
+Private mLaying As Boolean
+Private mNoSave As Boolean       ' tests: do not keep the size
+
+' The menu opens compact and the user drags its border to resize it; the size is kept per user.
+Private Const DEF_W As Single = 500
+Private Const DEF_H As Single = 600
+Private Const MIN_W As Single = 460
+Private Const MIN_H As Single = 540
+Private Const MAX_W As Single = 1400
+Private Const MAX_H As Single = 1000
 
 Private Function AddCtl(ByVal progId As String, ByVal nm As String, ByVal l As Single, ByVal t As Single, _
                         ByVal w As Single, ByVal h As Single) As Object
@@ -86,8 +97,8 @@ Private Sub UserForm_Initialize()
     mBusy = True
     Set mModel = SK_LoadModel()
     Me.Caption = mModel("look")("menuTitle") & "   |   " & ThisDocument.Name
-    Me.Width = 672
-    Me.Height = 512
+    Me.Width = DEF_W
+    Me.Height = DEF_H - 50     ' the Stationkeeper band adds its height when the form is dressed
     Me.BackColor = &HFFFFFF
 
     AddLabel "lblSearch", "Search", 10, 8, 60, 14
@@ -146,6 +157,7 @@ Private Sub UserForm_Initialize()
     txtDesc.Font.Size = 10
     Set lblInfo = AddLabel("lblInfo", "", 322, 218, 328, 112)
     lblInfo.WordWrap = True
+    lblTitle.WordWrap = True
 
     Set btnRun = AddCtl("Forms.CommandButton.1", "btnRun", 322, 340, 90, 26)
     btnRun.Caption = "Run"
@@ -268,13 +280,173 @@ Private Sub UserForm_Initialize()
     mBusy = False
     RefreshList
     frmSKBrand.Dress Me, mModel("look")("menuTitle"), "Team macros and Stationkeeper Tools   |   " & ThisDocument.Name & "   |   " & SK_VERSION, "btnRun|btnAskRun"
+    ' The size the user left the menu at.
+    Me.Width = Clamp(Val(SK_GetPref("menuW", CStr(DEF_W))), MIN_W, MAX_W)
+    Me.Height = Clamp(Val(SK_GetPref("menuH", CStr(DEF_H))), MIN_H, MAX_H)
+    mReady = True
+    Layout
 End Sub
 
 Private Sub UserForm_Activate()
     On Error Resume Next
     frmSKBrand.SetIcon Me
+    frmSKBrand.Sizable Me
+    Layout
     txtSearch.SetFocus
 End Sub
+
+Private Function Clamp(ByVal v As Single, ByVal lo As Single, ByVal hi As Single) As Single
+    If v < lo Then v = lo
+    If v > hi Then v = hi
+    Clamp = v
+End Function
+
+Private Sub UserForm_Resize()
+    If Not mReady Or mLaying Then Exit Sub
+    Layout
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+    If mNoSave Or Not mReady Then Exit Sub
+    If Me.Width <> Val(SK_GetPref("menuW", CStr(DEF_W))) Then SK_SetPref "menuW", CStr(CLng(Me.Width))
+    If Me.Height <> Val(SK_GetPref("menuH", CStr(DEF_H))) Then SK_SetPref "menuH", CStr(CLng(Me.Height))
+End Sub
+
+' By name: Left, Top, Width and Height belong to the control as the form holds it.
+Private Sub Place(ByVal nm As String, ByVal l As Single, ByVal t As Single, ByVal w As Single, ByVal h As Single)
+    Dim c As MSForms.Control
+    On Error Resume Next
+    Set c = Me.Controls(nm)
+    If c Is Nothing Then Exit Sub
+    If w < 4 Then w = 4
+    If h < 4 Then h = 4
+    c.Left = l: c.Top = t: c.Width = w: c.Height = h
+End Sub
+
+' Places every control for the form's size now. Two rows of filters, the list beside the
+' description, then the link strip, the status line and the bottom buttons.
+Private Sub Layout()
+    Dim w As Single, h As Single, o As Single, u As Single, lw As Single, rx As Single, rw As Single
+    Dim y As Single, pb As Single, half As Single, ph As Single, fh As Single, fw As Single
+    If mLaying Then Exit Sub
+    mLaying = True
+    On Error Resume Next
+    If Me.Width < MIN_W Then Me.Width = MIN_W
+    If Me.Height < MIN_H Then Me.Height = MIN_H
+    w = Me.InsideWidth
+    h = Me.InsideHeight
+    o = Me.Controls("lblSKLine").Top + Me.Controls("lblSKLine").Height
+    frmSKBrand.Fit Me
+    u = w - 20
+
+    ' Filters, row 1: Search, Show, Sort by.
+    Place "lblSearch", 10, o + 8, 60, 14
+    Place "txtSearch", 10, o + 22, u - 192, 20
+    Place "lblCount", 10 + (u - 192) - 120, o + 8, 120, 14
+    Place "lblShow", 10 + u - 186, o + 8, 100, 14
+    Place "cboShow", 10 + u - 186, o + 22, 100, 20
+    Place "lblSort", 10 + u - 80, o + 8, 80, 14
+    Place "cboSort", 10 + u - 80, o + 22, 80, 20
+    ' Row 2: Category, What it affects.
+    half = (u - 6) / 2
+    Place "lblCat", 10, o + 46, half, 14
+    Place "cboCat", 10, o + 60, half, 20
+    Place "lblAff", 16 + half, o + 46, half, 14
+    Place "cboAffects", 16 + half, o + 60, half, 20
+
+    ' From the bottom up: buttons, status, the folder offer, the link strip, the legend.
+    y = h - 8 - 24
+    Place "btnStd", 10, y, 110, 24
+    Place "btnReports", 126, y, 96, 24
+    Place "chkKeep", 230, y + 3, 130, 18
+    Place "btnClose", w - 10 - 70, y, 70, 24
+    y = y - 18
+    Place "lblStatus", 10, y, u, 14
+    y = y - 26
+    Place "lblSuggest", 10, y + 4, u - 146, 16
+    Place "btnSuggest", w - 10 - 140, y, 140, 22
+    y = y - 46
+    Place "lblLink", 10, y, u - 210, 42
+    Place "btnLink", w - 10 - 204, y + 2, 84, 22
+    Place "btnRefresh", w - 10 - 116, y + 2, 56, 22
+    Place "btnUnlink", w - 10 - 56, y + 2, 56, 22
+    y = y - 18
+    Place "lblLegend", 10, y, u, 14
+    pb = y - 4
+
+    ' The list beside the description.
+    y = o + 88
+    ph = pb - y
+    lw = Int(u * 0.44)
+    If lw < 190 Then lw = 190
+    rx = 10 + lw + 10
+    rw = w - 10 - rx
+    Place "lstMacros", 10, y, lw, ph
+    ' A list box made in Initialize can keep its first width until it is set a second time.
+    If Abs(lstMacros.Width - lw) > 1 Then lstMacros.Width = lw + 1: lstMacros.Width = lw
+    If lw >= 280 Then
+        lstMacros.ColumnWidths = CLng(lw - 124) & " pt;34 pt;84 pt"
+    Else
+        lstMacros.ColumnWidths = CLng(lw - 40) & " pt;34 pt;0 pt"
+    End If
+    Place "lblTitle", rx, y, rw, 34
+    Place "lblRun", rx, y + 36, rw, 14
+    Place "txtDesc", rx, y + 54, rw, ph - 54 - 6 - 84 - 6 - 26
+    Place "lblInfo", rx, y + ph - 26 - 6 - 84, rw, 84
+    Place "btnRun", rx, y + ph - 26, 84, 26
+    Place "btnPin", rx + 90, y + ph - 26, 84, 26
+
+    ' The question panel covers the description.
+    fw = rw
+    fh = ph - 52 - 32
+    Place "fraAsk", rx, y + 52, fw, fh
+    Place "lblAskHead", 10, 8, fw - 22, 18
+    Place "lblAskText", 10, 30, fw - 22, fh - 98
+    Place "chkAskNever", 10, fh - 64, fw - 22, 16
+    Place "btnAskRun", 10, fh - 40, 56, 24
+    Place "btnAskLink", 72, fh - 40, fw - 22 - 62 - 64, 24
+    Place "btnAskCancel", fw - 12 - 58, fh - 40, 58, 24
+    mLaying = False
+End Sub
+
+' Tests: the size, whether the border can be dragged, whether every control is inside the form,
+' and the same after the form is made wider and taller. The size is not kept.
+Public Function TestSize() As String
+    Dim s As String, lw As Single
+    mNoSave = True
+    Layout      ' as Activate does when the menu is shown
+    s = "w=" & Me.Width & " h=" & Me.Height & " list=" & CLng(lstMacros.Width) & " inside=" & Inside() & " cols=" & lstMacros.ColumnWidths
+    frmSKBrand.Sizable Me
+    s = s & " sizable=" & frmSKBrand.IsSizable(Me)
+    lw = lstMacros.Width
+    Me.Width = 800
+    Me.Height = 620
+    s = s & " || wide: w=" & Me.Width & " h=" & Me.Height & " grew=" & (lstMacros.Width > lw + 100) & " list=" & CLng(lstMacros.Width) & " inside=" & Inside() & _
+        " band=" & (Abs(Me.Controls("lblSKBand").Width - Me.InsideWidth) < 1) & " cols=" & lstMacros.ColumnWidths
+    Me.Width = 200
+    Me.Height = 200
+    s = s & " || small: w=" & Me.Width & " h=" & Me.Height & " inside=" & Inside()
+    Me.Width = DEF_W
+    Me.Height = DEF_H
+    TestSize = s
+End Function
+
+' Every visible control lies inside the form, and no two on the form's bottom row overlap.
+Private Function Inside() As String
+    Dim c As Object, bad As String
+    For Each c In Me.Controls
+        If c.Parent.Name = Me.Name Then
+            If c.Left < -0.5 Or c.Top < -0.5 Or c.Left + c.Width > Me.InsideWidth + 0.5 Or c.Top + c.Height > Me.InsideHeight + 0.5 Then bad = bad & " " & c.Name
+        End If
+    Next
+    If chkKeep.Left + chkKeep.Width > btnClose.Left Then bad = bad & " keep-over-close"
+    If lstMacros.Left + lstMacros.Width > txtDesc.Left Then bad = bad & " list-over-desc"
+    If Abs(txtDesc.Left + txtDesc.Width - (Me.InsideWidth - 10)) > 1 Then bad = bad & " desc-not-at-edge"
+    If lblLink.Left + lblLink.Width > btnLink.Left Then bad = bad & " link-over-button"
+    If txtDesc.Height < 40 Then bad = bad & " desc-short"
+    Inside = IIf(Len(bad) = 0, "all", "out:" & bad)
+End Function
 
 ' For the tests: what the Stationkeeper look put on this form.
 Public Function TestBrand() As String
@@ -819,7 +991,7 @@ End Sub
 
 ' Tests: the Global Standards button.
 Public Function TestStd() As String
-    TestStd = btnStd.Caption & " | " & btnStd.ControlTipText & " | left=" & btnStd.Left & " | status width=" & lblStatus.Width
+    TestStd = btnStd.Caption & " | " & btnStd.ControlTipText & " | left=" & btnStd.Left & " | apart=" & (btnStd.Top > btnLink.Top + 60)
 End Function
 
 ' Tests: the reports button.

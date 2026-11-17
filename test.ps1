@@ -785,7 +785,8 @@ try {
             Write-Output "MENU0: $mn"
             Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
             Check 'the Show box has three choices: All macros, Stationkeeper, Other' ($mn -match 'SHOW=All macros\|Stationkeeper\|Other(\s|$)') ''
-            Check '1.11.0: the menu has a Global Standards button, apart from the effort folder link' ($mn -match 'STD=Global Standards\.\.\. \| (The tools read |No Global Standards workbook is chosen)[^|]*\| left=346 \| status width=332') ''
+            Check '1.11.0: the menu has a Global Standards button, apart from the effort folder link' ($mn -match 'STD=Global Standards\.\.\. \| (The tools read |No Global Standards workbook is chosen)[^|]*\| left=10 \| apart=True') ''
+            Check '1.13.1: the menu opens compact, its border can be dragged, and every control stays inside at any size' (($mn -match '## SIZE=w=500 h=600 list=\d+ inside=all cols=\d+ pt;34 pt;0 pt sizable=True') -and ($mn -match '\|\| wide: w=800 h=620 grew=True list=\d+ inside=all band=True cols=\d+ pt;34 pt;84 pt') -and ($mn -match '\|\| small: w=460 h=540 inside=all')) $mn
             Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Fit All Tables\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
             Check 'filter Other: own macros only' (($mn -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'OTHER \d+:[^|]*(SK-|SK\+|Style Inspector)')) ''
             Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link a folder\.\.\., Cancel \| Don''t ask again') ''
@@ -1112,7 +1113,7 @@ try {
         $d = OpenDoc $word $sample
         $b = TR $word 'T_Brand'
         Write-Output "BRAND: $b"
-        Check '1.6.0: the menu wears the Stationkeeper look: navy band, amber line, satellite, page color, controls moved under the band' (($b -match 'MENU band=603416 line=1CB8FF title=\S.* logo=True icon=3 page=FCF8F5 height=562 searchTop=72')) $b
+        Check '1.6.0: the menu wears the Stationkeeper look: navy band, amber line, satellite, page color, controls moved under the band' (($b -match 'MENU band=603416 line=1CB8FF title=\S.* logo=True icon=3 page=FCF8F5 height=600 searchTop=72')) $b
         Check '1.6.0: the admin too, pages under the band' ($b -match 'ADMIN band=603416 line=1CB8FF title=Stationkeeper Macros Admin logo=True icon=3 page=FCF8F5 height=602 pagesTop=74') $b
         $d.Close([ref]0)
     }
