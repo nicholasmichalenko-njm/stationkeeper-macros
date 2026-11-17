@@ -1,10 +1,14 @@
 Attribute VB_Name = "SKW_Headers"
 ' =====================================================================
-' Stationkeeper Tools: headers and footers by page size (1.12.0).
+' Stationkeeper Tools: headers and footers by page size (1.12.0), and chapter numbers in page numbers (1.13.0).
 '   HeaderFooterMap             report: every section's page size and orientation, what its header and
 '                               footer hold, and which follow the section before
 '   ReplaceHeadersByPageSize    gives every section of one page size and orientation the same header and
 '                               footer, from the section at the cursor or from a Quick Part, in a copy
+'   PageNumberRestart           sets page numbers to restart at 1 at each chapter, or to continue through
+'                               the whole document, in a copy
+'   PageNumberChapters          sets every section's page numbers to include the chapter number (1-3)
+'                               or to leave it out (3), in a copy
 ' Headers and footers belong to sections, and so do page size and orientation. The replace changes what
 ' the headers and footers hold and nothing else: no section break is added, removed or moved, and no
 ' section's page number settings are touched. A section of another page size that follows one about to
@@ -465,4 +469,422 @@ Fail:
     Application.StatusBar = False
     SKW_ProgressDone
     SKW_HeaderReplaceCopy = "Stopped: " & ed & ". Your document is not changed."
+End Function
+
+' =====================================================================
+' Chapter numbers in page numbers (1.13.0)
+' =====================================================================
+' Word keeps this on each section's page numbers: include the chapter number or not, which heading level
+' is the chapter, and the separator. The Stationkeeper app's templates write the same setting. Only those
+' three are set here: restart, start at and number format stay, and what the footers hold is not touched.
+
+Private Function SepConst(ByVal sep As String) As Long
+    Select Case LCase$(Trim$(sep))
+        Case ".", "period": SepConst = wdSeparatorPeriod
+        Case ":", "colon": SepConst = wdSeparatorColon
+        Case ChrW$(8212), "em dash", "emdash": SepConst = wdSeparatorEmDash
+        Case ChrW$(8211), "en dash", "endash": SepConst = wdSeparatorEnDash
+        Case Else: SepConst = wdSeparatorHyphen
+    End Select
+End Function
+
+Private Function SepName(ByVal c As Long) As String
+    Select Case c
+        Case wdSeparatorPeriod: SepName = "period"
+        Case wdSeparatorColon: SepName = "colon"
+        Case wdSeparatorEmDash: SepName = "em dash"
+        Case wdSeparatorEnDash: SepName = "en dash"
+        Case Else: SepName = "hyphen"
+    End Select
+End Function
+
+' The chapter heading level and separator the Global Standards use for captions (Table 1-2), which page
+' numbers by chapter normally match. Empty when no workbook is chosen or captions have no chapter level.
+Public Function SKW_ChapterDefault() As String
+    Dim r As Object, lvl As Long, sep As String, st As String
+    On Error GoTo Done
+    For Each r In SKW_WbRows("Captions")
+        st = ""
+        If r.Exists("status") Then st = LCase$(Trim$(r("status")))
+        If (Len(st) = 0 Or st = "approved") And lvl = 0 Then
+            If r.Exists("chapter level") Then
+                If Val(r("chapter level")) > 0 Then
+                    If Not r.Exists("part") Then
+                        lvl = Val(r("chapter level"))
+                    ElseIf LCase$(Trim$(r("part"))) = "body" Or Len(Trim$(r("part"))) = 0 Then
+                        lvl = Val(r("chapter level"))
+                    End If
+                    If lvl > 0 Then
+                        sep = "-"
+                        If r.Exists("separator") Then
+                            If Len(Trim$(r("separator"))) > 0 Then sep = Trim$(r("separator"))
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next
+    If lvl > 0 Then SKW_ChapterDefault = lvl & "|" & sep
+Done:
+End Function
+
+' Is the heading level numbered? Word makes a page's chapter number from the numbered heading before it.
+Private Function HeadingNumbered(ByVal d As Object, ByVal lvl As Long) As Boolean
+    Dim st As Object, c As Collection, lt As Object
+    On Error Resume Next
+    Set st = d.Styles(-1 - lvl)
+    If st Is Nothing Then Exit Function
+    Set c = SKW_StyleRanges(d.Content, st, 1)
+    If c.Count > 0 Then
+        HeadingNumbered = (Len(c(1).Paragraphs(1).Range.ListFormat.ListString) > 0)
+        Exit Function
+    End If
+    Set lt = st.ListTemplate
+    HeadingNumbered = Not lt Is Nothing
+End Function
+
+Private Function PnNow(ByVal sec As Object) As String
+    Dim pn As Object
+    On Error Resume Next
+    Set pn = sec.Headers(wdHeaderFooterPrimary).PageNumbers
+    If pn.IncludeChapterNumber Then
+        PnNow = "Chapter number from heading level " & (pn.HeadingLevelForChapter + 1) & ", " & SepName(pn.ChapterPageSeparator)
+    Else
+        PnNow = "No chapter number"
+    End If
+End Function
+
+' Reads every section (doIt False) or sets it (doIt True). Returns how many differ from what is wanted.
+Private Function PnWork(ByVal d As Object, ByVal turnOn As Boolean, ByVal lvl As Long, ByVal sepC As Long, ByVal doIt As Boolean, ByVal rows As Collection) As Long
+    Dim s As Object, pn As Object, i As Long, differs As Boolean, n As Long
+    For Each s In d.Sections
+        i = i + 1
+        Set pn = s.Headers(wdHeaderFooterPrimary).PageNumbers
+        If turnOn Then
+            differs = Not pn.IncludeChapterNumber
+            If Not differs Then differs = (pn.HeadingLevelForChapter <> lvl - 1) Or (pn.ChapterPageSeparator <> sepC)
+        Else
+            differs = pn.IncludeChapterNumber
+        End If
+        If differs Then n = n + 1
+        If Not rows Is Nothing Then
+            rows.Add SKW_Row(i, FirstPageOf(s), KindOf(s), PnNow(s), NumberingOf(s), _
+                IIf(differs, IIf(turnOn, "Takes the chapter number: heading level " & lvl & ", " & SepName(sepC), "Loses the chapter number"), "Already right"))
+        End If
+        If doIt And differs Then
+            If turnOn Then
+                pn.IncludeChapterNumber = True
+                pn.HeadingLevelForChapter = lvl - 1
+                pn.ChapterPageSeparator = sepC
+            Else
+                pn.IncludeChapterNumber = False
+            End If
+        End If
+    Next
+    PnWork = n
+End Function
+
+' Sets every section's page numbers to include the chapter number (1-3) or to leave it out (3), in one action. Reports first, then works on a copy. Restart, start at and number format are not changed, and the page count is compared before and after.
+Public Sub PageNumberChapters()
+    Dim pick As String, dflt As String, lvl As String, sep As String, msg As String, mode As String
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    If SKW_IsQuiet() Then Exit Sub
+    pick = InputBox("Page numbers in this document:" & vbCr & vbCr & "1  Include the chapter number (1-3)" & vbCr & "2  Leave the chapter number out (3)" & vbCr & vbCr & _
+        "Type the number.", "Page Numbers: Chapter Numbers", "1")
+    If Len(pick) = 0 Then Exit Sub
+    If pick = "2" Then
+        mode = "off"
+    ElseIf pick = "1" Then
+        mode = "on"
+        dflt = SKW_ChapterDefault()
+        If Len(dflt) > 0 Then
+            lvl = Split(dflt, "|")(0)
+            sep = Split(dflt, "|")(1)
+        Else
+            ' No Global Standards workbook, or its captions have no chapter level: ask.
+            lvl = InputBox("Which heading level is the chapter? (1 to 9)", "Page Numbers: Chapter Numbers", "1")
+            If Len(lvl) = 0 Then Exit Sub
+            sep = InputBox("What separates the chapter number from the page number?" & vbCr & "Type one of:  -   .   :   en dash   em dash", "Page Numbers: Chapter Numbers", "-")
+            If Len(sep) = 0 Then Exit Sub
+        End If
+    Else
+        SKW_Say "Type 1 or 2.": Exit Sub
+    End If
+    SKW_Fixable = 0
+    msg = SKW_ChapterNumbersCheck(mode, Val(lvl), sep)
+    If SKW_OfferFix(msg, "The fix sets every section in a copy of the document. Restart, start at and number format are not changed. Your document is not changed.") Then
+        SKW_Show SKW_ChapterNumbersCopy("", mode, Val(lvl), sep)
+    End If
+End Sub
+
+Private Function PnRefuse(ByVal d As Object, ByVal turnOn As Boolean, ByVal lvl As Long) As String
+    If Not turnOn Then Exit Function
+    If lvl < 1 Or lvl > 9 Then PnRefuse = "The chapter heading level is a number from 1 to 9. Nothing was changed.": Exit Function
+    If Not HeadingNumbered(d, lvl) Then
+        PnRefuse = "Heading " & lvl & " is not numbered in this document, and Word makes a page's chapter number from a numbered heading. " & _
+            "Number the headings first (the multilevel list linked to the heading styles), then run this again. Nothing was changed."
+    End If
+End Function
+
+Public Function SKW_ChapterNumbersCheck(ByVal mode As String, ByVal lvl As Long, ByVal sep As String) As String
+    Dim d As Object, msg As String, rows As New Collection, n As Long, wasSaved As Boolean, turnOn As Boolean, e As String, src As String
+    Set SKW_LastReport = Nothing
+    SKW_Fixable = 0
+    msg = SKW_Begin("Page numbers: chapter numbers", False)
+    If Len(msg) > 0 Then SKW_ChapterNumbersCheck = msg: Exit Function
+    Set d = ActiveDocument
+    wasSaved = d.Saved
+    turnOn = (LCase$(mode) = "on")
+    e = PnRefuse(d, turnOn, lvl)
+    If Len(e) = 0 Then n = PnWork(d, turnOn, lvl, SepConst(sep), False, rows)
+    If wasSaved And Not d.Saved Then d.Saved = True
+    SKW_Finish
+    If Len(e) > 0 Then SKW_ChapterNumbersCheck = e: Exit Function
+    SKW_Fixable = n
+    If turnOn Then
+        src = IIf(Len(SKW_ChapterDefault()) > 0 And SKW_ChapterDefault() = lvl & "|" & Trim$(sep), _
+            " The heading level and separator are the ones the Global Standards' Captions sheet gives captions.", "")
+        msg = d.Sections.Count & " section(s): " & n & " would take the chapter number (heading level " & lvl & ", " & SepName(SepConst(sep)) & ")."
+    Else
+        msg = d.Sections.Count & " section(s): " & n & " would lose the chapter number."
+    End If
+    SKW_Report "Page Numbers: Chapter Numbers", msg & src & " Only the three settings are changed on each section: include the chapter number, the chapter's heading level, the separator. " & _
+        "Restart, start at and number format stay, and what the footers hold is not touched. The fix compares the page count and each section's first page, before and after. Changes nothing.", _
+        Array("Section", "Starts on page", "Page size", "Page numbers now", "Numbering", "What happens"), rows
+    SKW_ChapterNumbersCheck = msg
+End Function
+
+Public Function SKW_ChapterNumbersCopy(ByVal target As String, ByVal mode As String, ByVal lvl As Long, ByVal sep As String) As String
+    Dim d As Object, c As Object, fso As Object, n As Long, k As Long, base As String, ext As String, before As String, after As String, ed As String
+    Dim turnOn As Boolean, e As String
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_ChapterNumbersCopy = "Open a document first.": Exit Function
+    Set d = ActiveDocument
+    If Len(d.Path) = 0 Then SKW_ChapterNumbersCopy = "Save the document first. The copy is made from the saved file.": Exit Function
+    If Not d.Saved Then SKW_ChapterNumbersCopy = "Save the document first. The copy is made from the saved file, so unsaved changes would be left out.": Exit Function
+    turnOn = (LCase$(mode) = "on")
+    If Len(target) = 0 Then
+        base = d.Path & "\" & SKW_Stem(d.Name) & " (page numbers)"
+        ext = Mid$(d.Name, InStrRev(d.Name, "."))
+        target = base & ext
+        Do While Len(Dir$(target)) > 0
+            k = k + 1
+            target = base & " " & (k + 1) & ext
+        Loop
+    End If
+    On Error GoTo Fail
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    fso.CopyFile d.FullName, target, True
+    SKW_ProgressTitle "Page numbers: setting a copy"
+    SKW_Status "Opening the copy..."
+    Set c = Documents.Open(FileName:=target, AddToRecentFiles:=False, Visible:=True)
+    c.TrackRevisions = False
+    e = PnRefuse(c, turnOn, lvl)
+    If Len(e) > 0 Then
+        c.Close SaveChanges:=0
+        fso.DeleteFile target, True
+        Application.StatusBar = False
+        SKW_ProgressDone
+        SKW_ChapterNumbersCopy = e
+        Exit Function
+    End If
+    SKW_Status "Counting the pages..."
+    before = Proof(c)
+    n = PnWork(c, turnOn, lvl, SepConst(sep), True, Nothing)
+    SKW_Status "Counting the pages again..."
+    after = Proof(c)
+    SKW_Status "Saving the copy..."
+    c.Save
+    Application.StatusBar = False
+    SKW_ProgressDone
+    SKW_ChapterNumbersCopy = n & " of " & c.Sections.Count & " section(s) " & IIf(turnOn, "now include the chapter number in their page numbers (heading level " & lvl & ", " & _
+        SepName(SepConst(sep)) & ")", "no longer include the chapter number in their page numbers") & ", in a copy: " & Mid$(target, InStrRev(target, "\") + 1) & "." & vbCr & _
+        IIf(before = after, "Pagination is as it was: " & after & ".", "Pagination changed. Before: " & before & ". After: " & after & ".") & vbCr & _
+        "Restart, start at and number format were not changed. Your document is not changed. The copy is open."
+    Exit Function
+Fail:
+    ed = Err.Description
+    Application.ScreenUpdating = True
+    Application.StatusBar = False
+    SKW_ProgressDone
+    SKW_ChapterNumbersCopy = "Stopped: " & ed & ". Your document is not changed."
+End Function
+
+' =====================================================================
+' Page numbers restart at each chapter, or continue (1.13.0)
+' =====================================================================
+' A chapter starts at a section whose first paragraph with text is the chapter heading. Restarting at every
+' section would break a chapter that holds a landscape section, so only those sections restart at 1 and the
+' sections inside a chapter continue. Only restart and start at are set.
+
+Private Function OpensChapter(ByVal sec As Object, ByVal lvl As Long) As Boolean
+    Dim p As Object, n As Long
+    On Error Resume Next
+    For Each p In sec.Range.Paragraphs
+        n = n + 1
+        If Len(Trim$(Replace(Replace(p.Range.Text, vbCr, ""), Chr$(12), ""))) > 0 Then
+            OpensChapter = (p.OutlineLevel = lvl) And (p.Range.Information(wdWithInTable) = False)
+            Exit Function
+        End If
+        If n >= 5 Then Exit Function
+    Next
+End Function
+
+' Reads every section (doIt False) or sets it (doIt True). Returns how many differ. Section 1 is left alone when numbers continue.
+Private Function RsWork(ByVal d As Object, ByVal byChapter As Boolean, ByVal lvl As Long, ByVal doIt As Boolean, ByVal rows As Collection, ByRef chapters As Long) As Long
+    Dim s As Object, pn As Object, i As Long, differs As Boolean, n As Long, want As Boolean, what As String
+    chapters = 0
+    For Each s In d.Sections
+        i = i + 1
+        Set pn = s.Headers(wdHeaderFooterPrimary).PageNumbers
+        differs = False
+        If byChapter Then
+            want = OpensChapter(s, lvl)
+            If want Then
+                chapters = chapters + 1
+                differs = (Not pn.RestartNumberingAtSection) Or (pn.StartingNumber <> 1)
+                what = IIf(differs, "Restarts at 1: it opens a chapter", "Already right: it opens a chapter")
+            ElseIf i = 1 Then
+                what = "Left alone: the first section, before any chapter"
+            Else
+                differs = pn.RestartNumberingAtSection
+                what = IIf(differs, "Continues: it is inside a chapter", "Already right: it continues")
+            End If
+        Else
+            want = False
+            If i = 1 Then
+                what = "Left alone: the first section sets where the numbers start"
+            Else
+                differs = pn.RestartNumberingAtSection
+                what = IIf(differs, "Continues from the section before", "Already right: it continues")
+            End If
+        End If
+        If differs Then n = n + 1
+        If Not rows Is Nothing Then rows.Add SKW_Row(i, FirstPageOf(s), KindOf(s), NumberingOf(s), what)
+        If doIt And differs Then
+            If want Then
+                pn.RestartNumberingAtSection = True
+                pn.StartingNumber = 1
+            Else
+                pn.RestartNumberingAtSection = False
+            End If
+        End If
+    Next
+    RsWork = n
+End Function
+
+Private Function RsLevel() As Long
+    Dim dflt As String
+    RsLevel = 1
+    dflt = SKW_ChapterDefault()
+    If Len(dflt) > 0 Then RsLevel = Val(Split(dflt, "|")(0))
+End Function
+
+' Sets page numbers to restart at 1 at each chapter, or to continue through the whole document, in one action. Reports first, then works on a copy. Number format, chapter numbers and what the footers hold are not changed, and the page count is compared before and after.
+Public Sub PageNumberRestart()
+    Dim pick As String, mode As String, msg As String
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    If SKW_IsQuiet() Then Exit Sub
+    pick = InputBox("Page numbers in this document:" & vbCr & vbCr & "1  Start at 1 at each chapter" & vbCr & "2  Continue through the whole document" & vbCr & vbCr & _
+        "Type the number.", "Page Numbers: Restart or Continue", "1")
+    If Len(pick) = 0 Then Exit Sub
+    If pick = "1" Then
+        mode = "chapter"
+    ElseIf pick = "2" Then
+        mode = "continue"
+    Else
+        SKW_Say "Type 1 or 2.": Exit Sub
+    End If
+    SKW_Fixable = 0
+    msg = SKW_PageRestartCheck(mode, 0)
+    If SKW_OfferFix(msg, "The fix sets the sections in a copy of the document. Number format, chapter numbers and what the footers hold are not changed. Your document is not changed.") Then
+        SKW_Show SKW_PageRestartCopy("", mode, 0)
+    End If
+End Sub
+
+' mode: "chapter" or "continue". lvl: the chapter's heading level; 0 takes the Global Standards' Captions sheet, else 1.
+Public Function SKW_PageRestartCheck(ByVal mode As String, ByVal lvl As Long) As String
+    Dim d As Object, msg As String, rows As New Collection, n As Long, wasSaved As Boolean, byChapter As Boolean, ch As Long
+    Set SKW_LastReport = Nothing
+    SKW_Fixable = 0
+    msg = SKW_Begin("Page numbers: restart or continue", False)
+    If Len(msg) > 0 Then SKW_PageRestartCheck = msg: Exit Function
+    Set d = ActiveDocument
+    wasSaved = d.Saved
+    byChapter = (LCase$(mode) = "chapter")
+    If lvl < 1 Or lvl > 9 Then lvl = RsLevel()
+    n = RsWork(d, byChapter, lvl, False, rows, ch)
+    If wasSaved And Not d.Saved Then d.Saved = True
+    SKW_Finish
+    If byChapter And ch = 0 Then
+        SKW_PageRestartCheck = "No section opens with a Heading " & lvl & ", so there is no chapter to restart at. A chapter starts where a section's first line is the chapter heading. Nothing was changed."
+        Exit Function
+    End If
+    SKW_Fixable = n
+    If byChapter Then
+        msg = d.Sections.Count & " section(s), " & ch & " open a chapter (Heading " & lvl & "): " & n & " would change so page numbers start at 1 at each chapter and continue inside it."
+    Else
+        msg = d.Sections.Count & " section(s): " & n & " would change so page numbers continue through the whole document."
+    End If
+    SKW_Report "Page Numbers: Restart or Continue", msg & " Only restart and start at are set. Number format, chapter numbers and what the footers hold are not touched. " & _
+        "The fix compares the page count and each section's first page, before and after. Changes nothing.", _
+        Array("Section", "Starts on page", "Page size", "Numbering now", "What happens"), rows
+    SKW_PageRestartCheck = msg
+End Function
+
+Public Function SKW_PageRestartCopy(ByVal target As String, ByVal mode As String, ByVal lvl As Long) As String
+    Dim d As Object, c As Object, fso As Object, n As Long, k As Long, base As String, ext As String, before As String, after As String, ed As String
+    Dim byChapter As Boolean, ch As Long
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_PageRestartCopy = "Open a document first.": Exit Function
+    Set d = ActiveDocument
+    If Len(d.Path) = 0 Then SKW_PageRestartCopy = "Save the document first. The copy is made from the saved file.": Exit Function
+    If Not d.Saved Then SKW_PageRestartCopy = "Save the document first. The copy is made from the saved file, so unsaved changes would be left out.": Exit Function
+    byChapter = (LCase$(mode) = "chapter")
+    If lvl < 1 Or lvl > 9 Then lvl = RsLevel()
+    If Len(target) = 0 Then
+        base = d.Path & "\" & SKW_Stem(d.Name) & " (page numbers)"
+        ext = Mid$(d.Name, InStrRev(d.Name, "."))
+        target = base & ext
+        Do While Len(Dir$(target)) > 0
+            k = k + 1
+            target = base & " " & (k + 1) & ext
+        Loop
+    End If
+    On Error GoTo Fail
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    fso.CopyFile d.FullName, target, True
+    SKW_ProgressTitle "Page numbers: setting a copy"
+    SKW_Status "Opening the copy..."
+    Set c = Documents.Open(FileName:=target, AddToRecentFiles:=False, Visible:=True)
+    c.TrackRevisions = False
+    n = RsWork(c, byChapter, lvl, False, Nothing, ch)
+    If byChapter And ch = 0 Then
+        c.Close SaveChanges:=0
+        fso.DeleteFile target, True
+        Application.StatusBar = False
+        SKW_ProgressDone
+        SKW_PageRestartCopy = "No section opens with a Heading " & lvl & ", so there is no chapter to restart at. Nothing was changed."
+        Exit Function
+    End If
+    SKW_Status "Counting the pages..."
+    before = Proof(c)
+    n = RsWork(c, byChapter, lvl, True, Nothing, ch)
+    SKW_Status "Counting the pages again..."
+    after = Proof(c)
+    SKW_Status "Saving the copy..."
+    c.Save
+    Application.StatusBar = False
+    SKW_ProgressDone
+    SKW_PageRestartCopy = n & " of " & c.Sections.Count & " section(s) changed, in a copy: " & Mid$(target, InStrRev(target, "\") + 1) & ". " & _
+        IIf(byChapter, "Page numbers start at 1 at each of the " & ch & " chapter(s) and continue inside it.", "Page numbers continue through the whole document.") & vbCr & _
+        IIf(before = after, "Pagination is as it was: " & after & ".", "Pagination changed. Before: " & before & ". After: " & after & ".") & vbCr & _
+        "Number format and chapter numbers were not changed. Your document is not changed. The copy is open."
+    Exit Function
+Fail:
+    ed = Err.Description
+    Application.ScreenUpdating = True
+    Application.StatusBar = False
+    SKW_ProgressDone
+    SKW_PageRestartCopy = "Stopped: " & ed & ". Your document is not changed."
 End Function

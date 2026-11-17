@@ -129,7 +129,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 75 tools in 1.12.0)
+## Stationkeeper Tools (0.4.0 and later; 77 tools in 1.13.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -195,6 +195,33 @@ Headers and footers belong to sections, and so do page size and orientation. The
 - **From a Quick Part:** the main header or footer is filled. First-page and even-page ones are left as they are, and the report says so. The Quick Part is found by name in the templates Word has loaded.
 - A floating object in the source header (a text box, a picture set to float) that does not carry over is named in the result.
 - The source section itself is not changed.
+
+### Chapter numbers in page numbers (1.13.0)
+
+One action sets every section's page numbers to include the chapter number (1-3) or to leave it out (3).
+
+| Tool | What it does | Changes the document? |
+|---|---|---|
+| Page Numbers: Chapter Numbers On or Off | Asks: include the chapter number, or leave it out. Reports every section's page numbers now and what would change, then sets every section in a copy | No, report; the fix works on a copy |
+
+- **One source.** The chapter's heading level and the separator come from the Global Standards workbook: the Captions sheet's Chapter level and Separator on the approved body row, the same values that number captions (Table 1-2). The on or off choice is made at run time and is not stored anywhere.
+- With no workbook chosen, or captions without a chapter level, the tool asks for the heading level and the separator.
+- **Three settings only.** On each section: include the chapter number, the chapter's heading level, the separator. Restart, start at and number format stay. What the footers hold is not touched.
+- **It refuses with the reason** when the chapter heading level is not numbered in the document. Word makes a page's chapter number from a numbered heading.
+- **Proof.** The copy's page count and the page each section starts on are read before and after.
+- The app's templates write the same Word setting through the template's Numbering pick. Run this tool to match a document to that pick; it does not change the pick.
+
+### Page numbers restart at each chapter, or continue (1.13.0)
+
+| Tool | What it does | Changes the document? |
+|---|---|---|
+| Page Numbers: Restart at Each Chapter or Continue | Asks: start at 1 at each chapter, or continue through the whole document. Reports every section's numbering now and what would change, then sets the sections in a copy | No, report; the fix works on a copy |
+
+- **Start at 1 at each chapter.** A chapter starts where a section's first line with text is the chapter heading (the Captions sheet's Chapter level, else Heading 1). That section restarts at 1. Every other section continues, so a landscape page inside a chapter keeps the chapter's count. A first section before any chapter (a cover, front matter) is left alone.
+- **Continue.** Every section after the first continues from the one before. The first section is left alone: it sets where the numbers start.
+- **Two settings only.** Restart and start at. Number format, chapter numbers and what the footers hold are not touched.
+- With no section opening with the chapter heading, the restart is refused with the reason.
+- The same proof: page count and each section's first page, before and after.
 
 ### Choosing a workbook kept in OneDrive or SharePoint (1.11.0)
 

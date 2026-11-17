@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 75 tools arrive described, categorised and in the menu' (($tc -like '75 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 77 tools arrive described, categorised and in the menu' (($tc -like '77 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -548,6 +548,10 @@ try {
     [string]$headCopy = Join-Path $work 'Headers 1.12 (landscape).docx'
     [string]$headCopyQ = Join-Path $work 'Headers 1.12 (quick part).docx'
     Remove-Item $headDoc, $headCopy, $headCopyQ -Force -ErrorAction SilentlyContinue
+    [string]$chapDoc = Join-Path $work 'Chapters 1.13.docx'
+    [string]$chapOn = Join-Path $work 'Chapters 1.13 (on).docx'
+    [string]$chapOff = Join-Path $work 'Chapters 1.13 (off).docx'
+    Remove-Item $chapDoc, $chapOn, $chapOff -Force -ErrorAction SilentlyContinue
     [string]$quickStd = Join-Path $work 'Global Standards (quick).xlsx'
     [string]$quickStdSeq = Join-Path $work 'Global Standards (quick sequential).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick).xlsx') $quickStd -Force
@@ -671,6 +675,20 @@ try {
         Write-Output "HEADQP: $hq"
         Check '1.12.0: a Quick Part that does not exist is named, and nothing changes' ($hq -match '^missing: No Quick Part named "No Such Part" was found') $hq
         Check '1.12.0: a Quick Part by name fills the header of every section of the page size; footers are left alone' (($hq -match 'copy: \[1 own:New landscape header / own:Old footer\]') -and ($hq -match '\[3 own:New landscape header / linked:Old footer\]') -and ($hq -match '\[2 own:Old landscape header / linked:Old footer\]') -and ($hq -match '\[4 own:Old landscape header / linked:Old footer\]') -and ($hq -match 'Pagination is as it was')) $hq
+        # 12e. 1.13.0: chapter numbers in page numbers, and restart or continue, on four fictional sections.
+        $cn = RunW $word 'SKW_Test.TW_Chapters' "$quickStd|$chapDoc|$chapOn|$chapOff"
+        Write-Output "CHAPTERS: $cn"
+        Check '1.13.0: the chapters test document has four sections, Heading 1 numbered, one section already with chapter numbers' ($cn -match '^saved=Chapters 1\.13\.docx sections=4 h1=1 \[1 off\] \[2 off restart1\] \[3 off restart5\] \[4 on level1 sep0\] pages=4') $cn
+        Check '1.13.0: the chapter heading level and separator start from the Global Standards'' Captions sheet' (($cn -match '## default=1\|- ##') -and ($cn -match 'are the ones the Global Standards'' Captions sheet gives captions')) $cn
+        Check '1.13.0: the check says which sections would take the chapter number, and changes nothing' (($cn -match '## on: 4 section\(s\): 3 would take the chapter number \(heading level 1, hyphen\)\. fixable=3 saved=True ##') -and ($cn -match '\| 4 \| 4 \| Letter portrait \| Chapter number from heading level 1, hyphen \|[^|]*\| Already right \|') -and ($cn -match 'Takes the chapter number: heading level 1, hyphen')) $cn
+        Check '1.13.0: every section includes the chapter number in a copy, and the restarts are left alone' (($cn -match '3 of 4 section\(s\) now include the chapter number in their page numbers \(heading level 1, hyphen\), in a copy: Chapters 1\.13 \(on\)\.docx') -and ($cn -match 'same=False copy on: \[1 on level1 sep0\] \[2 on level1 sep0 restart1\] \[3 on level1 sep0 restart5\] \[4 on level1 sep0\] pages=4')) $cn
+        Check '1.13.0: every section leaves the chapter number out in a copy' (($cn -match '## off: 4 section\(s\): 1 would lose the chapter number\. fixable=1') -and ($cn -match '1 of 4 section\(s\) no longer include the chapter number in their page numbers, in a copy: Chapters 1\.13 \(off\)\.docx') -and ($cn -match 'same=False copy off: \[1 off\] \[2 off restart1\] \[3 off restart5\] \[4 off\] pages=4')) $cn
+        Check '1.13.0: a chapter heading level that is not numbered is refused with the reason, and no copy is left' (($cn -match '## level2: Heading 2 is not numbered in this document.*Nothing was changed\. fixable=0') -and ($cn -match '## level2copy: Heading 2 is not numbered in this document.*left=False')) $cn
+        Check '1.13.0: the restart check finds the sections that open a chapter and the one inside a chapter' (($cn -match '## rcheck: 4 section\(s\), 3 open a chapter \(Heading 1\): 3 would change so page numbers start at 1 at each chapter and continue inside it\. fixable=3 saved=True ##') -and ($cn -match '\| 3 \| 3 \| Letter landscape \| restarts at 5 \| Continues: it is inside a chapter \|') -and ($cn -match '\| 2 \| 2 \| Letter portrait \| restarts at 1 \| Already right: it opens a chapter \|')) $cn
+        Check '1.13.0: page numbers start at 1 at each chapter and continue inside it, in a copy; chapter numbers are left alone' (($cn -match '3 of 4 section\(s\) changed, in a copy: [^/]*Page numbers start at 1 at each of the 3 chapter\(s\) and continue inside it\.') -and ($cn -match 'same=False copy chapter: \[1 off restart1\] \[2 off restart1\] \[3 off\] \[4 on level1 sep0 restart1\] pages=4')) $cn
+        Check '1.13.0: page numbers continue through the whole document in a copy; the first section is left alone' (($cn -match '## ccheck: 4 section\(s\): 2 would change so page numbers continue through the whole document\. fixable=2') -and ($cn -match '2 of 4 section\(s\) changed, in a copy: [^/]*Page numbers continue through the whole document\.') -and ($cn -match 'same=False copy continue: \[1 off\] \[2 off\] \[3 off\] \[4 on level1 sep0\] pages=4')) $cn
+        Check '1.13.0: with no section opening a chapter the restart is refused with the reason' ($cn -match '## nochapter: No section opens with a Heading 3, so there is no chapter to restart at\..*Nothing was changed\. fixable=0') $cn
+        Check '1.13.0: pagination is compared before and after each time, and the source document is not changed' ((([regex]::Matches($cn, 'Pagination is as it was: 4 page\(s\); sections start on 1 2 3 4\.')).Count -eq 4) -and ($cn -match '## source: \[1 off\] \[2 off restart1\] \[3 off restart5\] \[4 on level1 sep0\] pages=4$')) $cn
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

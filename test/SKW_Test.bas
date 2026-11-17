@@ -1938,3 +1938,111 @@ Public Function TW_HeadersQuickPart(ByVal target As String) As String
     d.Close SaveChanges:=0
     TW_HeadersQuickPart = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.13.0: chapter numbers in page numbers, and restart or continue. Four fictional sections: chapter one,
+' chapter two (restarts at 1), a landscape page inside chapter two (restarts at 5), chapter three (already
+' includes the chapter number). Heading 1 is numbered; Heading 2 is not.
+' ---------------------------------------------------------------------
+Private Function ChapState(ByVal d As Object) As String
+    Dim s As Object, t As String, i As Long, pn As Object
+    For Each s In d.Sections
+        i = i + 1
+        Set pn = s.Headers(wdHeaderFooterPrimary).PageNumbers
+        t = t & " [" & i & " " & IIf(pn.IncludeChapterNumber, "on level" & (pn.HeadingLevelForChapter + 1) & " sep" & pn.ChapterPageSeparator, "off") & _
+            IIf(pn.RestartNumberingAtSection, " restart" & pn.StartingNumber, "") & "]"
+    Next
+    ChapState = Mid$(t, 2) & " pages=" & d.ComputeStatistics(wdStatisticPages)
+End Function
+
+' arg: the workbook | the document to make | the copy with chapter numbers | the copy without
+Public Function TW_Chapters(ByVal arg As String) As String
+    Dim a() As String, d As Object, c As Object, s As String, prev As String, lt As Object, i As Long, r As Object, pn As Object, v As Variant
+    SKW_Quiet = True
+    a = Split(arg, "|")
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath a(0)
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.ActiveWindow.View.ShowFieldCodes = False
+    d.Content.InsertAfter "Chapter One" & vbCr & "A part" & vbCr & "Body one" & vbCr & "Chapter Two" & vbCr & "Body two" & vbCr & "Wide page" & vbCr & "Chapter Three" & vbCr & "Body three"
+    For Each v In Array(7, 6, 4)
+        Set r = d.Paragraphs(CLng(v)).Range
+        r.Collapse wdCollapseStart
+        r.InsertBreak wdSectionBreakNextPage
+    Next
+    Set lt = d.ListTemplates.Add(OutlineNumbered:=True)
+    lt.ListLevels(1).NumberFormat = "%1"
+    lt.ListLevels(1).NumberStyle = wdListNumberStyleArabic
+    For i = 1 To d.Paragraphs.Count
+        Select Case Replace(d.Paragraphs(i).Range.Text, vbCr, "")
+            Case "Chapter One", "Chapter Two", "Chapter Three"
+                d.Paragraphs(i).Style = d.Styles(wdStyleHeading1)
+                d.Paragraphs(i).Range.ListFormat.ApplyListTemplate ListTemplate:=lt, ContinuePreviousList:=(i > 1)
+            Case "A part"
+                d.Paragraphs(i).Style = d.Styles(wdStyleHeading2)
+                d.Paragraphs(i).Range.ListFormat.RemoveNumbers
+        End Select
+    Next
+    d.Sections(1).Footers(wdHeaderFooterPrimary).Range.Text = "Page "
+    Set r = d.Sections(1).Footers(wdHeaderFooterPrimary).Range
+    r.MoveEnd wdCharacter, -1
+    r.Collapse 0
+    r.Fields.Add r, wdFieldPage
+    Set pn = d.Sections(2).Headers(wdHeaderFooterPrimary).PageNumbers
+    pn.RestartNumberingAtSection = True
+    pn.StartingNumber = 1
+    d.Sections(3).PageSetup.Orientation = wdOrientLandscape
+    Set pn = d.Sections(3).Headers(wdHeaderFooterPrimary).PageNumbers
+    pn.RestartNumberingAtSection = True
+    pn.StartingNumber = 5
+    Set pn = d.Sections(4).Headers(wdHeaderFooterPrimary).PageNumbers
+    pn.IncludeChapterNumber = True
+    pn.HeadingLevelForChapter = 0
+    pn.ChapterPageSeparator = wdSeparatorHyphen
+    d.SaveAs2 FileName:=a(1), FileFormat:=wdFormatXMLDocument
+    s = "saved=" & d.Name & " sections=" & d.Sections.Count & " h1=" & d.Paragraphs(1).Range.ListFormat.ListString & " " & ChapState(d)
+    s = s & " ## default=" & SKW_ChapterDefault()
+    If Not d.Saved Then d.Save
+    s = s & " ## on: " & SKW_ChapterNumbersCheck("on", 1, "-") & " fixable=" & SKW_Fixable & " saved=" & d.Saved & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_ChapterNumbersCopy(a(2), "on", 1, "-"), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " copy on: " & ChapState(c)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    s = s & " ## off: " & SKW_ChapterNumbersCheck("off", 0, "") & " fixable=" & SKW_Fixable
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_ChapterNumbersCopy(a(3), "off", 0, ""), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " copy off: " & ChapState(c)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    s = s & " ## level2: " & SKW_ChapterNumbersCheck("on", 2, "-") & " fixable=" & SKW_Fixable
+    s = s & " ## level2copy: " & SKW_ChapterNumbersCopy(a(2) & ".x.docx", "on", 2, "-") & " left=" & (Len(Dir$(a(2) & ".x.docx")) > 0)
+    ' Restart or continue. Section 2 of a new document sits inside chapter one: a landscape page.
+    s = s & " ## rcheck: " & SKW_PageRestartCheck("chapter", 0) & " fixable=" & SKW_Fixable & " saved=" & d.Saved & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_PageRestartCopy(a(2) & ".r.docx", "chapter", 0), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " copy chapter: " & ChapState(c)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    s = s & " ## ccheck: " & SKW_PageRestartCheck("continue", 0) & " fixable=" & SKW_Fixable
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_PageRestartCopy(a(2) & ".c.docx", "continue", 0), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " copy continue: " & ChapState(c)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    s = s & " ## nochapter: " & SKW_PageRestartCheck("chapter", 3) & " fixable=" & SKW_Fixable
+    s = s & " ## source: " & ChapState(d)
+    SKW_SetStandardsPath prev
+    d.Close SaveChanges:=0
+    TW_Chapters = s
+End Function

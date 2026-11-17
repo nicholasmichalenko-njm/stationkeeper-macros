@@ -308,6 +308,12 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Headers.ReplaceHeadersByPageSize", "Replace Headers and Footers (by Page Size)", "Layout", _
         "Gives every section of one page size and orientation the same header and footer: the ones of the section at the cursor, or a Quick Part. Reports first, then works on a copy. No section break or page number setting is changed, and the page count is compared before and after.", _
         "headers, footers, sections, page size, landscape, orientation, replace, quick part, pagination", "Headers and footers, Pages and sections", "Whole document", "No, it reports; the fix works on a copy")
+    s = s & "," & T("SKW_Headers.PageNumberChapters", "Page Numbers: Chapter Numbers On or Off", "Layout", _
+        "Sets every section's page numbers to include the chapter number (1-3) or to leave it out (3), in one action. The heading level and separator start from the Global Standards' Captions sheet. Reports first, then works on a copy. Restart, start at and number format are not changed.", _
+        "page numbers, chapter, chapter number, sections, footers, separator, heading level, pagination", "Pages and sections, Headers and footers", "Whole document", "No, it reports; the fix works on a copy")
+    s = s & "," & T("SKW_Headers.PageNumberRestart", "Page Numbers: Restart at Each Chapter or Continue", "Layout", _
+        "Sets page numbers to start at 1 at each chapter, or to continue through the whole document, in one action. A chapter starts where a section opens with the chapter heading; sections inside a chapter continue. Reports first, then works on a copy. Number format and chapter numbers are not changed.", _
+        "page numbers, restart, start at 1, continue, chapter, sections, pagination, numbering", "Pages and sections, Headers and footers", "Whole document", "No, it reports; the fix works on a copy")
     s = s & "," & T("SKW_Review.BannedPhrasesReview", "Banned Phrases Review", "Before delivery", _
         "Finds the team's banned phrases in the selection or the whole body. Ones with a replacement are changed as tracked changes; every finding gets a comment naming the rule. One Ctrl+Z undoes it.", _
         "banned, phrases, plain language, words, wording, style guide, track", "Text, Comments and tracking", "Selection or whole document", "Yes")
@@ -509,7 +515,7 @@ Private Function SkKind(ByVal run As String) As String
         "ConvertToTeamList|InsertAcronymList|DeliveryCheck|DeckTextLeftovers|DeckBannedPhrases|DeckAcronymCheck|DeckFontAudit|" & _
         "DeckSmallText|DeckTemplateCheck|DeckSlideNumberCheck|DeckMarkingCheck|DeckLanguageCheck|DeckTableStyleCheck|DeckColorCheck|" & _
         "DeckDeliveryCheck|BookCheck|TableRolesCheck|ApplyTableRolesHere|AssignTableRole|ShowTableRoles|" & _
-        "QuickTableFormatHere|QuickTableFormatAll|QuickCaptionFormatHere|QuickCaptionFormatAll|CaptionNumberingCheck|FixCaptionNumberHere|"
+        "QuickTableFormatHere|QuickTableFormatAll|QuickCaptionFormatHere|QuickCaptionFormatAll|CaptionNumberingCheck|FixCaptionNumberHere|PageNumberChapters|PageNumberRestart|"
     If InStr(1, BUILT, "|" & Mid$(run, InStr(run, ".") + 1) & "|", vbTextCompare) > 0 Then
         SkKind = "Built for Stationkeeper"
     Else
