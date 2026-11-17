@@ -302,6 +302,12 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Layout.SectionMap", "Section Map", "Layout", _
         "Report of every section: first page, orientation, paper, margins, columns, how it starts, whether headers and footers follow the previous section, and page number restarts. Changes nothing.", _
         "sections, landscape, margins, headers, footers, page numbers, link to previous", "Pages and sections, Headers and footers", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Headers.HeaderFooterMap", "Header and Footer Map", "Layout", _
+        "Report of every section's page size and orientation, what its header and footer hold, which follow the section before, and where page numbers restart. Changes nothing.", _
+        "headers, footers, sections, page size, landscape, orientation, link to previous, map", "Headers and footers, Pages and sections", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Headers.ReplaceHeadersByPageSize", "Replace Headers and Footers (by Page Size)", "Layout", _
+        "Gives every section of one page size and orientation the same header and footer: the ones of the section at the cursor, or a Quick Part. Reports first, then works on a copy. No section break or page number setting is changed, and the page count is compared before and after.", _
+        "headers, footers, sections, page size, landscape, orientation, replace, quick part, pagination", "Headers and footers, Pages and sections", "Whole document", "No, it reports; the fix works on a copy")
     s = s & "," & T("SKW_Review.BannedPhrasesReview", "Banned Phrases Review", "Before delivery", _
         "Finds the team's banned phrases in the selection or the whole body. Ones with a replacement are changed as tracked changes; every finding gets a comment naming the rule. One Ctrl+Z undoes it.", _
         "banned, phrases, plain language, words, wording, style guide, track", "Text, Comments and tracking", "Selection or whole document", "Yes")

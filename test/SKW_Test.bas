@@ -1823,3 +1823,118 @@ Public Function TW_LocalPath(ByVal folder As String) As String
     SKW_SetStandardsPath prev
     TW_LocalPath = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.12.0: headers and footers by page size. Five fictional sections: portrait, landscape (own header),
+' portrait and landscape (both following the section before), landscape (the new header and footer).
+' ---------------------------------------------------------------------
+Public Function TW_HeadersBuild(ByVal savePath As String) As String
+    Dim d As Object, i As Long, r As Object, s As Object
+    SKW_Quiet = True
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.ActiveWindow.View.ShowFieldCodes = False
+    d.Content.InsertAfter "Body one" & vbCr & "Body two" & vbCr & "Body three" & vbCr & "Body four" & vbCr & "Body five"
+    For i = 5 To 2 Step -1
+        Set r = d.Paragraphs(i).Range
+        r.Collapse wdCollapseStart
+        r.InsertBreak wdSectionBreakNextPage
+    Next
+    d.Sections(2).PageSetup.Orientation = wdOrientLandscape
+    d.Sections(4).PageSetup.Orientation = wdOrientLandscape
+    d.Sections(5).PageSetup.Orientation = wdOrientLandscape
+    d.Sections(1).Headers(wdHeaderFooterPrimary).Range.Text = "Old portrait header"
+    d.Sections(1).Footers(wdHeaderFooterPrimary).Range.Text = "Old footer"
+    d.Sections(2).Headers(wdHeaderFooterPrimary).LinkToPrevious = False
+    d.Sections(2).Headers(wdHeaderFooterPrimary).Range.Text = "Old landscape header"
+    d.Sections(5).Headers(wdHeaderFooterPrimary).LinkToPrevious = False
+    d.Sections(5).Headers(wdHeaderFooterPrimary).Range.Text = "New landscape header"
+    d.Sections(5).Footers(wdHeaderFooterPrimary).LinkToPrevious = False
+    d.Sections(5).Footers(wdHeaderFooterPrimary).Range.Text = "New footer, page "
+    Set r = d.Sections(5).Footers(wdHeaderFooterPrimary).Range
+    r.MoveEnd wdCharacter, -1
+    r.Collapse 0
+    r.Fields.Add r, wdFieldPage
+    d.Sections(3).Headers(wdHeaderFooterPrimary).PageNumbers.RestartNumberingAtSection = True
+    d.Sections(3).Headers(wdHeaderFooterPrimary).PageNumbers.StartingNumber = 7
+    d.SaveAs2 FileName:=savePath, FileFormat:=wdFormatXMLDocument
+    d.Range(0, 0).Select
+    TW_HeadersBuild = "saved=" & d.Name & " sections=" & d.Sections.Count & " kinds=" & SKW_PageKinds() & " " & HeadState(d)
+End Function
+
+Private Function HeadState(ByVal d As Object) As String
+    Dim s As Object, t As String, i As Long
+    For Each s In d.Sections
+        i = i + 1
+        t = t & " [" & i & " " & IIf(i > 1 And s.Headers(wdHeaderFooterPrimary).LinkToPrevious, "linked", "own") & ":" & _
+            Replace(s.Headers(wdHeaderFooterPrimary).Range.Text, vbCr, "") & " / " & IIf(i > 1 And s.Footers(wdHeaderFooterPrimary).LinkToPrevious, "linked", "own") & ":" & _
+            Replace(s.Footers(wdHeaderFooterPrimary).Range.Text, vbCr, "") & "]"
+    Next
+    HeadState = Mid$(t, 2) & " restart3=" & d.Sections(3).Headers(wdHeaderFooterPrimary).PageNumbers.RestartNumberingAtSection & "/" & _
+        d.Sections(3).Headers(wdHeaderFooterPrimary).PageNumbers.StartingNumber & " pages=" & d.ComputeStatistics(wdStatisticPages)
+End Function
+
+Private Function HeadDoc() As Object
+    Dim d As Object
+    For Each d In Documents
+        If d.Name = "Headers 1.12.docx" Then Set HeadDoc = d
+    Next
+    HeadDoc.Activate
+End Function
+
+' The map, then every landscape section given section 5's header and footer, in a copy.
+Public Function TW_Headers(ByVal target As String) As String
+    Dim d As Object, c As Object, s As String
+    SKW_Quiet = True
+    Set d = HeadDoc()
+    ' Reading the headers to describe the document (HeadState) marks it changed; the tools need a saved file.
+    If Not d.Saved Then d.Save
+    s = SKW_HeaderMap() & " saved=" & d.Saved & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    d.Sections(5).Range.Paragraphs(1).Range.Select
+    Selection.Collapse
+    s = s & " ## check: " & SKW_HeaderReplaceCheck("Letter landscape", "section", "both") & " fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_HeaderReplaceCopy(target, "Letter landscape", "section", "both"), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " copy: " & HeadState(c) & " ## source: " & HeadState(d)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    d.Activate
+    TW_Headers = s
+End Function
+
+' Every portrait section given a Quick Part as its header, in a copy. The Quick Part is made in this template for the test and removed again.
+Public Function TW_HeadersQuickPart(ByVal target As String) As String
+    Dim d As Object, c As Object, s As String, tmpl As Object, r As Object, bb As Object
+    SKW_Quiet = True
+    Set d = HeadDoc()
+    Set tmpl = d.AttachedTemplate
+    Set r = d.Sections(5).Headers(wdHeaderFooterPrimary).Range
+    r.MoveEnd wdCharacter, -1
+    On Error Resume Next
+    tmpl.BuildingBlockEntries("SK Test Header").Delete
+    On Error GoTo 0
+    Set bb = tmpl.BuildingBlockEntries.Add("SK Test Header", wdTypeQuickParts, "General", r)
+    If Not d.Saved Then d.Save
+    d.Sections(1).Range.Paragraphs(1).Range.Select
+    Selection.Collapse
+    s = "missing: " & SKW_HeaderReplaceCheck("Letter portrait", "qp:No Such Part|", "both")
+    s = s & " ## check: " & SKW_HeaderReplaceCheck("Letter portrait", "qp:SK Test Header|", "both")
+    CloseReport
+    d.Activate
+    s = s & " ## " & Replace(SKW_HeaderReplaceCopy(target, "Letter portrait", "qp:SK Test Header|", "both"), vbCr, " / ")
+    Set c = ActiveDocument
+    s = s & " ## same=" & (c.FullName = d.FullName) & " copy: " & HeadState(c)
+    If c.FullName <> d.FullName Then c.Close SaveChanges:=0
+    On Error Resume Next
+    tmpl.BuildingBlockEntries("SK Test Header").Delete
+    tmpl.Saved = True
+    ThisDocument.Saved = True
+    On Error GoTo 0
+    d.Activate
+    d.Close SaveChanges:=0
+    TW_HeadersQuickPart = s
+End Function

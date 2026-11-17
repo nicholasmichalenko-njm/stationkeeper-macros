@@ -129,7 +129,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 73 tools in 1.11.0)
+## Stationkeeper Tools (0.4.0 and later; 75 tools in 1.12.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -178,6 +178,23 @@ Fast fixes for tables and captions. **Every value comes from the Stationkeeper a
 - Quick Table Format sets only the header row, body rows and cell margins. Apply Table Roles sets every role, fill and edge from the same workbook, and makes a missing Tag style.
 - With an effort linked, reports say the values are the Global Standards and the effort may differ.
 - Captions in text boxes, headers and footers are not read. Cell margins are set on the table; a cell with margins of its own keeps them.
+
+### Headers and footers by page size (1.12.0)
+
+Headers and footers belong to sections, and so do page size and orientation. These two tools work on every section of one page size and orientation together.
+
+| Tool | What it does | Changes the document? |
+|---|---|---|
+| Header and Footer Map | Every section: the page it starts on, its page size and orientation, what its header and footer hold, whether each follows the section before, different first page and odd-even, and where page numbers restart | No, report |
+| Replace Headers and Footers (by Page Size) | Gives every section of one page size and orientation the same header and footer. It asks which page size, where the new ones come from (the section the cursor is in, or a Quick Part by name), and whether to replace the header, the footer or both. It reports first, then works on a copy | No, report; the fix works on a copy |
+
+- **Pagination is protected.** No section break is added, removed or moved. No section's page number settings (restart, start at, format) are touched.
+- **Neighbours are protected.** A section of another page size whose header or footer follows a section about to change is unlinked first, so it keeps what it shows now. The report lists each one.
+- **Proof.** The copy's page count and the page each section starts on are read before and after. The result says "Pagination is as it was", or gives both readings when a taller header or footer moved text.
+- **From the section at the cursor:** the main header and footer are copied, and the first-page and even-page ones where both the source and the target section use them.
+- **From a Quick Part:** the main header or footer is filled. First-page and even-page ones are left as they are, and the report says so. The Quick Part is found by name in the templates Word has loaded.
+- A floating object in the source header (a text box, a picture set to float) that does not carry over is named in the result.
+- The source section itself is not changed.
 
 ### Choosing a workbook kept in OneDrive or SharePoint (1.11.0)
 

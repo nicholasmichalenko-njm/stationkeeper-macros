@@ -305,7 +305,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(18 modules and 3 forms)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(19 modules and 3 forms)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 73 tools arrive described, categorised and in the menu' (($tc -like '73 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 75 tools arrive described, categorised and in the menu' (($tc -like '75 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -544,6 +544,10 @@ try {
     [string]$quickN = Join-Path $work 'Quick 1.10 (numbers).docx'
     [string]$quickS = Join-Path $work 'Quick 1.10 (sequential).docx'
     Remove-Item $quickDoc, $quickT, $quickC, $quickN, $quickS -Force -ErrorAction SilentlyContinue
+    [string]$headDoc = Join-Path $work 'Headers 1.12.docx'
+    [string]$headCopy = Join-Path $work 'Headers 1.12 (landscape).docx'
+    [string]$headCopyQ = Join-Path $work 'Headers 1.12 (quick part).docx'
+    Remove-Item $headDoc, $headCopy, $headCopyQ -Force -ErrorAction SilentlyContinue
     [string]$quickStd = Join-Path $work 'Global Standards (quick).xlsx'
     [string]$quickStdSeq = Join-Path $work 'Global Standards (quick sequential).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick).xlsx') $quickStd -Force
@@ -652,6 +656,21 @@ try {
         Check '1.10.0: a paragraph that is not a caption is left alone, with the reason' ($qh -match '## none: The paragraph at the cursor is not a caption the Captions sheet knows') $qh
         Check '1.11.0: with no Global Standards workbook chosen, every quick tool says so and changes nothing' (([regex]::Matches($qh.Substring($qh.IndexOf('## nostd:')), 'reads the Global Standards workbook and nothing else')).Count -eq 6) $qh
         [void](RunW $word 'SKW_Test.TW_QuickClose')
+        # 12d. 1.12.0: headers and footers by page size, on five fictional sections.
+        $hb = RunW $word 'SKW_Test.TW_HeadersBuild' $headDoc
+        Write-Output "HEADBUILD: $hb"
+        Check '1.12.0: the headers test document has five sections of two page sizes' (($hb -match 'saved=Headers 1\.12\.docx sections=5 kinds=Letter portrait=2\|Letter landscape=3') -and ($hb -match '\[3 linked:Old landscape header / linked:Old footer\]') -and ($hb -match 'pages=5')) $hb
+        $hh = RunW $word 'SKW_Test.TW_Headers' $headCopy
+        Write-Output "HEADERS: $hh"
+        Check '1.12.0: Header and Footer Map lists each section''s page size, header, footer and links' (($hh -match '^5 section\(s\), 2 page size\(s\): Letter portrait \(2\), Letter landscape \(3\)\. saved=True ##') -and ($hh -match '\| 3 \| 3 \| Letter portrait \| same as previous \| Old landscape header \| same as previous \| Old footer \|[^|]*\| restarts at 7 \|')) $hh
+        Check '1.12.0: the check says which sections change, which is the source, and which neighbours are unlinked first' (($hh -match '## check: 3 section\(s\) are Letter landscape: 2 would take the header and footer of section 5, 2 neighbouring header\(s\) or footer\(s\) are unlinked first') -and ($hh -match 'fixable=2') -and ($hh -match 'Section 5 is the source and is not changed') -and ($hh -match 'Keeps what it shows: it follows a section that changes')) $hh
+        Check '1.12.0: every section of the page size takes the new header and footer, in a copy' (($hh -match 'copy: \[1 own:Old portrait header / own:Old footer\] \[2 own:New landscape header / own:New footer, page \d+\]') -and ($hh -match '\[4 own:New landscape header / own:New footer, page \d+\] \[5 own:New landscape header / own:New footer, page \d+\]') -and ($hh -match 'same=False')) $hh
+        Check '1.12.0: a section of another page size that followed a changed one keeps what it showed' ($hh -match '\[3 own:Old landscape header / own:Old footer\]') $hh
+        Check '1.12.0: no page number setting is touched and pagination is as it was; the source document is not changed' (($hh -match 'Pagination is as it was: 5 page\(s\); sections start on 1 2 3 4 5\.') -and ($hh -match 'copy: [^#]*restart3=True/7 pages=5') -and ($hh -match '## source: \[1 own:Old portrait header / own:Old footer\] \[2 own:Old landscape header / linked:Old footer\] \[3 linked:Old landscape header / linked:Old footer\] \[4 linked:Old landscape header / linked:Old footer\]')) $hh
+        $hq = RunW $word 'SKW_Test.TW_HeadersQuickPart' $headCopyQ
+        Write-Output "HEADQP: $hq"
+        Check '1.12.0: a Quick Part that does not exist is named, and nothing changes' ($hq -match '^missing: No Quick Part named "No Such Part" was found') $hq
+        Check '1.12.0: a Quick Part by name fills the header of every section of the page size; footers are left alone' (($hq -match 'copy: \[1 own:New landscape header / own:Old footer\]') -and ($hq -match '\[3 own:New landscape header / linked:Old footer\]') -and ($hq -match '\[2 own:Old landscape header / linked:Old footer\]') -and ($hq -match '\[4 own:Old landscape header / linked:Old footer\]') -and ($hq -match 'Pagination is as it was')) $hq
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp
