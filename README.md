@@ -131,7 +131,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 77 tools in 1.13.0)
+## Stationkeeper Tools (0.4.0 and later; 77 tools in 1.14.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -197,6 +197,24 @@ Headers and footers belong to sections, and so do page size and orientation. The
 - **From a Quick Part:** the main header or footer is filled. First-page and even-page ones are left as they are, and the report says so. The Quick Part is found by name in the templates Word has loaded.
 - A floating object in the source header (a text box, a picture set to float) that does not carry over is named in the result.
 - The source section itself is not changed.
+
+### Remap Style by what each paragraph is (1.14.0)
+
+Remap Style reads every paragraph in the style you name before it changes anything, so one style can go to several.
+
+| The paragraph is | It becomes |
+|---|---|
+| Not in a list | The style you give (leave it blank to leave these alone) |
+| Bulleted or numbered by hand | The **Style** of the approved row for that kind and **Level** on the Global Standards' **List numbering** sheet. The list style's own bullet replaces the one applied by hand. With no such row, or a style the document lacks, it is left alone: a bullet is never lost |
+| In a table | Left alone, unless you apply that one row |
+| Led by a typed bullet | Left alone, and listed |
+
+- **Report first.** One numbered row per style and kind: how many paragraphs, how many carry formatting by hand, what they become, and why any are left alone.
+- **Apply** every row, one row by its number, or only the selected paragraphs. Each run is one Ctrl+Z, so a document can be changed a step at a time.
+- **Formatting by hand**, chosen per run: keep all of it; keep emphasis only (bold, italic, underline, strikethrough, superscript, subscript, color, highlight) while fonts, sizes, indents and spacing take the style's; or clear it.
+- **List Paragraph.** Word usually moves text to List Paragraph when someone bullets it from Normal. Changing Normal alone, the report says how many places are in List Paragraph; name it as a second style in the same run.
+- Several styles can be named in one run. A character style changes as before: its text takes the other style.
+- The tools' own Style map sheet is no longer read. The list styles come from the Global Standards workbook; the style for plain paragraphs is asked for and not stored.
 
 ### Chapter numbers in page numbers (1.13.0)
 
@@ -315,7 +333,7 @@ Clears the Styles pane down to what the document uses. It reports first, then as
 | Banned Phrases Review | The team's banned phrases (Banned phrases sheet) in the selection or the whole body: replacements as tracked changes, a comment naming the rule on each | Yes, one Ctrl+Z |
 | Caption Audit | Tables and figures without captions, typed caption numbers, wrong labels, captions on the wrong side (settings TableCaptionPosition, FigureCaptionPosition), repeated captions | No, report |
 | Import Team Styles | Brings the style definitions in from the team template (setting StyleSource, else the attached template) and lists which changed | Yes, one Ctrl+Z |
-| Remap Style | Changes every use of one style to another, or every pair on the Style map sheet | Yes, one Ctrl+Z |
+| Remap Style | Changes a style to another by what each paragraph is (see below) | Yes, one Ctrl+Z |
 | Pagination Check | One report with two parts. Keep with next: headings and captions above tables that can be stranded at a page bottom, long kept chains. Breaks and spacing: manual page and column breaks, empty paragraphs used as spacing, line breaks ending paragraphs, body text starting a new page | No, report |
 | Typed Lists Finder | Paragraphs starting with a typed bullet or number instead of a real list | No, report |
 | TOC Check | Headings missing from the contents, entries whose heading changed, page numbers out of date | No, report |

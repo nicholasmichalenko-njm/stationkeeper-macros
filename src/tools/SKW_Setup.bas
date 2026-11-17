@@ -354,8 +354,8 @@ Public Function SKW_ToolList() As String
         "Brings the team's style definitions in from the team template (or the attached template) and lists which styles changed. One Ctrl+Z undoes it.", _
         "styles, import, update styles, template, organizer", "Styles", "Whole document", "Yes")
     s = s & "," & T("SKW_Styles.RemapStyle", "Remap Style", "Styles", _
-        "Changes every use of one style to another, or applies every pair on the Style map sheet. One Ctrl+Z undoes it.", _
-        "styles, replace style, remap, convert, style map", "Styles", "Whole document", "Yes")
+        "Changes a style to another by what each paragraph is. A paragraph bulleted or numbered by hand goes to the Global Standards' list style for its level and keeps its bullet. Formatting by hand is kept, kept in part or cleared, as you choose. Reports first; applies every row, one row or the selection. One Ctrl+Z undoes it.", _
+        "styles, replace style, remap, convert, style map, bullets, list level, direct formatting, normal", "Styles, Lists", "Whole document", "Yes")
     s = s & "," & T("SKW_Layout.KeepWithNextAudit", "Pagination Check", "Layout", _
         "One report of what moves text between pages: headings and captions that do not keep with what follows, long kept runs, manual page and column breaks, empty paragraphs used as spacing and line breaks ending paragraphs. Changes nothing.", _
         "pagination, keep with next, breaks, page break, empty paragraphs, widow, orphan, spacing", "Pages and sections, Styles", "Whole document", "No, it only reports")

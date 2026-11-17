@@ -2046,3 +2046,112 @@ Public Function TW_Chapters(ByVal arg As String) As String
     d.Close SaveChanges:=0
     TW_Chapters = s
 End Function
+
+' ---------------------------------------------------------------------
+' 1.14.0: Remap Style by what each paragraph is. A fictional document: plain paragraphs in Normal (one with
+' a bold word, one bold throughout and indented by hand), bullets applied by hand at levels 1, 2 and 4 and a
+' number applied by hand (Word puts those in List Paragraph), one bullet put back in Normal, a typed bullet,
+' and a table cell.
+' ---------------------------------------------------------------------
+Private Function RemapPara(ByVal d As Object, ByVal starts As String) As Object
+    Dim p As Object
+    For Each p In d.Paragraphs
+        If Left$(p.Range.Text, Len(starts)) = starts Then Set RemapPara = p: Exit Function
+    Next
+End Function
+
+Private Function RemapState(ByVal d As Object) As String
+    Dim v As Variant, p As Object, t As String
+    For Each v In Array("Plain one", "Whole bold", "Bullet A", "Bullet B", "Bullet D", "Bullet N", "Numbered", ChrW$(8226), "Cell", "Plain two")
+        Set p = RemapPara(d, CStr(v))
+        t = t & " [" & IIf(v = ChrW$(8226), "Typed", v) & ": " & p.Range.ParagraphStyle.NameLocal
+        If p.Range.ListFormat.ListType <> wdListNoNumbering Then t = t & " list" & p.Range.ListFormat.ListLevelNumber & IIf(Len(p.Range.ListFormat.ListString) > 0, "+mark", "")
+        Select Case CStr(v)
+            Case "Plain one": t = t & " boldword=" & (p.Range.Words(3).Font.Bold = True) & " first=" & (p.Range.Words(1).Font.Bold = True)
+            Case "Whole bold": t = t & " bold=" & (p.Range.Font.Bold = True) & " indent=" & CLng(p.LeftIndent) & " size=" & p.Range.Font.Size
+            Case "Bullet B": t = t & " italicword=" & (p.Range.Words(3).Font.Italic = True)
+        End Select
+        t = t & "]"
+    Next
+    RemapState = Mid$(t, 2)
+End Function
+
+Public Function TW_RemapKinds(ByVal std As String) As String
+    Dim d As Object, s As String, prev As String, ltB As Object, ltN As Object, p As Object, i As Long, r As Object, tb As Object, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath std
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.ActiveWindow.View.ShowFieldCodes = False
+    d.Content.InsertAfter "Plain one here" & vbCr & "Whole bold line" & vbCr & "Bullet A item" & vbCr & "Bullet B item" & vbCr & "Bullet D item" & vbCr & "Bullet N item" & vbCr & _
+        "Numbered item" & vbCr & ChrW$(8226) & vbTab & "Typed bullet" & vbCr & "Plain two here" & vbCr & "After"
+    For Each p In d.Paragraphs
+        p.Style = d.Styles(wdStyleNormal)
+    Next
+    RemapPara(d, "Plain one").Range.Words(3).Font.Bold = True
+    Set p = RemapPara(d, "Whole bold")
+    p.Range.Font.Bold = True
+    p.Range.Font.Size = 9
+    p.LeftIndent = 36
+    stage = "bullets"
+    Set ltB = d.ListTemplates.Add(OutlineNumbered:=True)
+    For i = 1 To 4
+        ltB.ListLevels(i).NumberFormat = ChrW$(8226)
+        ltB.ListLevels(i).NumberStyle = wdListNumberStyleBullet
+    Next
+    RemapPara(d, "Bullet A").Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=ltB, ContinuePreviousList:=False, ApplyLevel:=1
+    RemapPara(d, "Bullet B").Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=ltB, ContinuePreviousList:=True, ApplyLevel:=2
+    RemapPara(d, "Bullet D").Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=ltB, ContinuePreviousList:=True, ApplyLevel:=4
+    RemapPara(d, "Bullet N").Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=ltB, ContinuePreviousList:=True, ApplyLevel:=1
+    ' Word moved the four above to List Paragraph when they were bulleted. This one is put back in Normal, bullet and all.
+    RemapPara(d, "Bullet N").Style = d.Styles(wdStyleNormal)
+    RemapPara(d, "Bullet B").Range.Words(3).Font.Italic = True
+    stage = "numbers"
+    Set ltN = d.ListTemplates.Add(OutlineNumbered:=True)
+    ltN.ListLevels(1).NumberStyle = wdListNumberStyleArabic
+    ltN.ListLevels(1).NumberFormat = "%1."
+    RemapPara(d, "Numbered").Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=ltN, ContinuePreviousList:=False, ApplyLevel:=1
+    stage = "table"
+    Set r = RemapPara(d, "After").Range
+    Set tb = d.Tables.Add(r, 1, 1)
+    tb.Cell(1, 1).Range.Text = "Cell text"
+    tb.Cell(1, 1).Range.Style = d.Styles(wdStyleNormal)
+    d.UndoClear
+    stage = "state"
+    s = "start: " & RemapState(d)
+    stage = "check"
+    s = s & " ## hint: " & SKW_RemapCheck("Normal>Body Text")
+    CloseReport
+    d.Activate
+    s = s & " ## check: " & SKW_RemapCheck("Normal>Body Text|List Paragraph>Body Text") & " fixable=" & SKW_Fixable & " ## " & ReportText()
+    s = s & " ## key2=" & SKW_RemapRowKey(1)
+    CloseReport
+    d.Activate
+    stage = "all"
+    s = s & " ## all: " & Replace(SKW_RemapApply("Normal>Body Text|List Paragraph>Body Text", "all", "all", ""), vbCr, " / ") & " ## " & RemapState(d)
+    d.Undo 1
+    s = s & " ## undone: " & RemapState(d)
+    stage = "textrow"
+    s = s & " ## textrow: " & Replace(SKW_RemapApply("Normal>Body Text", "text", "all", "Normal|plain|0"), vbCr, " / ") & " ## " & RemapState(d)
+    d.Undo 1
+    stage = "nonesel"
+    RemapPara(d, "Plain one").Range.Select
+    s = s & " ## nonesel: " & Replace(SKW_RemapApply("Normal>Body Text", "none", "selection", ""), vbCr, " / ") & " ## " & RemapState(d)
+    d.Undo 1
+    s = s & " ## listsonly: " & Replace(SKW_RemapApply("Normal>|List Paragraph>", "all", "all", ""), vbCr, " / ") & " ## " & RemapState(d)
+    d.Undo 1
+    s = s & " ## tablerow: " & Replace(SKW_RemapApply("Normal>Body Text", "all", "all", "Normal|table|0"), vbCr, " / ") & " ## " & RemapState(d)
+    SKW_SetStandardsPath prev
+    d.Close SaveChanges:=0
+    TW_RemapKinds = s
+    Exit Function
+Bad:
+    TW_RemapKinds = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+    d.Close SaveChanges:=0
+End Function

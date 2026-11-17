@@ -6,13 +6,15 @@ Attribute VB_Name = "SKW_Styles"
 '   DirectFormattingReport           report: text formatted by hand instead of by style
 '   ClearDirectFormattingSelection   clears hand formatting in the selection, keeps emphasis
 '   ImportTeamStyles                 brings in the team's style definitions
-'   RemapStyle                       changes every use of one style to another
+'   RemapStyle                       changes a style to another by what each paragraph is (list, level, table), keeping formatting by hand as chosen
 '   FontNotAllowed                   report: fonts used that are not on the team list
 '   RemoveUnusedCustomStyles         deletes custom styles nobody uses
 ' =====================================================================
 Option Explicit
 
 Private Const UNDEF As Long = 9999999
+Private mRmKeys() As String          ' Remap Style: the row keys of the last check, 1-based: "From|kind|level"
+Private mRmCount As Long
 
 ' Shows the paragraph and character style at the cursor and any formatting applied by hand on top of them. With several paragraphs selected, makes a report. Changes nothing.
 Public Sub StyleInspector()
@@ -468,26 +470,40 @@ Public Sub ImportTeamStyles()
     SKW_Show SKW_ImportTeamStyles("")
 End Sub
 
-' Changes every paragraph (or text) in one style to another style, or applies every pair on the Style map sheet of the standards workbook. One Ctrl+Z undoes it.
+' Changes a style to another without losing what the paragraphs are: a hand-bulleted or numbered paragraph goes to the Global Standards' list style for its level and keeps its bullet, and formatting applied by hand is kept, kept in part or cleared, as chosen. Reports first; applies everything, one row or the selection. One Ctrl+Z undoes it.
 Public Sub RemapStyle()
-    Dim pairs As String, r As Object, n As Long, a As String, b As String, ans As VbMsgBoxResult
+    Dim pairs As String, a As String, b As String, msg As String, pick As String, keep As String, scope As String, key As String
     If SKW_IsQuiet() Or Documents.Count = 0 Then Exit Sub
-    For Each r In SKW_Rows("Style map")
-        If r.Exists("from") And r.Exists("to") Then
-            If Len(r("from")) > 0 And Len(r("to")) > 0 Then pairs = pairs & "|" & r("from") & ">" & r("to"): n = n + 1
-        End If
-    Next
-    If n > 0 Then
-        ans = MsgBox("The standards workbook maps " & n & " style(s) to others." & vbCr & vbCr & "Yes: apply all of them" & vbCr & _
-                     "No: change one style now", vbYesNoCancel + vbQuestion, "Remap Style")
-        If ans = vbCancel Then Exit Sub
-        If ans = vbYes Then SKW_Show SKW_RemapStyle(Mid$(pairs, 2)): Exit Sub
+    a = InputBox("Change which style?", "Remap Style", SKW_ParaStyleName(Selection.Range))
+    Do While Len(Trim$(a)) > 0
+        b = InputBox("Paragraphs in " & a & " that are not in a list become which style?" & vbCr & vbCr & _
+            "Leave it blank to leave them alone. Bulleted and numbered paragraphs go to the list styles on the Global Standards' List numbering sheet, by level.", "Remap Style", "")
+        pairs = pairs & "|" & Trim$(a) & ">" & Trim$(b)
+        a = InputBox("Another style to change in the same run?" & vbCr & vbCr & "Leave it blank to go on.", "Remap Style", "")
+    Loop
+    If Len(pairs) = 0 Then Exit Sub
+    pairs = Mid$(pairs, 2)
+    SKW_Fixable = 0
+    msg = SKW_RemapCheck(pairs)
+    If SKW_Fixable <= 0 Or SKW_LastReport Is Nothing Then SKW_Show msg: Exit Sub
+    pick = InputBox(Split(msg & vbCr, vbCr)(0) & vbCr & vbCr & "The report lists each kind of paragraph as a numbered row." & vbCr & vbCr & _
+        "A  apply every row" & vbCr & "S  apply to the selected paragraphs only" & vbCr & "or the number of one row to apply only that row" & vbCr & vbCr & _
+        "Leave it blank to change nothing.", "Remap Style", "A")
+    pick = UCase$(Trim$(pick))
+    If Len(pick) = 0 Then Exit Sub
+    scope = "all"
+    If pick = "S" Then
+        scope = "selection"
+    ElseIf pick <> "A" Then
+        key = SKW_RemapRowKey(Val(pick))
+        If Len(key) = 0 Then SKW_Say "The report has no row " & pick & ". Nothing was changed.": Exit Sub
     End If
-    a = InputBox("Change every use of which style?", "Remap Style", SKW_ParaStyleName(Selection.Range))
-    If Len(a) = 0 Then Exit Sub
-    b = InputBox("Change " & a & " to which style?", "Remap Style", "Normal")
-    If Len(b) = 0 Then Exit Sub
-    SKW_Show SKW_RemapStyle(a & ">" & b)
+    keep = InputBox("Formatting applied by hand:" & vbCr & vbCr & "1  Keep all of it" & vbCr & _
+        "2  Keep emphasis only (bold, italic, underline, strikethrough, superscript, subscript, color, highlight); fonts, sizes, indents and spacing take the style's" & vbCr & _
+        "3  Clear it: the style's look only" & vbCr & vbCr & "Type the number.", "Remap Style", "1")
+    If Len(keep) = 0 Then Exit Sub
+    keep = IIf(keep = "2", "text", IIf(keep = "3", "none", "all"))
+    SKW_Show SKW_RemapApply(pairs, keep, scope, key)
 End Sub
 
 Private Function StyleSig(ByVal st As Object) As String
@@ -555,54 +571,471 @@ Fail:
     SKW_ImportTeamStyles = "Styles could not be brought in: " & msg
 End Function
 
-' pairs: "From>To|From>To"
-Public Function SKW_RemapStyle(ByVal pairs As String) As String
-    Dim d As Object, msg As String, pr As Variant, a As String, b As String, sa As Object, sb As Object
-    Dim story As Object, f As Object, n As Long, total As Long, out As String, skipped As String
-    Set SKW_LastReport = Nothing
-    msg = SKW_Begin("Remap style", True)
-    If Len(msg) > 0 Then SKW_RemapStyle = msg: Exit Function
-    Set d = ActiveDocument
-    On Error GoTo Fail
-    For Each pr In Split(pairs, "|")
-        If InStr(pr, ">") > 0 Then
-            a = Trim$(Split(pr, ">")(0)): b = Trim$(Split(pr, ">")(1))
-            Set sa = SKW_GetStyle(d, a): Set sb = SKW_GetStyle(d, b)
-            If sa Is Nothing Or sb Is Nothing Then
-                skipped = skipped & "; " & a & " to " & b & " (" & IIf(sa Is Nothing, a, b) & " is not in this document)"
-            Else
-                n = 0
-                For Each story In SKW_Stories(d)
-                    If story.StoryType <> wdCommentsStory Then
-                        n = n + SKW_StyleRanges(story, sa).Count
-                        Set f = story.Duplicate
-                        With f.Find
-                            .ClearFormatting
-                            .Replacement.ClearFormatting
-                            .Text = ""
-                            .Replacement.Text = ""
-                            .Format = True
-                            .Style = sa
-                            .Replacement.Style = sb
-                            .Forward = True
-                            .Wrap = wdFindStop
-                            .Execute Replace:=wdReplaceAll
-                        End With
-                    End If
-                Next
-                total = total + n
-                out = out & "; " & a & " to " & b & ": " & n & " place(s)"
+' =====================================================================
+' Remap Style (1.14.0): by what each paragraph is
+' =====================================================================
+' Every paragraph in a From style is one of: plain, bulleted or numbered by hand (with its level),
+' in a table, or led by a typed bullet. A row of the report is one From style and one of those.
+'   plain            becomes the To style given for the From style (blank: left alone)
+'   bullet, number   becomes the Style of the approved List numbering row of that kind and level in the
+'                    Global Standards workbook. With no such row or style it is left alone: a bullet is never lost
+'   table            left alone unless that one row is applied
+'   typed bullet     always left alone
+' A list that comes from the From style itself is not "by hand": those paragraphs are plain.
+
+Private Function RmStyleHasList(ByVal st As Object) As Boolean
+    Dim lt As Object
+    On Error Resume Next
+    Set lt = st.ListTemplate
+    RmStyleHasList = Not lt Is Nothing
+End Function
+
+Private Function RmTyped(ByVal t As String) As Boolean
+    Dim c As Long, nx As String
+    If Len(t) < 3 Then Exit Function
+    c = AscW(Left$(t, 1))
+    nx = Mid$(t, 2, 1)
+    If nx <> vbTab And nx <> " " Then Exit Function
+    Select Case c
+        Case 8226, 183, 9642, 9679, -3913, 8211, 45, 42: RmTyped = True
+    End Select
+End Function
+
+' "plain|0", "bullet|2", "number|1", "table|0" or "typed|0"
+Private Function RmKind(ByVal p As Object, ByVal styleList As Boolean) As String
+    Dim lt As Long, lvl As Long, ns As Long
+    On Error Resume Next
+    If p.Range.Information(wdWithInTable) Then RmKind = "table|0": Exit Function
+    lt = p.Range.ListFormat.ListType
+    If lt = wdListNoNumbering Or lt = wdListListNumOnly Or styleList Then
+        RmKind = IIf(RmTyped(p.Range.Text), "typed|0", "plain|0")
+        Exit Function
+    End If
+    lvl = p.Range.ListFormat.ListLevelNumber
+    If lvl < 1 Then lvl = 1
+    ns = -1
+    ns = p.Range.ListFormat.ListTemplate.ListLevels(lvl).NumberStyle
+    If ns = wdListNumberStyleBullet Or ns = wdListNumberStylePictureBullet Or (ns = -1 And (lt = wdListBullet Or lt = wdListPictureBullet)) Then
+        RmKind = "bullet|" & lvl
+    Else
+        RmKind = "number|" & lvl
+    End If
+End Function
+
+' The list style the Global Standards give a kind and level, or "" with the reason in why.
+Private Function RmListStyle(ByVal knd As String, ByVal lvl As Long, ByRef why As String) As String
+    Dim r As Object, fmt As String, st As String, isB As Boolean, n As Long
+    On Error Resume Next
+    For Each r In SKW_WbRows("List numbering")
+        n = n + 1
+        st = ""
+        If r.Exists("status") Then st = LCase$(Trim$(r("status")))
+        If Len(st) = 0 Or st = "approved" Then
+            fmt = ""
+            If r.Exists("fmt") Then fmt = LCase$(Trim$(r("fmt")))
+            isB = (fmt = "bullet")
+            If isB = (knd = "bullet") And Val(r("level")) = lvl Then
+                If r.Exists("style") Then RmListStyle = Trim$(r("style"))
+                If Len(RmListStyle) > 0 Then Exit Function
             End If
         End If
     Next
+    If n = 0 Then
+        why = "no Global Standards workbook with a List numbering sheet is chosen"
+    Else
+        why = "the List numbering sheet has no approved " & knd & " row for level " & lvl & " with a Style"
+    End If
+End Function
+
+Private Function RmKindWords(ByVal knd As String) As String
+    Select Case knd
+        Case "plain": RmKindWords = "Not in a list"
+        Case "bullet": RmKindWords = "Bulleted by hand"
+        Case "number": RmKindWords = "Numbered by hand"
+        Case "table": RmKindWords = "In a table"
+        Case "typed": RmKindWords = "Typed bullet"
+    End Select
+End Function
+
+' Does the paragraph carry formatting applied by hand? A quick reading: mixed runs, or the whole
+' paragraph differing from its style in emphasis, font, size or indents.
+Private Function RmHasDirect(ByVal p As Object, ByVal sa As Object) As Boolean
+    Dim f As Object, sf As Object
+    On Error Resume Next
+    Set f = p.Range.Font
+    Set sf = sa.Font
+    If f.Bold = UNDEF Or f.Italic = UNDEF Or f.Underline = UNDEF Or f.Size = UNDEF Or f.Color = UNDEF Or Len(f.Name) = 0 Then RmHasDirect = True: Exit Function
+    If f.Bold <> sf.Bold Or f.Italic <> sf.Italic Or f.Underline <> sf.Underline Or f.Size <> sf.Size Or f.Name <> sf.Name Or f.Color <> sf.Color Then RmHasDirect = True: Exit Function
+    If f.Superscript <> sf.Superscript Or f.Subscript <> sf.Subscript Or f.StrikeThrough <> sf.StrikeThrough Then RmHasDirect = True: Exit Function
+    If p.Range.HighlightColorIndex <> wdNoHighlight Then RmHasDirect = True: Exit Function
+    If p.Range.ListFormat.ListType = wdListNoNumbering Then
+        If Abs(p.LeftIndent - sa.ParagraphFormat.LeftIndent) > 0.05 Or Abs(p.FirstLineIndent - sa.ParagraphFormat.FirstLineIndent) > 0.05 Then RmHasDirect = True: Exit Function
+    End If
+    If Abs(p.SpaceBefore - sa.ParagraphFormat.SpaceBefore) > 0.05 Or Abs(p.SpaceAfter - sa.ParagraphFormat.SpaceAfter) > 0.05 Or p.Alignment <> sa.ParagraphFormat.Alignment Then RmHasDirect = True
+End Function
+
+' One run's formatting, or "" when the range is not one run (something differs inside it).
+Private Function RmSig(ByVal r As Object) As String
+    Dim f As Object, h As Long
+    On Error Resume Next
+    Set f = r.Font
+    h = r.HighlightColorIndex
+    If f.Bold = UNDEF Or f.Italic = UNDEF Or f.Underline = UNDEF Or f.StrikeThrough = UNDEF Or f.Superscript = UNDEF Or f.Subscript = UNDEF _
+        Or f.Color = UNDEF Or f.Size = UNDEF Or Len(f.Name) = 0 Or h = UNDEF Then Exit Function
+    RmSig = f.Bold & "|" & f.Italic & "|" & f.Underline & "|" & f.StrikeThrough & "|" & f.Superscript & "|" & f.Subscript & "|" & f.Color & "|" & h & "|" & f.Size & "|" & f.Name
+End Function
+
+' The runs of a range: each "start|end|signature". Halves the range until each piece is one run.
+Private Function RmRange(ByVal story As Object, ByVal a As Long, ByVal b As Long) As Object
+    Set RmRange = story.Duplicate
+    RmRange.SetRange a, b
+End Function
+
+Private Sub RmRuns(ByVal d As Object, ByVal a As Long, ByVal b As Long, ByVal runs As Collection)
+    Dim sg As String, m As Long
+    If b <= a Then Exit Sub
+    sg = RmSig(RmRange(d, a, b))
+    If Len(sg) > 0 Or b - a = 1 Then
+        If Len(sg) > 0 Then runs.Add a & "|" & b & "|" & sg
+        Exit Sub
+    End If
+    m = a + (b - a) \ 2
+    RmRuns d, a, m, runs
+    RmRuns d, m, b, runs
+End Sub
+
+Private Function RmStyleSig(ByVal st As Object) As String
+    Dim f As Object
+    On Error Resume Next
+    Set f = st.Font
+    RmStyleSig = f.Bold & "|" & f.Italic & "|" & f.Underline & "|" & f.StrikeThrough & "|" & f.Superscript & "|" & f.Subscript & "|" & f.Color & "|" & wdNoHighlight & "|" & f.Size & "|" & f.Name
+End Function
+
+' Puts back, on each run, what differed from the old style. upTo 8: emphasis only. upTo 10: font size and name too.
+Private Sub RmRestore(ByVal d As Object, ByVal runs As Collection, ByVal base As String, ByVal upTo As Long)
+    Dim v As Variant, a() As String, b() As String, r As Object, i As Long
+    On Error Resume Next
+    b = Split(base, "|")
+    For Each v In runs
+        a = Split(v, "|")
+        Set r = RmRange(d, CLng(a(0)), CLng(a(1)))
+        For i = 1 To upTo
+            If a(i + 1) <> b(i - 1) Then
+                Select Case i
+                    Case 1: If r.Font.Bold <> CLng(a(2)) Then r.Font.Bold = CLng(a(2))
+                    Case 2: If r.Font.Italic <> CLng(a(3)) Then r.Font.Italic = CLng(a(3))
+                    Case 3: If r.Font.Underline <> CLng(a(4)) Then r.Font.Underline = CLng(a(4))
+                    Case 4: If r.Font.StrikeThrough <> CLng(a(5)) Then r.Font.StrikeThrough = CLng(a(5))
+                    Case 5: If r.Font.Superscript <> CLng(a(6)) Then r.Font.Superscript = CLng(a(6))
+                    Case 6: If r.Font.Subscript <> CLng(a(7)) Then r.Font.Subscript = CLng(a(7))
+                    Case 7: If r.Font.Color <> CLng(a(8)) Then r.Font.Color = CLng(a(8))
+                    Case 8: If r.HighlightColorIndex <> CLng(a(9)) Then r.HighlightColorIndex = CLng(a(9))
+                    Case 9: If r.Font.Size <> CSng(a(10)) Then r.Font.Size = CSng(a(10))
+                    Case 10: If r.Font.Name <> a(11) Then r.Font.Name = a(11)
+                End Select
+            End If
+        Next
+    Next
+End Sub
+
+' Sets one paragraph. d is the paragraph's story. keep: "all", "text" or "none". Returns "" or a note.
+Private Function RmSet(ByVal d As Object, ByVal p As Object, ByVal sa As Object, ByVal sb As Object, ByVal knd As String, ByVal keep As String) As String
+    Dim runs As New Collection, base As String, isList As Boolean, lt As Object, lvl As Long, targetList As Boolean
+    Dim pf(1 To 6) As Single, al As Long, hadPf As Boolean, a As Long, b As Long
+    On Error Resume Next
+    isList = (knd = "bullet" Or knd = "number")
+    targetList = RmStyleHasList(sb)
+    a = p.Range.Start: b = p.Range.End
+    If keep <> "none" Then
+        base = RmStyleSig(sa)
+        RmRuns d, a, b, runs
+    End If
+    If keep = "all" Then
+        hadPf = True
+        pf(1) = p.LeftIndent: pf(2) = p.FirstLineIndent: pf(3) = p.RightIndent
+        pf(4) = p.SpaceBefore: pf(5) = p.SpaceAfter: pf(6) = p.LineSpacing
+        al = p.Alignment
+    End If
+    If isList Then
+        Set lt = p.Range.ListFormat.ListTemplate
+        lvl = p.Range.ListFormat.ListLevelNumber
+        ' The list style brings its own bullet or number: the one applied by hand comes off first, so there is one.
+        If targetList Then p.Range.ListFormat.RemoveNumbers
+    End If
+    p.Style = sb
+    Set p = RmRange(d, a, a).Paragraphs(1)
+    If isList Then
+        If targetList Then
+            ' The list's own indents were set by hand with the bullet: the list style's take over.
+            p.LeftIndent = sb.ParagraphFormat.LeftIndent
+            p.FirstLineIndent = sb.ParagraphFormat.FirstLineIndent
+        End If
+        If p.Range.ListFormat.ListType = wdListNoNumbering And Not lt Is Nothing Then
+            ' The style has no bullet of its own: the one applied by hand goes back on.
+            p.Range.ListFormat.ApplyListTemplateWithLevel ListTemplate:=lt, ContinuePreviousList:=True, ApplyLevel:=lvl
+            RmSet = "kept the bullet or number applied by hand: " & sb.NameLocal & " has none of its own"
+        End If
+    Else
+        If keep <> "all" Then p.Range.ParagraphFormat.Reset
+    End If
+    If keep <> "all" Then p.Range.Font.Reset
+    If keep = "all" Then
+        RmRestore d, runs, base, 10
+        If hadPf Then
+            If Not isList Then
+                If Abs(pf(1) - sa.ParagraphFormat.LeftIndent) > 0.05 Then p.LeftIndent = pf(1)
+                If Abs(pf(2) - sa.ParagraphFormat.FirstLineIndent) > 0.05 Then p.FirstLineIndent = pf(2)
+            End If
+            If Abs(pf(3) - sa.ParagraphFormat.RightIndent) > 0.05 Then p.RightIndent = pf(3)
+            If Abs(pf(4) - sa.ParagraphFormat.SpaceBefore) > 0.05 Then p.SpaceBefore = pf(4)
+            If Abs(pf(5) - sa.ParagraphFormat.SpaceAfter) > 0.05 Then p.SpaceAfter = pf(5)
+            If al <> sa.ParagraphFormat.Alignment Then p.Alignment = al
+        End If
+    ElseIf keep = "text" Then
+        RmRestore d, runs, base, 8
+    End If
+End Function
+
+' The text of a character style changed to another, as before 1.14.0.
+Private Function RmCharStyle(ByVal d As Object, ByVal sa As Object, ByVal sb As Object) As Long
+    Dim story As Object, f As Object, n As Long
+    For Each story In SKW_Stories(d)
+        If story.StoryType <> wdCommentsStory Then
+            n = n + SKW_StyleRanges(story, sa).Count
+            Set f = story.Duplicate
+            With f.Find
+                .ClearFormatting
+                .Replacement.ClearFormatting
+                .Text = ""
+                .Replacement.Text = ""
+                .Format = True
+                .Style = sa
+                .Replacement.Style = sb
+                .Forward = True
+                .Wrap = wdFindStop
+                .Execute Replace:=wdReplaceAll
+            End With
+        End If
+    Next
+    RmCharStyle = n
+End Function
+
+' The work behind the check and the apply.
+'   doIt False: fills groups (key -> Array(count, withDirect, becomes, note, changes)) and changes nothing.
+'   doIt True: sets the paragraphs. onlyKey "" for every row, or one row's key. selA, selB: the selection, or -1.
+Private Function RmWalk(ByVal d As Object, ByVal pairs As String, ByVal doIt As Boolean, ByVal keep As String, ByVal onlyKey As String, _
+                        ByVal selA As Long, ByVal selB As Long, ByVal selStory As Long, ByVal groups As Object, ByRef skipped As String, ByRef notes As String) As Long
+    Dim pr As Variant, a As String, b As String, sa As Object, sb As Object, st As Object, story As Object, rg As Object, p As Object
+    Dim kd As String, knd As String, lvl As Long, key As String, target As String, why As String, will As Boolean, g As Variant
+    Dim styleList As Boolean, n As Long, paras As Collection, v As Variant, nt As String, seen As Object, tname As Object
+    Set tname = CreateObject("Scripting.Dictionary")
+    For Each pr In Split(pairs, "|")
+        If InStr(pr, ">") > 0 Then
+            a = Trim$(Split(pr, ">")(0)): b = Trim$(Split(pr, ">")(1))
+            Set sa = SKW_GetStyle(d, a)
+            Set sb = Nothing
+            If Len(b) > 0 Then Set sb = SKW_GetStyle(d, b)
+            If sa Is Nothing Then
+                skipped = skipped & "; " & a & " (" & a & " is not in this document)"
+            ElseIf Len(b) > 0 And sb Is Nothing Then
+                skipped = skipped & "; " & a & " to " & b & " (" & b & " is not in this document)"
+            ElseIf sa.Type = wdStyleTypeCharacter Then
+                If sb Is Nothing Then
+                    skipped = skipped & "; " & a & " (a character style needs a style to change to)"
+                Else
+                    key = a & "|char|0"
+                    If doIt Then
+                        If Len(onlyKey) = 0 Or onlyKey = key Then n = n + RmCharStyle(d, sa, sb)
+                    Else
+                        groups(key) = Array(0, 0, b, "Character style: the text takes " & b, True)
+                        For Each story In SKW_Stories(d)
+                            If story.StoryType <> wdCommentsStory Then
+                                g = groups(key): g(0) = g(0) + SKW_StyleRanges(story, sa).Count: groups(key) = g
+                            End If
+                        Next
+                    End If
+                End If
+            Else
+                styleList = RmStyleHasList(sa)
+                For Each story In SKW_Stories(d)
+                    If story.StoryType <> wdCommentsStory Then
+                        ' The paragraphs first: a style change does not move them.
+                        Set paras = New Collection
+                        Set seen = CreateObject("Scripting.Dictionary")
+                        For Each rg In SKW_StyleRanges(story, sa)
+                            For Each p In rg.Paragraphs
+                                If Not seen.Exists(p.Range.Start) Then
+                                    seen(p.Range.Start) = 1
+                                    paras.Add p.Range.Start
+                                End If
+                            Next
+                        Next
+                        SKW_Steps paras.Count, "Paragraph"
+                        For Each v In paras
+                            SKW_Step
+                            Set p = RmParaAt(story, CLng(v))
+                            If Not p Is Nothing Then
+                                kd = RmKind(p, styleList)
+                                knd = Split(kd, "|")(0): lvl = Val(Split(kd, "|")(1))
+                                key = a & "|" & kd
+                                target = "": why = "": will = False
+                                Select Case knd
+                                    Case "plain"
+                                        If sb Is Nothing Then why = "no style was given for paragraphs that are not in a list" Else target = b: will = True
+                                    Case "bullet", "number"
+                                        If Not tname.Exists(kd) Then tname(kd) = RmListStyle(knd, lvl, why): tname(kd & "?") = why
+                                        target = tname(kd): why = tname(kd & "?")
+                                        If Len(target) > 0 Then
+                                            If SKW_GetStyle(d, target) Is Nothing Then
+                                                why = target & " is not in this document (Import Team Styles brings it in)": target = ""
+                                            Else
+                                                will = True
+                                            End If
+                                        End If
+                                    Case "table"
+                                        If sb Is Nothing Then
+                                            why = "no style was given"
+                                        Else
+                                            target = b
+                                            why = "tables are left alone unless this row is applied by its number"
+                                            will = (onlyKey = key)
+                                        End If
+                                    Case "typed"
+                                        why = "the bullet is typed text, not a list"
+                                End Select
+                                If Not doIt Then
+                                    If Not groups.Exists(key) Then groups(key) = Array(0, 0, target, why, will Or (knd = "table" And Len(target) > 0))
+                                    g = groups(key)
+                                    g(0) = g(0) + 1
+                                    If RmHasDirect(p, sa) Then g(1) = g(1) + 1
+                                    groups(key) = g
+                                    If will Then n = n + 1
+                                ElseIf will And (Len(onlyKey) = 0 Or onlyKey = key) Then
+                                    If selA < 0 Or (story.StoryType = selStory And p.Range.Start < selB And p.Range.End > selA) Then
+                                        Set st = SKW_GetStyle(d, target)
+                                        nt = RmSet(story, p, sa, st, knd, keep)
+                                        If Len(nt) > 0 And InStr(notes, nt) = 0 Then notes = notes & "; " & nt
+                                        n = n + 1
+                                    End If
+                                End If
+                            End If
+                        Next
+                    End If
+                Next
+            End If
+        End If
+    Next
+    RmWalk = n
+End Function
+
+' A paragraph by its start in a story that is not the main text.
+Private Function RmParaAt(ByVal story As Object, ByVal pos As Long) As Object
+    Dim r As Object
+    On Error Resume Next
+    Set r = story.Duplicate
+    r.SetRange pos, pos
+    Set RmParaAt = r.Paragraphs(1)
+End Function
+
+' Word moves text from Normal to List Paragraph when someone clicks a bullet or number on it. When Normal is
+' being changed and List Paragraph is not, say how many list paragraphs sit there.
+Private Function RmListParaHint(ByVal d As Object, ByVal pairs As String) As String
+    Dim pr As Variant, nm As String, lp As String, hasNormal As Boolean, hasLp As Boolean, st As Object, n As Long, story As Object
+    On Error Resume Next
+    nm = d.Styles(wdStyleNormal).NameLocal
+    lp = d.Styles(wdStyleListParagraph).NameLocal
+    For Each pr In Split(pairs, "|")
+        If LCase$(Trim$(Split(pr & ">", ">")(0))) = LCase$(nm) Then hasNormal = True
+        If LCase$(Trim$(Split(pr & ">", ">")(0))) = LCase$(lp) Then hasLp = True
+    Next
+    If Not hasNormal Or hasLp Or Len(lp) = 0 Then Exit Function
+    Set st = d.Styles(lp)
+    For Each story In SKW_Stories(d)
+        If story.StoryType <> wdCommentsStory Then n = n + SKW_StyleRanges(story, st).Count
+    Next
+    If n > 0 Then RmListParaHint = "This document also has text in " & lp & " in " & n & " place(s): the style Word gives text that is bulleted or numbered from " & nm & _
+        ". Name " & lp & " as another style to change, and its bullets go to the list styles too."
+End Function
+
+' The key of a numbered row of the last check, or "".
+Public Function SKW_RemapRowKey(ByVal n As Long) As String
+    If n >= 1 And n <= mRmCount Then SKW_RemapRowKey = mRmKeys(n)
+End Function
+
+' pairs: "From>To|From>To". To may be blank: paragraphs not in a list are then left alone.
+Public Function SKW_RemapCheck(ByVal pairs As String) As String
+    Dim d As Object, msg As String, rows As New Collection, groups As Object, skipped As String, notes As String, n As Long
+    Dim k As Variant, a() As String, g As Variant, i As Long, wasSaved As Boolean, alone As Long, hint As String
+    Set SKW_LastReport = Nothing
+    SKW_Fixable = 0
+    mRmCount = 0
+    msg = SKW_Begin("Remap style: reading", False)
+    If Len(msg) > 0 Then SKW_RemapCheck = msg: Exit Function
+    Set d = ActiveDocument
+    wasSaved = d.Saved
+    Set groups = CreateObject("Scripting.Dictionary")
+    n = RmWalk(d, pairs, False, "all", "", -1, -1, 0, groups, skipped, notes)
+    hint = RmListParaHint(d, pairs)
+    If wasSaved And Not d.Saved Then d.Saved = True
     SKW_Finish
-    SKW_RemapStyle = "Remapped " & total & " place(s)" & IIf(Len(out) > 0, ": " & Mid$(out, 3), "") & "." & _
+    If groups.Count > 0 Then ReDim mRmKeys(1 To groups.Count)
+    For Each k In groups.Keys
+        i = i + 1
+        mRmKeys(i) = k
+        a = Split(k, "|")
+        g = groups(k)
+        If a(1) = "char" Then n = n + g(0)
+        If Len(g(2)) = 0 Or (a(1) = "table") Then alone = alone + g(0)
+        rows.Add SKW_Row(i, a(0), IIf(a(1) = "char", "Character style", RmKindWords(a(1))), IIf(Val(a(2)) > 0, a(2), ""), g(0), g(1), _
+            IIf(Len(g(2)) > 0 And a(1) <> "table", g(2), "Left alone"), IIf(a(1) = "table" And Len(g(2)) > 0, "Would become " & g(2) & ": ", "") & g(3))
+    Next
+    mRmCount = i
+    SKW_Fixable = n
+    msg = n & " paragraph(s) would change style and " & alone & " would be left alone, in " & i & " row(s)."
+    If i = 0 Then msg = "Nothing in this document is in the style(s) named."
+    If Len(skipped) > 0 Then msg = msg & " Skipped: " & Mid$(skipped, 3) & "."
+    If Len(hint) > 0 Then msg = msg & " " & hint
+    If i > 0 Then
+        SKW_Report "Remap Style", msg & " A paragraph bulleted or numbered by hand goes to the list style the Global Standards' List numbering sheet gives its level, " & _
+            "and is left alone when there is none: a bullet is never lost. Apply every row, one row by its number, or the selection. Changes nothing.", _
+            Array("Row", "Style now", "What the paragraph is", "List level", "Paragraphs", "With formatting by hand", "Becomes", "Note"), rows
+    End If
+    SKW_RemapCheck = msg
+End Function
+
+' keep: "all", "text" (emphasis only) or "none". scope: "all" or "selection". onlyKey: "" or one row's key.
+Public Function SKW_RemapApply(ByVal pairs As String, ByVal keep As String, ByVal scope As String, ByVal onlyKey As String) As String
+    Dim d As Object, msg As String, skipped As String, notes As String, n As Long, selA As Long, selB As Long, selStory As Long
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_RemapApply = "Open a document first.": Exit Function
+    Set d = ActiveDocument
+    selA = -1: selB = -1
+    If LCase$(scope) = "selection" Then
+        selA = Selection.Range.Start: selB = Selection.Range.End: selStory = Selection.Range.StoryType
+        If selB = selA Then selB = selA + 1
+    End If
+    keep = LCase$(keep)
+    If keep <> "text" And keep <> "none" Then keep = "all"
+    msg = SKW_Begin("Remap style", True)
+    If Len(msg) > 0 Then SKW_RemapApply = msg: Exit Function
+    On Error GoTo Fail
+    n = RmWalk(d, pairs, True, keep, onlyKey, selA, selB, selStory, Nothing, skipped, notes)
+    SKW_Finish
+    SKW_RemapApply = "Remapped " & n & " paragraph(s)" & IIf(Len(onlyKey) > 0, " in the row " & Replace(onlyKey, "|", ", "), "") & _
+        IIf(selA >= 0, " in the selection", "") & ". Formatting by hand: " & _
+        IIf(keep = "all", "kept", IIf(keep = "text", "emphasis kept; fonts, sizes, indents and spacing take the style's", "cleared")) & "." & _
+        IIf(Len(notes) > 0, vbCr & "Note: " & Mid$(notes, 3) & ".", "") & _
         IIf(Len(skipped) > 0, vbCr & "Skipped: " & Mid$(skipped, 3) & ".", "") & vbCr & "One Ctrl+Z undoes it."
     Exit Function
 Fail:
     msg = Err.Description
     SKW_Finish
-    SKW_RemapStyle = "Stopped: " & msg & ". Press Ctrl+Z to undo what was done."
+    SKW_RemapApply = "Stopped: " & msg & ". Press Ctrl+Z to undo what was done."
+End Function
+
+' pairs: "From>To|From>To". Every row, formatting by hand kept. Kept for callers from before 1.14.0.
+Public Function SKW_RemapStyle(ByVal pairs As String) As String
+    SKW_RemapStyle = SKW_RemapApply(pairs, "all", "all", "")
 End Function
 
 ' ---------------------------------------------------------------------
