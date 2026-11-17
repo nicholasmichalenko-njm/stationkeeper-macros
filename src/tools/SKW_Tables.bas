@@ -1433,3 +1433,54 @@ Public Function SKW_ShowTableRoles() As String
 Fail:
     SKW_ShowTableRoles = "The view could not be changed: " & Err.Description
 End Function
+
+' ---------------------------------------------------------------------
+' Add rows to the table at the cursor (1.18.0)
+' ---------------------------------------------------------------------
+' Adds several empty rows to the table the cursor is in: at the end, or below the row the cursor is in. Says how many rows the table has and asks how many more. The new rows take the look of the row they follow. One Ctrl+Z undoes it.
+Public Sub AddTableRows()
+    Dim t As Object, n As String, pos As String, cur As Long
+    If SKW_IsQuiet() Then Exit Sub
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    If Not Selection.Information(wdWithInTable) Then SKW_Say "Click in a table first.": Exit Sub
+    Set t = Selection.Tables(1)
+    cur = Selection.Information(wdEndOfRangeRowNumber)
+    n = InputBox("This table has " & t.Rows.Count & " row(s) and " & t.Columns.Count & " column(s). The cursor is in row " & cur & "." & vbCr & vbCr & _
+        "How many rows do you need to add?", "Add Rows to Table", "1")
+    If Len(Trim$(n)) = 0 Then Exit Sub
+    pos = InputBox("Where do the " & Val(n) & " new row(s) go?" & vbCr & vbCr & "1  At the end of the table" & vbCr & "2  Below row " & cur & ", where the cursor is" & vbCr & vbCr & _
+        "The new rows take the look of the row they follow. Type the number.", "Add Rows to Table", "1")
+    If Len(pos) = 0 Then Exit Sub
+    SKW_Show SKW_AddTableRows(Val(n), pos <> "2")
+End Sub
+
+' atEnd True: after the last row. False: below the row the cursor is in.
+Public Function SKW_AddTableRows(ByVal n As Long, ByVal atEnd As Boolean) As String
+    Dim t As Object, msg As String, was As Long, cur As Long, ed As String
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_AddTableRows = "Open a document first.": Exit Function
+    If Not Selection.Information(wdWithInTable) Then SKW_AddTableRows = "Click in a table first. Nothing was changed.": Exit Function
+    If n < 1 Or n > 500 Then SKW_AddTableRows = "Type a number of rows from 1 to 500. Nothing was changed.": Exit Function
+    msg = SKW_Begin("Add rows to table", True)
+    If Len(msg) > 0 Then SKW_AddTableRows = msg: Exit Function
+    On Error GoTo Fail
+    Set t = Selection.Tables(1)
+    was = t.Rows.Count
+    cur = Selection.Information(wdEndOfRangeRowNumber)
+    If atEnd Then
+        t.Range.Cells(t.Range.Cells.Count).Select
+        cur = was
+    Else
+        Selection.Collapse wdCollapseStart
+    End If
+    Selection.InsertRowsBelow n
+    Selection.Collapse wdCollapseStart
+    SKW_Finish
+    SKW_AddTableRows = n & " row(s) added " & IIf(atEnd, "at the end of the table", "below row " & cur) & ". The table had " & was & " row(s) and now has " & t.Rows.Count & _
+        ". The new rows take the look of row " & cur & "." & vbCr & "One Ctrl+Z undoes it."
+    Exit Function
+Fail:
+    ed = Err.Description
+    SKW_Finish
+    SKW_AddTableRows = "Stopped: " & ed & ". Press Ctrl+Z to undo what was done."
+End Function

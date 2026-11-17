@@ -380,6 +380,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Review.BannedPhrasesReview", "Banned Phrases Review", "Before delivery", _
         "Finds the team's banned phrases in the selection or the whole body. Ones with a replacement are changed as tracked changes; every finding gets a comment naming the rule. One Ctrl+Z undoes it.", _
         "banned, phrases, plain language, words, wording, style guide, track", "Text, Comments and tracking", "Selection or whole document", "Yes")
+    s = s & "," & T("SKW_Tables.AddTableRows", "Add Rows to Table", "Tables", _
+        "Adds several empty rows to the table the cursor is in. Says how many rows the table has, asks how many more you need, and puts them at the end or below the cursor's row. The new rows take the look of the row they follow. One Ctrl+Z undoes it.", _
+        "tables, rows, add rows, insert rows, more rows", "Tables", "Table at the cursor", "Yes")
     s = s & "," & T("SKW_Tables.TableRolesCheck", "Table Roles Check", "Tables", _
         "Report of every table's rows by role (caption, header, divider, total, body) and its cells by kind (number, short text, long text), with the rows to look at. Changes nothing, then offers to style every table in a copy.", _
         "tables, roles, total row, divider row, numbers, alignment, format all tables, fix", "Tables", "Whole document", "No, it reports; the fix works on a copy")

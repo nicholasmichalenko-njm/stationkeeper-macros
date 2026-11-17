@@ -2315,3 +2315,44 @@ Bad:
     SKW_SetEffortStdPath prevE
     d.Close SaveChanges:=0
 End Function
+
+' 1.18.0: add rows to the table at the cursor. A fictional 3 by 3 table: a bold header row, then two body rows.
+Public Function TW_AddRows() As String
+    Dim d As Object, t As Object, s As String, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.Content.InsertAfter "Before" & vbCr & "After"
+    Set t = d.Tables.Add(d.Paragraphs(2).Range, 3, 3)
+    t.Cell(1, 1).Range.Text = "Head": t.Cell(2, 1).Range.Text = "Body one": t.Cell(3, 1).Range.Text = "Body two"
+    t.Rows(1).Range.Font.Bold = True
+    t.Rows(3).Range.Font.Italic = True
+    d.UndoClear
+    stage = "outside"
+    d.Paragraphs(1).Range.Select
+    Selection.Collapse wdCollapseStart
+    s = "outside: " & SKW_AddTableRows(2, True)
+    stage = "end"
+    t.Cell(2, 2).Range.Select
+    Selection.Collapse wdCollapseStart
+    s = s & " ## bad: " & SKW_AddTableRows(0, True) & " rows=" & t.Rows.Count
+    s = s & " ## end: " & Replace(SKW_AddTableRows(4, True), vbCr, " / ") & " rows=" & t.Rows.Count & " cols=" & t.Columns.Count & _
+        " last=[" & Replace(Replace(t.Cell(7, 1).Range.Text, vbCr, ""), Chr$(7), "") & "] italic=" & (t.Rows(7).Range.Font.Italic = True) & " third=" & Replace(Replace(t.Cell(3, 1).Range.Text, vbCr, ""), Chr$(7), "")
+    d.Undo 1
+    s = s & " ## undone: rows=" & t.Rows.Count
+    stage = "below"
+    t.Cell(1, 2).Range.Select
+    Selection.Collapse wdCollapseStart
+    s = s & " ## below: " & Replace(SKW_AddTableRows(2, False), vbCr, " / ") & " rows=" & t.Rows.Count & " second=[" & Replace(Replace(t.Cell(2, 1).Range.Text, vbCr, ""), Chr$(7), "") & _
+        "] bold=" & (t.Rows(2).Range.Font.Bold = True) & " fourth=" & Replace(Replace(t.Cell(4, 1).Range.Text, vbCr, ""), Chr$(7), "")
+    d.Close SaveChanges:=0
+    TW_AddRows = s
+    Exit Function
+Bad:
+    TW_AddRows = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    d.Close SaveChanges:=0
+End Function

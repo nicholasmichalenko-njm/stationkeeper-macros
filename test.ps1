@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 81 tools arrive described, categorised and in the menu' (($tc -like '81 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 82 tools arrive described, categorised and in the menu' (($tc -like '82 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -739,6 +739,13 @@ try {
         Check '1.17.0: writing changes only the rows that differ; a row keeps its status and name, and no row is removed' (($cp -match '## hwrite: 1 heading level\(s\) changed and 0 added') -and ($cp -match '## hrow: text=Section %1 at=0?\.75 status=Approved name=Heading 1 headings=9 h2=%1\.%2')) $cp
         Check '1.17.0: nothing is written while the workbook is held open' ($cp -match '## locked: The Global Standards workbook is open in Excel or held by another program\.[^#]*Nothing was written\. after=2') $cp
         Check '1.17.0: a workbook without the sheet, and no workbook, are refused with the reason' (($cp -match '## nosheet: The workbook has no Phrases sheet\.') -and ($cp -match '## nostd: No Global Standards workbook is chosen\.')) $cp
+        # 12j. 1.18.0: add rows to the table at the cursor.
+        $ar = RunW $word 'SKW_Test.TW_AddRows'
+        Write-Output "ADDROWS: $ar"
+        Check '1.18.0: outside a table, or with a number that is not 1 to 500, nothing is changed' (($ar -match '^outside: Click in a table first\. Nothing was changed\.') -and ($ar -match '## bad: Type a number of rows from 1 to 500\. Nothing was changed\. rows=3')) $ar
+        Check '1.18.0: rows are added at the end, empty, with the look of the last row, and the message counts before and after' (($ar -match '## end: 4 row\(s\) added at the end of the table\. The table had 3 row\(s\) and now has 7\.') -and ($ar -match 'rows=7 cols=3 last=\[\] italic=True third=Body two')) $ar
+        Check '1.18.0: one Ctrl+Z takes the added rows back out' ($ar -match '## undone: rows=3 ##') $ar
+        Check '1.18.0: rows are added below the row the cursor is in, with that row''s look' (($ar -match '## below: 2 row\(s\) added below row 1\. The table had 3 row\(s\) and now has 5\.') -and ($ar -match 'rows=5 second=\[\] bold=True fourth=Body one')) $ar
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp
