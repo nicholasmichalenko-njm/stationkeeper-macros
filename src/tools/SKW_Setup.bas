@@ -380,6 +380,9 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Review.BannedPhrasesReview", "Banned Phrases Review", "Before delivery", _
         "Finds the team's banned phrases in the selection or the whole body. Ones with a replacement are changed as tracked changes; every finding gets a comment naming the rule. One Ctrl+Z undoes it.", _
         "banned, phrases, plain language, words, wording, style guide, track", "Text, Comments and tracking", "Selection or whole document", "Yes")
+    s = s & "," & T("SKW_Fields.StyleCrossReferences", "Style Cross-References", "Fields", _
+        "Gives every cross-reference in the document the team's cross-reference character style, and sets each one to keep it when fields update. The style's name comes from the Global Standards (Settings: cross_reference_style). Reports first. Tables of contents and figures are left alone. One Ctrl+Z undoes it.", _
+        "cross-references, style, character style, ref, fields, see section", "Cross-references, Fields, Styles", "Whole document", "Yes")
     s = s & "," & T("SKW_Tables.AddTableRows", "Add Rows to Table", "Tables", _
         "Adds several empty rows to the table the cursor is in. Says how many rows the table has, asks how many more you need, and puts them at the end or below the cursor's row. The new rows take the look of the row they follow. One Ctrl+Z undoes it.", _
         "tables, rows, add rows, insert rows, more rows", "Tables", "Table at the cursor", "Yes")
@@ -574,7 +577,7 @@ End Function
 ' Tools that read team rules (the standards workbook now, the effort's data once linked) are
 ' "Built for Stationkeeper": they run on their own. The rest are general tools with no tie.
 Private Function SkKind(ByVal run As String) As String
-    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|ChooseEffortStandardsWorkbook|CaptureStyles|CaptureBannedPhrase|CaptureHeadingNumbering|PreDeliveryLeftovers|StyleInspector|" & _
+    Const BUILT As String = "|MakeStandardsWorkbook|ChooseStandardsWorkbook|ChooseEffortStandardsWorkbook|CaptureStyles|CaptureBannedPhrase|CaptureHeadingNumbering|StyleCrossReferences|PreDeliveryLeftovers|StyleInspector|" & _
         "NonAllowedStyleReport|DirectFormattingReport|ClearDirectFormattingSelection|TableStandardsAudit|" & _
         "BannedPhrasesReview|CaptionAudit|ImportTeamStyles|RemapStyle|KeepWithNextAudit|" & _
         "AcronymQuickCheck|LoadTeamDictionaries|PageLimitCounter|RemoveUnusedCustomStyles|DeleteUnusedStyles|" & _

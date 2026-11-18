@@ -2342,6 +2342,7 @@ Public Function TW_AddRows() As String
     s = s & " ## end: " & Replace(SKW_AddTableRows(4, True), vbCr, " / ") & " rows=" & t.Rows.Count & " cols=" & t.Columns.Count & _
         " last=[" & Replace(Replace(t.Cell(7, 1).Range.Text, vbCr, ""), Chr$(7), "") & "] italic=" & (t.Rows(7).Range.Font.Italic = True) & " third=" & Replace(Replace(t.Cell(3, 1).Range.Text, vbCr, ""), Chr$(7), "")
     d.Undo 1
+    Set t = d.Tables(1)
     s = s & " ## undone: rows=" & t.Rows.Count
     stage = "below"
     t.Cell(1, 2).Range.Select
@@ -2354,5 +2355,83 @@ Public Function TW_AddRows() As String
 Bad:
     TW_AddRows = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
     On Error Resume Next
+    d.Close SaveChanges:=0
+End Function
+
+' 1.19.0: Style Cross-References. A fictional document: a heading with a bookmark, a sentence with a REF and
+' a PAGEREF to it, and a table of contents (whose own page references must be left alone).
+Private Function XrefState(ByVal d As Object) As String
+    Dim f As Object, s As String, st As Object, nm As String
+    For Each f In d.Fields
+        If f.Type = wdFieldRef Or f.Type = wdFieldPageRef Then
+            nm = "(mixed)"
+            Set st = Nothing
+            On Error Resume Next
+            Set st = f.Result.CharacterStyle
+            On Error GoTo 0
+            If Not st Is Nothing Then nm = st.NameLocal
+            s = s & " [" & IIf(f.Type = wdFieldRef, "REF", "PAGEREF") & " " & Replace(f.Result.Text, vbCr, "") & " | " & nm & " | " & _
+                IIf(InStr(1, f.Code.Text, "CHARFORMAT", vbTextCompare) > 0, "C", "") & IIf(InStr(1, f.Code.Text, "MERGEFORMAT", vbTextCompare) > 0, "M", "") & "]"
+        End If
+    Next
+    XrefState = Mid$(s, 2)
+End Function
+
+Public Function TW_Xref(ByVal std As String) As String
+    Dim d As Object, s As String, prev As String, st As Object, r As Object, stage As String, br As Object
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    prev = SKW_StandardsPath()
+    SKW_SetStandardsPath std
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.TrackRevisions = False
+    d.Content.Delete
+    d.ActiveWindow.View.ShowFieldCodes = False
+    d.Content.InsertAfter "Scope" & vbCr & "See  on page  for more." & vbCr & "Contents" & vbCr & "End"
+    d.Paragraphs(1).Style = d.Styles(wdStyleHeading1)
+    Set r = d.Paragraphs(1).Range
+    r.MoveEnd wdCharacter, -1
+    d.Bookmarks.Add "bk1", r
+    Set st = d.Styles.Add("ZZ Xref", wdStyleTypeCharacter)
+    st.Font.Italic = True
+    Set r = d.Paragraphs(2).Range
+    r.SetRange r.Start + 4, r.Start + 4
+    r.Fields.Add r, wdFieldEmpty, "REF bk1 \h", True
+    Set r = d.Paragraphs(2).Range
+    r.SetRange r.End - 11, r.End - 11
+    r.Fields.Add r, wdFieldEmpty, "PAGEREF bk1 \h", False
+    Set r = d.Paragraphs(4).Range
+    r.Collapse wdCollapseStart
+    d.TablesOfContents.Add Range:=r, UseHeadingStyles:=True
+    d.Fields.Update
+    d.UndoClear
+    stage = "check"
+    s = "name=" & SKW_XrefStyleName() & " start: " & XrefState(d)
+    s = s & " ## check: " & SKW_XrefStyleCheck("") & " fixable=" & SKW_Fixable & " ## " & ReportText()
+    CloseReport
+    d.Activate
+    stage = "apply"
+    s = s & " ## apply: " & Replace(SKW_XrefStyleApply(""), vbCr, " / ") & " ## " & XrefState(d)
+    d.Undo 1
+    s = s & " ## undone: " & XrefState(d)
+    s = s & " ## again: " & Replace(SKW_XrefStyleApply(""), vbCr, " / ")
+    stage = "update"
+    Set br = d.Bookmarks("bk1").Range
+    br.Text = "Scope and limits"
+    d.Bookmarks.Add "bk1", br
+    d.Fields.Update
+    s = s & " ## updated: " & XrefState(d)
+    s = s & " ## recheck: " & SKW_XrefStyleCheck("")
+    stage = "refusals"
+    s = s & " ## para: " & SKW_XrefStyleCheck("Heading 1") & " ## missing: " & SKW_XrefStyleCheck("No Such Style")
+    SKW_SetStandardsPath prev
+    d.Close SaveChanges:=0
+    TW_Xref = s
+    Exit Function
+Bad:
+    TW_Xref = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
     d.Close SaveChanges:=0
 End Function

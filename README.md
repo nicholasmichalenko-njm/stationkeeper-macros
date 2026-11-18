@@ -151,7 +151,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 82 tools in 1.18.0)
+## Stationkeeper Tools (0.4.0 and later; 83 tools in 1.19.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 
@@ -388,6 +388,7 @@ Clears the Styles pane down to what the document uses. It reports first, then as
 | Import Team Styles | Brings the style definitions in from the team template (setting StyleSource, else the attached template) and lists which changed | Yes, one Ctrl+Z |
 | Remap Style | Changes a style to another by what each paragraph is (see below) | Yes, one Ctrl+Z |
 | Add Rows to Table (1.18.0) | Click in a table. It says how many rows the table has and asks how many more you need, then adds them at the end or below the cursor's row. The new rows are empty and take the look of the row they follow | Yes, one Ctrl+Z |
+| Style Cross-References (1.19.0) | Gives every cross-reference (a REF, PAGEREF or NOTEREF field) the team's cross-reference character style and sets each field to keep it when fields update (`\* CHARFORMAT` in place of `\* MERGEFORMAT`). The style's name comes from the Global Standards: a Settings row named `cross_reference_style`. Without one, you pick from the document's character styles by number. Reports first. Tables of contents and figures are left alone | Yes, one Ctrl+Z |
 | Pagination Check | One report with two parts. Keep with next: headings and captions above tables that can be stranded at a page bottom, long kept chains. Breaks and spacing: manual page and column breaks, empty paragraphs used as spacing, line breaks ending paragraphs, body text starting a new page | No, report |
 | Typed Lists Finder | Paragraphs starting with a typed bullet or number instead of a real list | No, report |
 | TOC Check | Headings missing from the contents, entries whose heading changed, page numbers out of date | No, report |

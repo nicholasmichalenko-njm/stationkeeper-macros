@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 82 tools arrive described, categorised and in the menu' (($tc -like '82 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 83 tools arrive described, categorised and in the menu' (($tc -like '83 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -746,6 +746,15 @@ try {
         Check '1.18.0: rows are added at the end, empty, with the look of the last row, and the message counts before and after' (($ar -match '## end: 4 row\(s\) added at the end of the table\. The table had 3 row\(s\) and now has 7\.') -and ($ar -match 'rows=7 cols=3 last=\[\] italic=True third=Body two')) $ar
         Check '1.18.0: one Ctrl+Z takes the added rows back out' ($ar -match '## undone: rows=3 ##') $ar
         Check '1.18.0: rows are added below the row the cursor is in, with that row''s look' (($ar -match '## below: 2 row\(s\) added below row 1\. The table had 3 row\(s\) and now has 5\.') -and ($ar -match 'rows=5 second=\[\] bold=True fourth=Body one')) $ar
+        # 12k. 1.19.0: Style Cross-References (the style's name from the capture workbook's Settings sheet).
+        $xr = RunW $word 'SKW_Test.TW_Xref' $capStd
+        Write-Output "XREF: $xr"
+        Check '1.19.0: the cross-reference style is named on the Global Standards'' Settings sheet' ($xr -match '^name=ZZ Xref start: \[REF Scope \| [^|]+ \| M\] \[PAGEREF \d+ \| [^|]+ \| \]') $xr
+        Check '1.19.0: the check counts the cross-references outside the table of contents and says what the fix does' (($xr -match '## check: 2 cross-reference\(s\): 2 are not in ZZ Xref, or would lose it when fields update\. fixable=2') -and ($xr -match '\| Text or number \| Scope \| [^|]+\| No \| Takes ZZ Xref; set to hold it when fields update') -and ($xr -match '\| Page number \| \d+ \|')) $xr
+        Check '1.19.0: every cross-reference takes the style and is set to keep it; the table of contents is left alone' (($xr -match '## apply: 2 of 2 cross-reference\(s\) set to ZZ Xref') -and ($xr -match '## apply: [^#]*## \[REF Scope \| ZZ Xref \| C\] \[PAGEREF \d+ \| ZZ Xref \| C\]( \[PAGEREF \d+ \| (?!ZZ Xref)[^|]+ \| [^\]]*\])* ## undone')) $xr
+        Check '1.19.0: one Ctrl+Z puts the cross-references back' ($xr -match '## undone: \[REF Scope \| (?!ZZ Xref)[^|]+ \| M\] \[PAGEREF \d+ \| (?!ZZ Xref)[^|]+ \| \]') $xr
+        Check '1.19.0: the style holds when the fields update and the text changes' (($xr -match '## updated: \[REF Scope and limits \| ZZ Xref \| C\] \[PAGEREF \d+ \| ZZ Xref \| C\]') -and ($xr -match '## recheck: 2 cross-reference\(s\): 0 are not in ZZ Xref')) $xr
+        Check '1.19.0: a paragraph style and a style the document lacks are refused with the reason' (($xr -match '## para: Heading 1 is a paragraph style\.') -and ($xr -match '## missing: The style No Such Style is not in this document\.')) $xr
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

@@ -4,6 +4,7 @@ Attribute VB_Name = "SKW_Fields"
 '   SafeUpdateAllFields      updates every field, outside-file fields kept as they are
 '   FindBrokenReferences     report: references, links and included files that are broken
 '   FieldCodeReport          report: every field with its code and result
+'   StyleCrossReferences     gives every cross-reference the team's character style, and makes it hold
 ' Each macro calls a SKW_ function that does the work and returns a summary.
 ' =====================================================================
 Option Explicit
@@ -216,3 +217,206 @@ Public Function SKW_FieldCodeReport() As String
     SKW_Report "Field Code Report", intro & " Changes nothing.", Array("Type", "Code", "Result", "Where", "Page", "Locked"), rows
     SKW_FieldCodeReport = total & " field(s) listed."
 End Function
+
+' ---------------------------------------------------------------------
+' Style Cross-References (1.19.0)
+' ---------------------------------------------------------------------
+' Word has no setting that gives cross-references a style. A cross-reference is a field (REF, PAGEREF or
+' NOTEREF). This tool gives every one of them the team's character style, and sets the field so the style
+' holds when fields update: the field's own switch \* CHARFORMAT makes its result take the look of the field,
+' so the style is put on the whole field and \* MERGEFORMAT, which would hold the old look, is taken off.
+' The style's name comes from the Global Standards: the Settings row cross_reference_style.
+' Fields inside a table of contents or a table of figures are left alone.
+
+Public Function SKW_XrefStyleName() As String
+    Dim r As Object
+    For Each r In SKW_WbRows("Settings")
+        If r.Exists("name") Then
+            If LCase$(Trim$(r("name"))) = "cross_reference_style" Then
+                If r.Exists("value") Then SKW_XrefStyleName = Trim$(r("value"))
+                Exit Function
+            End If
+        End If
+    Next
+End Function
+
+Private Function XrefInToc(ByVal d As Object, ByVal f As Object, ByVal spans As Collection) As Boolean
+    Dim v As Variant, p As Long
+    On Error Resume Next
+    If f.Code.StoryType <> wdMainTextStory Then Exit Function
+    p = f.Code.Start
+    For Each v In spans
+        If p >= v(0) And p <= v(1) Then XrefInToc = True: Exit Function
+    Next
+End Function
+
+' The cross-reference fields of a document, tables of contents and figures left out.
+Private Function XrefFields(ByVal d As Object) As Collection
+    Dim c As New Collection, story As Object, f As Object, spans As New Collection, t As Object
+    On Error Resume Next
+    For Each t In d.TablesOfContents
+        spans.Add Array(t.Range.Start, t.Range.End)
+    Next
+    For Each t In d.TablesOfFigures
+        spans.Add Array(t.Range.Start, t.Range.End)
+    Next
+    For Each story In SKW_Stories(d)
+        If story.StoryType <> wdCommentsStory Then
+            For Each f In story.Fields
+                If f.Type = wdFieldRef Or f.Type = wdFieldPageRef Or f.Type = wdFieldNoteRef Then
+                    If Not XrefInToc(d, f, spans) Then c.Add f
+                End If
+            Next
+        End If
+    Next
+    Set XrefFields = c
+End Function
+
+Private Function XrefWhole(ByVal f As Object) As Object
+    Dim r As Object
+    Set r = f.Code.Duplicate
+    r.SetRange f.Code.Start - 1, f.Result.End + 1
+    Set XrefWhole = r
+End Function
+
+Private Function XrefStyleNow(ByVal f As Object) As String
+    Dim st As Object
+    On Error Resume Next
+    Set st = f.Result.CharacterStyle
+    If st Is Nothing Then XrefStyleNow = "(mixed)" Else XrefStyleNow = st.NameLocal
+End Function
+
+Private Function XrefHolds(ByVal f As Object) As Boolean
+    XrefHolds = (InStr(1, f.Code.Text, "\* CHARFORMAT", vbTextCompare) > 0) And (InStr(1, f.Code.Text, "\* MERGEFORMAT", vbTextCompare) = 0)
+End Function
+
+Private Function XrefKind(ByVal f As Object) As String
+    Select Case f.Type
+        Case wdFieldPageRef: XrefKind = "Page number"
+        Case wdFieldNoteRef: XrefKind = "Note number"
+        Case Else: XrefKind = "Text or number"
+    End Select
+End Function
+
+Public Function SKW_XrefStyleCheck(ByVal styleName As String) As String
+    Dim d As Object, msg As String, rows As New Collection, f As Object, st As Object, n As Long, total As Long, cur As String, holds As Boolean
+    Dim wasSaved As Boolean, pg As String, r As Object
+    Set SKW_LastReport = Nothing
+    SKW_Fixable = 0
+    msg = SKW_Begin("Style cross-references: reading", False)
+    If Len(msg) > 0 Then SKW_XrefStyleCheck = msg: Exit Function
+    Set d = ActiveDocument
+    wasSaved = d.Saved
+    If Len(styleName) = 0 Then styleName = SKW_XrefStyleName()
+    Set st = SKW_GetStyle(d, styleName)
+    If Len(styleName) = 0 Or st Is Nothing Then
+        SKW_Finish
+        SKW_XrefStyleCheck = IIf(Len(styleName) = 0, "No cross-reference style is named. Put a row named cross_reference_style on the Global Standards' Settings sheet with the style's name as its value.", _
+            "The style " & styleName & " is not in this document. Bring it in first (Import Team Styles).") & " Nothing was read."
+        Exit Function
+    End If
+    If st.Type <> wdStyleTypeCharacter And st.Type <> 6 Then
+        SKW_Finish
+        SKW_XrefStyleCheck = styleName & " is a paragraph style. A cross-reference sits inside a paragraph, so it needs a character style. Nothing was read."
+        Exit Function
+    End If
+    For Each f In XrefFields(d)
+        total = total + 1
+        cur = XrefStyleNow(f)
+        holds = XrefHolds(f)
+        If StrComp(cur, st.NameLocal, vbTextCompare) <> 0 Or Not holds Then
+            n = n + 1
+            If n <= 300 Then
+                pg = ""
+                On Error Resume Next
+                Set r = f.Result
+                pg = r.Information(wdActiveEndAdjustedPageNumber)
+                On Error GoTo 0
+                rows.Add SKW_Row(pg, XrefKind(f), Left$(Replace(f.Result.Text, vbCr, " "), 80), cur, IIf(holds, "Yes", "No"), _
+                    IIf(StrComp(cur, st.NameLocal, vbTextCompare) <> 0, "Takes " & st.NameLocal, "Keeps its style") & IIf(holds, "", "; set to hold it when fields update"))
+            End If
+        End If
+    Next
+    If wasSaved And Not d.Saved Then d.Saved = True
+    SKW_Finish
+    SKW_Fixable = n
+    msg = total & " cross-reference(s): " & n & " are not in " & st.NameLocal & ", or would lose it when fields update."
+    If n > 0 Then
+        SKW_Report "Style Cross-References", msg & " The fix puts " & st.NameLocal & " on each whole field and sets the field to keep it (\* CHARFORMAT in place of \* MERGEFORMAT), " & _
+            "so the style stays when the document's fields update. Fields inside a table of contents or a table of figures are left alone. Changes nothing." & _
+            IIf(n > 300, " The first 300 are listed.", ""), Array("Page", "Kind", "Shows", "Style now", "Holds on update", "What the fix does"), rows
+    End If
+    SKW_XrefStyleCheck = msg
+End Function
+
+Public Function SKW_XrefStyleApply(ByVal styleName As String) As String
+    Dim d As Object, msg As String, f As Object, st As Object, n As Long, total As Long, t As String, p As Long, ed As String, fs As Collection
+    Set SKW_LastReport = Nothing
+    If Documents.Count = 0 Then SKW_XrefStyleApply = "Open a document first.": Exit Function
+    Set d = ActiveDocument
+    If Len(styleName) = 0 Then styleName = SKW_XrefStyleName()
+    Set st = SKW_GetStyle(d, styleName)
+    If Len(styleName) = 0 Or st Is Nothing Then SKW_XrefStyleApply = "The cross-reference style is not named or is not in this document. Nothing was changed.": Exit Function
+    If st.Type <> wdStyleTypeCharacter And st.Type <> 6 Then SKW_XrefStyleApply = styleName & " is a paragraph style; a cross-reference needs a character style. Nothing was changed.": Exit Function
+    msg = SKW_Begin("Style cross-references", True)
+    If Len(msg) > 0 Then SKW_XrefStyleApply = msg: Exit Function
+    On Error GoTo Fail
+    Set fs = XrefFields(d)
+    SKW_Steps fs.Count, "Cross-reference"
+    For Each f In fs
+        SKW_Step
+        total = total + 1
+        If StrComp(XrefStyleNow(f), st.NameLocal, vbTextCompare) <> 0 Or Not XrefHolds(f) Then
+            If Not XrefHolds(f) Then
+                t = f.Code.Text
+                p = InStr(1, t, "\* MERGEFORMAT", vbTextCompare)
+                Do While p > 0
+                    t = Left$(t, p - 1) & Mid$(t, p + Len("\* MERGEFORMAT"))
+                    p = InStr(1, t, "\* MERGEFORMAT", vbTextCompare)
+                Loop
+                If InStr(1, t, "\* CHARFORMAT", vbTextCompare) = 0 Then t = RTrim$(t) & " \* CHARFORMAT "
+                f.Code.Text = t
+            End If
+            XrefWhole(f).Style = st
+            n = n + 1
+        End If
+    Next
+    SKW_Finish
+    SKW_XrefStyleApply = n & " of " & total & " cross-reference(s) set to " & st.NameLocal & ", and set to keep it when fields update." & vbCr & "One Ctrl+Z undoes it."
+    Exit Function
+Fail:
+    ed = Err.Description
+    SKW_Finish
+    SKW_XrefStyleApply = "Stopped: " & ed & ". Press Ctrl+Z to undo what was done."
+End Function
+
+' Gives every cross-reference in the document the team's cross-reference character style, and sets each one to keep it when fields update. The style's name comes from the Global Standards (Settings: cross_reference_style); without one you pick from the document's character styles. Reports first. Tables of contents and figures are left alone. One Ctrl+Z undoes it.
+Public Sub StyleCrossReferences()
+    Dim nm As String, msg As String, d As Object, st As Object, lines As String, names As New Collection, pick As String, i As Long, dpf As String
+    If SKW_IsQuiet() Then Exit Sub
+    If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
+    Set d = ActiveDocument
+    nm = SKW_XrefStyleName()
+    If Len(nm) = 0 Then
+        ' No standard yet: pick from the character styles this document has, by number.
+        dpf = d.Styles(wdStyleDefaultParagraphFont).NameLocal
+        For Each st In d.Styles
+            If st.Type = wdStyleTypeCharacter And st.InUse And names.Count < 40 Then
+                If st.NameLocal <> dpf Then names.Add st.NameLocal: lines = lines & vbCr & names.Count & "  " & st.NameLocal
+            End If
+        Next
+        If names.Count = 0 Then SKW_Say "This document has no character style to give its cross-references. Make or bring in the style first.": Exit Sub
+        pick = InputBox("The Global Standards name no cross-reference style (Settings: cross_reference_style)." & vbCr & vbCr & _
+            "Which character style do cross-references take? Type its number." & vbCr & lines, "Style Cross-References", "")
+        i = Val(pick)
+        If i < 1 Or i > names.Count Then Exit Sub
+        nm = names(i)
+    End If
+    SKW_Fixable = 0
+    msg = SKW_XrefStyleCheck(nm)
+    If SKW_Fixable <= 0 Or SKW_LastReport Is Nothing Then SKW_Show msg: Exit Sub
+    If MsgBox(msg & vbCr & vbCr & "Give the " & SKW_Fixable & " cross-reference(s) the style " & nm & " now?" & vbCr & vbCr & _
+        "One Ctrl+Z undoes it. The report stays open.", vbYesNo + vbQuestion, SKW_APP) <> vbYes Then Exit Sub
+    d.Activate
+    SKW_Show SKW_XrefStyleApply(nm)
+End Sub
