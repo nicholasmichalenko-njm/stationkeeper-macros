@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.19.0"
+Public Const SK_VERSION As String = "1.20.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -2386,4 +2386,15 @@ Public Function SK_AddButton() As String
     Exit Function
 Fail:
     SK_AddButton = "The button was not added: " & Err.Description
+End Function
+
+' Tests (1.20.0): what the menu lists for the person at the PC. Run by the tools' tests with Application.Run.
+Public Function SK_MenuAdminProbe() As String
+    On Error GoTo Bad
+    Load frmSKMenu
+    SK_MenuAdminProbe = frmSKMenu.TestAdmin()
+    Unload frmSKMenu
+    Exit Function
+Bad:
+    SK_MenuAdminProbe = "ERROR " & Err.Number & " " & Err.Description
 End Function

@@ -560,6 +560,8 @@ try {
     Copy-Item (Join-Path $Root 'test\fixtures\Fictional Effort Formatting.xlsx') $effStd -Force
     [string]$capStd = Join-Path $work 'Global Standards (capture).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (capture).xlsx') $capStd -Force
+    [string]$admStd = Join-Path $work 'Global Standards (admins).xlsx'
+    Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (admins).xlsx') $admStd -Force
     Copy-Item (Join-Path $Root 'test\fixtures\Company Standards (app format 2).xlsx') $appStd -Force
     Remove-Item (Join-Path $work 'Roles 1.8 (tables styled) 3.docx') -Force -ErrorAction SilentlyContinue
     Remove-Item $reportsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -755,6 +757,13 @@ try {
         Check '1.19.0: one Ctrl+Z puts the cross-references back' ($xr -match '## undone: \[REF Scope \| (?!ZZ Xref)[^|]+ \| M\] \[PAGEREF \d+ \| (?!ZZ Xref)[^|]+ \| \]') $xr
         Check '1.19.0: the style holds when the fields update and the text changes' (($xr -match '## updated: \[REF Scope and limits \| ZZ Xref \| C\] \[PAGEREF \d+ \| ZZ Xref \| C\]') -and ($xr -match '## recheck: 2 cross-reference\(s\): 0 are not in ZZ Xref')) $xr
         Check '1.19.0: a paragraph style and a style the document lacks are refused with the reason' (($xr -match '## para: Heading 1 is a paragraph style\.') -and ($xr -match '## missing: The style No Such Style is not in this document\.')) $xr
+        # 12l. 1.20.0: Stationkeeper Admins: one menu, the admin tools hidden from a person not on the workbook's list.
+        $ad = RunW $word 'SKW_Test.TW_Admin' "$capStd|$admStd"
+        Write-Output "ADMIN: $ad"
+        Check '1.20.0: with no Stationkeeper Admins list the admin tools show for everyone, and the menu says so' (($ad -match '^nolist: admin=True hide=\[\] note=The Global Standards have no Stationkeeper Admins list yet') -and ($ad -match '^nolist: [^#]*menu\{rows=\d+ capture=3 line=Global Standards: Global Standards \(capture\)\.xlsx \(no admin list yet\)\}')) $ad
+        Check '1.20.0: a person not on the list does not see the three Capture tools; the rest of the menu is unchanged' (($ad -match '^nolist: [^#]*menu\{rows=(\d+) capture=3') -and ([int]$Matches[1] -gt 3) -and ($ad -match ('## other: admin=False hide=\[\|SKW_Capture\.CaptureStyles\|SKW_Capture\.CaptureBannedPhrase\|SKW_Capture\.CaptureHeadingNumbering\|\] note=You are not listed as a Stationkeeper Admin\.[^#]*menu\{rows=' + ([int]$Matches[1] - 3) + ' capture=0 line=Global Standards: Global Standards \(admins\)\.xlsx\}'))) $ad
+        Check '1.20.0: run another way, each admin tool refuses a person not listed and writes nothing' ($ad -match '## refused: phrase=You are not listed as a Stationkeeper Admin\.[^#]*Nothing was written\. styles=You are not listed as a Stationkeeper Admin\.[^#]*Nothing was written\. heads=You are not listed as a Stationkeeper Admin\.') $ad
+        Check '1.20.0: a listed person (name matched without regard to case) sees the admin tools, and the list is kept so the menu does not read the workbook again' (($ad -match '## listed: admin=True hide=\[\] note=You are listed as a Stationkeeper Admin\.[^#]*menu\{rows=\d+ capture=3 line=Global Standards: Global Standards \(admins\)\.xlsx \(you are an admin\)\}') -and ($ad -match '## kept=True')) $ad
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

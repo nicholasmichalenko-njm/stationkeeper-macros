@@ -2435,3 +2435,44 @@ Bad:
     SKW_SetStandardsPath prev
     d.Close SaveChanges:=0
 End Function
+
+' 1.20.0: Stationkeeper Admins. One workbook has no list (everyone sees the admin tools); the other lists two
+' fictional people. The person at the PC is set by the test.
+Private Function AdminState() As String
+    Dim probe As String
+    On Error Resume Next
+    probe = Application.Run("SK_Macros.SK_MenuAdminProbe")
+    If Err.Number <> 0 Then probe = "no menu here (" & Err.Number & ")"
+    On Error GoTo 0
+    AdminState = "admin=" & SKW_IsAdmin() & " hide=[" & SKW_AdminHiddenList() & "] note=" & SKW_AdminNote() & " menu{" & probe & "}"
+End Function
+
+Public Function TW_Admin(ByVal both As String) As String
+    Dim p As Variant, prev As String, s As String, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    p = Split(both, "|")
+    prev = SKW_StandardsPath()
+    stage = "no list"
+    SKW_TestUser = "Someone Else"
+    SKW_SetStandardsPath CStr(p(0))
+    s = "nolist: " & AdminState()
+    stage = "not listed"
+    SKW_SetStandardsPath CStr(p(1))
+    s = s & " ## other: " & AdminState()
+    s = s & " ## refused: phrase=" & SKW_CapturePhrase("zz admin test phrase", "Banned", "", "") & " styles=" & SKW_CaptureStylesWrite("") & " heads=" & SKW_CaptureHeadingsWrite()
+    stage = "listed"
+    SKW_TestUser = "avery fictional"
+    s = s & " ## listed: " & AdminState()
+    stage = "kept"
+    s = s & " ## kept=" & (InStr(1, GetSetting(SKW_APP, "Admins", ThisDocument.Name, ""), "|Avery Fictional|Jordan Sample|") > 0)
+    SKW_TestUser = ""
+    SKW_SetStandardsPath prev
+    TW_Admin = s
+    Exit Function
+Bad:
+    TW_Admin = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    SKW_TestUser = ""
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+End Function

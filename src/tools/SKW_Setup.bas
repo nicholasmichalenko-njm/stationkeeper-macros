@@ -324,13 +324,13 @@ Public Function SKW_ToolList() As String
         "Lays an effort's own standards workbook (the app's Effort Formatting file) over the Global Standards. Where the effort sets a value it wins; a blank keeps the Global value. The menu's standards lines do the same.", _
         "standards, effort, excel, setup, rules, effort formatting", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Capture.CaptureStyles", "Capture Styles to the Global Standards", "Standards", _
-        "Adds the document's styles that the Global Standards' Styles sheet lacks, as Draft rows the Stationkeeper app holds until they are approved there. Reports first; writes only on a yes. A style already on the sheet is never changed. A dated copy of the workbook is kept first.", _
+        "For Stationkeeper Admins. Adds the document's styles that the Global Standards' Styles sheet lacks, as Draft rows the Stationkeeper app holds until they are approved there. Reports first; writes only on a yes. A style already on the sheet is never changed. A dated copy of the workbook is kept first.", _
         "standards, styles, capture, global standards, excel, draft", "Styles", "Whole document", "No, it writes to the workbook on a yes")
     s = s & "," & T("SKW_Capture.CaptureBannedPhrase", "Capture Banned Phrase", "Standards", _
-        "Adds the selected words, or a phrase you type, to the Global Standards' Phrases sheet as Banned or Avoid, with what to use instead and why. A phrase already there is left as it is. A dated copy of the workbook is kept first.", _
+        "For Stationkeeper Admins. Adds the selected words, or a phrase you type, to the Global Standards' Phrases sheet as Banned or Avoid, with what to use instead and why. A phrase already there is left as it is. A dated copy of the workbook is kept first.", _
         "standards, banned phrases, phrases, capture, global standards, excel", "Text", "Selection", "No, it writes to the workbook")
     s = s & "," & T("SKW_Capture.CaptureHeadingNumbering", "Capture Heading Numbering", "Standards", _
-        "Compares the document's heading numbering (Heading 1 to 9) with the Global Standards' Heading numbering sheet, then writes the document's numbering to the sheet on a yes. Changing an Approved row changes the standard for everyone. A dated copy of the workbook is kept first.", _
+        "For Stationkeeper Admins. Compares the document's heading numbering (Heading 1 to 9) with the Global Standards' Heading numbering sheet, then writes the document's numbering to the sheet on a yes. Changing an Approved row changes the standard for everyone. A dated copy of the workbook is kept first.", _
         "standards, heading numbering, section numbering, capture, global standards, excel", "Lists, Pages and sections", "Whole document", "No, it writes to the workbook on a yes")
     s = s & "," & T("SKW_Setup.ChooseReportsFolder", "Choose Reports Folder", "Tools setup", _
         "Chooses the folder on this PC where every report is saved as it is made, named for the report, the file it checked and the time. With no folder chosen, reports open and are not saved.", _

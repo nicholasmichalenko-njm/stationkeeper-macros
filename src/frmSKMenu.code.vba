@@ -18,6 +18,7 @@ Private WithEvents btnEff As MSForms.CommandButton
 Private WithEvents btnEffClear As MSForms.CommandButton
 Private lblStdG As MSForms.Label
 Private lblStdE As MSForms.Label
+Private mHide As String          ' the admin tools left out for this person: |Module.Macro|...|, or ""
 Private mKind As String          ' tests: list only the macros made for Stationkeeper, or only the others
 Private WithEvents chkKeep As MSForms.CheckBox
 Private WithEvents cboShow As MSForms.ComboBox
@@ -518,11 +519,12 @@ Private Sub RefreshList()
     flt = cboShow.Text
     mode = cboSort.Text
     n = mItems.Count
+    mHide = AdminHide()
     ReDim keys(1 To n + 1): ReDim idx(1 To n + 1): ReDim why(1 To n + 1)
 
     For i = 1 To n
         Set e = mItems(i)
-        If (Len(aff) = 0 Or HasAffect(e, aff)) And ShowPasses(e, flt) And CatPasses(e) Then
+        If (Len(aff) = 0 Or HasAffect(e, aff)) And ShowPasses(e, flt) And CatPasses(e) And Not AdminHidden(e) Then
             s = 0: w = ""
             If Len(q) > 0 Then s = ScoreEntry(e, q, w)
             If Len(q) = 0 Or s > 0 Then
@@ -789,6 +791,24 @@ Private Function AppOf(ByVal e As Object) As String
     End If
 End Function
 
+' The tools that change the Global Standards are for Stationkeeper Admins (the list is a sheet of the
+' workbook). The tools say which of them this person does not see; with no tools installed, none are hidden.
+Private Function AdminHide() As String
+    On Error Resume Next
+    AdminHide = Application.Run("SKW_Lib.SKW_AdminHiddenList")
+End Function
+
+Private Function AdminHidden(ByVal e As Object) As Boolean
+    If Len(mHide) = 0 Then Exit Function
+    On Error Resume Next
+    AdminHidden = (InStr(1, mHide, "|" & e("run") & "|", vbTextCompare) > 0)
+End Function
+
+Private Function AdminWords(ByVal fn As String) As String
+    On Error Resume Next
+    AdminWords = Application.Run("SKW_Lib." & fn)
+End Function
+
 Private Function ShowPasses(ByVal e As Object, ByVal flt As String) As Boolean
     Dim k As String
     ShowPasses = True
@@ -980,10 +1000,11 @@ End Function
 
 ' The two lines that say which standards the tools read.
 Private Sub StdLines()
-    Dim g As String, e As String
+    Dim g As String, e As String, tagWords As String, noteWords As String
     g = StdPath(): e = EffPath()
-    lblStdG.Caption = "Global Standards: " & IIf(Len(g) > 0, Mid$(g, InStrRev(g, "\") + 1), "not chosen")
-    lblStdG.ControlTipText = StdTip()
+    tagWords = AdminWords("SKW_AdminTag"): noteWords = AdminWords("SKW_AdminNote")
+    lblStdG.Caption = "Global Standards: " & IIf(Len(g) > 0, Mid$(g, InStrRev(g, "\") + 1), "not chosen") & IIf(Len(tagWords) > 0, " (" & tagWords & ")", "")
+    lblStdG.ControlTipText = StdTip() & IIf(Len(noteWords) > 0, " " & noteWords, "")
     lblStdE.Caption = "This effort's standards: " & IIf(Len(e) > 0, Mid$(e, InStrRev(e, "\") + 1), "none (the Global Standards stand alone)")
     lblStdE.ControlTipText = IIf(Len(e) > 0, "Laid over the Global Standards: " & e, "Choose the effort's Effort Formatting workbook to lay its values over the Global Standards.")
     btnStd.ControlTipText = StdTip()
@@ -1000,6 +1021,7 @@ Private Sub btnStd_Click()
     End If
     On Error GoTo 0
     StdLines
+    RefreshList
 End Sub
 
 Private Sub btnEff_Click()
@@ -1028,6 +1050,19 @@ Public Function TestStd() As String
     StdLines
     TestStd = lblStdG.Caption & " | " & lblStdE.Caption & " | " & btnStd.Caption & "/" & btnEff.Caption & "/" & btnEffClear.Caption & " clear=" & btnEffClear.Enabled & _
         " | order=" & (lblStdG.Top < lblStdE.Top And lblStdE.Top < lblLink.Top) & " filters=" & (cboShow.Top = cboCat.Top And cboCat.Top = cboSort.Top)
+End Function
+
+' Tests: what the list holds for this person: every row, the Capture tools among them, and the standards line.
+Public Function TestAdmin() As String
+    Dim i As Long, n As Long
+    txtSearch.Text = ""
+    SetShowChoice "All"
+    StdLines
+    RefreshList
+    For i = 0 To lstMacros.ListCount - 1
+        If LCase$(lstMacros.List(i, 0)) Like "capture *" Then n = n + 1
+    Next
+    TestAdmin = "rows=" & lstMacros.ListCount & " capture=" & n & " line=" & lblStdG.Caption
 End Function
 
 ' Tests: the list under an Application choice: count, then the first titles.

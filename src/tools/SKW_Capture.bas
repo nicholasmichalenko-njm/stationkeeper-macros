@@ -357,6 +357,7 @@ End Function
 Public Function SKW_CaptureStylesWrite(ByVal only As String) As String
     Dim d As Object, rows As New Collection, st As Object, have As Object, e As String, a As Long, c As Long, s As Long
     Set SKW_LastReport = Nothing
+    If Not SKW_IsAdmin() Then SKW_CaptureStylesWrite = SKW_NotAdminMsg(): Exit Function
     If Documents.Count = 0 Then SKW_CaptureStylesWrite = "Open a document first.": Exit Function
     Set d = ActiveDocument
     Set have = OnSheet("Styles", "Name")
@@ -374,6 +375,7 @@ End Function
 Public Sub CaptureStyles()
     Dim msg As String
     If SKW_IsQuiet() Then Exit Sub
+    If Not SKW_AdminGate() Then Exit Sub
     If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
     SKW_Fixable = 0
     msg = SKW_CaptureStylesCheck("")
@@ -388,6 +390,7 @@ End Sub
 ' ---------------------------------------------------------------------
 Public Function SKW_CapturePhrase(ByVal phrase As String, ByVal level As String, ByVal useInstead As String, ByVal why As String) As String
     Dim rows As New Collection, row As Object, e As String, a As Long, c As Long, s As Long
+    If Not SKW_IsAdmin() Then SKW_CapturePhrase = SKW_NotAdminMsg(): Exit Function
     phrase = Trim$(Replace(Replace(phrase, vbCr, " "), vbTab, " "))
     If Len(phrase) = 0 Then SKW_CapturePhrase = "No phrase was given. Nothing was written.": Exit Function
     If Len(phrase) > 120 Then SKW_CapturePhrase = "That is longer than a phrase (120 characters). Nothing was written.": Exit Function
@@ -409,6 +412,7 @@ End Function
 Public Sub CaptureBannedPhrase()
     Dim ph As String, lv As String, ui As String, wy As String
     If SKW_IsQuiet() Then Exit Sub
+    If Not SKW_AdminGate() Then Exit Sub
     On Error Resume Next
     If Documents.Count > 0 Then
         If Selection.Type = wdSelectionNormal And Len(Selection.Range.Text) <= 120 Then ph = Trim$(Replace(Selection.Range.Text, vbCr, " "))
@@ -513,6 +517,7 @@ End Function
 Public Function SKW_CaptureHeadingsWrite() As String
     Dim d As Object, rows As Collection, row As Object, e As String, a As Long, c As Long, s As Long, skipped As String
     Set SKW_LastReport = Nothing
+    If Not SKW_IsAdmin() Then SKW_CaptureHeadingsWrite = SKW_NotAdminMsg(): Exit Function
     If Documents.Count = 0 Then SKW_CaptureHeadingsWrite = "Open a document first.": Exit Function
     Set d = ActiveDocument
     Set rows = HeadingRows(d, skipped)
@@ -543,6 +548,7 @@ End Function
 Public Sub CaptureHeadingNumbering()
     Dim msg As String
     If SKW_IsQuiet() Then Exit Sub
+    If Not SKW_AdminGate() Then Exit Sub
     If Documents.Count = 0 Then SKW_Say "Open a document first.": Exit Sub
     SKW_Fixable = 0
     msg = SKW_CaptureHeadingsCheck()

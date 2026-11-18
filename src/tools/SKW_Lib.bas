@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.19.0"
+Public Const SKW_VERSION As String = "1.20.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
@@ -25,6 +25,9 @@ Public SKW_FindPos As Long
 Public SKW_Fixable As Long                ' what the last check found that its fix can put right
 Public SKW_Collect As Collection          ' not Nothing while a set runs: reports are gathered, not opened
 Public SKW_ProgressLine As String         ' what the progress window last said (kept while tests run, when no window shows)
+Public SKW_TestUser As String            ' tests: the person at the PC, in place of the Windows and Word user names
+Public Const SKW_ADMIN_SHEET As String = "Stationkeeper Admins"
+Public Const SKW_ADMIN_TOOLS As String = "|SKW_Capture.CaptureStyles|SKW_Capture.CaptureBannedPhrase|SKW_Capture.CaptureHeadingNumbering|"
 Public SKW_ProgressForce As Boolean       ' tests: show the window at once and even when quiet
 
 Private mUndo As Boolean
@@ -1353,6 +1356,96 @@ Public Function SKW_WbRows(ByVal sheet As String) As Collection
     Set SKW_WbRows = New Collection
     If w Is Nothing Then Exit Function
     If w.Exists(LCase$(sheet)) Then Set SKW_WbRows = w(LCase$(sheet))
+End Function
+
+' ---------------------------------------------------------------------
+' Stationkeeper Admins (1.20.0). One list, kept by the app's Global Standards workbook on the sheet
+' "Stationkeeper Admins" (column Name). The tools that change the Global Standards are for the people on it.
+' With no list yet, the admin tools show for everyone. This is a shared way of working, not a lock.
+' ---------------------------------------------------------------------
+' The names on the list as |a|b|, or "" when there is no workbook, no sheet or no name.
+' Kept per workbook file and date on this PC, so opening the menu does not read the workbook again.
+Public Function SKW_AdminNames() As String
+    Dim p As String, fileAt As Date, ck As String, kept As String, r As Object, nm As String, s As String, ks As Variant
+    p = SKW_StandardsPath()
+    If Len(p) = 0 Then Exit Function
+    On Error Resume Next
+    fileAt = FileDateTime(p)
+    If Err.Number <> 0 Then Exit Function
+    On Error GoTo 0
+    ck = p & "|" & Format$(fileAt, "yyyymmddhhnnss")
+    kept = GetSetting(SKW_APP, "Admins", ThisDocument.Name, "")
+    If Left$(kept, Len(ck) + 1) = ck & vbTab Then SKW_AdminNames = Mid$(kept, Len(ck) + 2): Exit Function
+    If SKW_Workbook() Is Nothing Then Exit Function
+    For Each r In SKW_WbRows(SKW_ADMIN_SHEET)
+        nm = ""
+        If r.Exists("name") Then
+            nm = r("name")
+        ElseIf r.Count > 0 Then
+            ks = r.Keys
+            nm = r(ks(0))
+        End If
+        nm = Trim$(Replace(nm, "|", " "))
+        If Len(nm) > 0 Then s = s & "|" & nm
+    Next
+    If Len(s) > 0 Then s = s & "|"
+    SaveSetting SKW_APP, "Admins", ThisDocument.Name, ck & vbTab & s
+    SKW_AdminNames = s
+End Function
+
+' The person at the PC, by both names the PC knows without a network: the Windows user name and Word's user name.
+Public Function SKW_Me() As String
+    If Len(SKW_TestUser) > 0 Then SKW_Me = "|" & SKW_TestUser & "|": Exit Function
+    SKW_Me = "|" & Environ$("USERNAME") & "|" & Application.UserName & "|"
+End Function
+
+Public Function SKW_IsAdmin() As Boolean
+    Dim adm As String, who As Variant, i As Long
+    adm = SKW_AdminNames()
+    If Len(adm) = 0 Then SKW_IsAdmin = True: Exit Function
+    who = Split(SKW_Me(), "|")
+    For i = LBound(who) To UBound(who)
+        If Len(Trim$(who(i))) > 0 Then
+            If InStr(1, adm, "|" & Trim$(who(i)) & "|", vbTextCompare) > 0 Then SKW_IsAdmin = True: Exit Function
+        End If
+    Next
+End Function
+
+' A few words for the menu's Global Standards line, and a sentence for its tip.
+Public Function SKW_AdminTag() As String
+    If Len(SKW_StandardsPath()) = 0 Then Exit Function
+    If Len(SKW_AdminNames()) = 0 Then
+        SKW_AdminTag = "no admin list yet"
+    ElseIf SKW_IsAdmin() Then
+        SKW_AdminTag = "you are an admin"
+    End If
+End Function
+
+Public Function SKW_AdminNote() As String
+    If Len(SKW_StandardsPath()) = 0 Then Exit Function
+    If Len(SKW_AdminNames()) = 0 Then
+        SKW_AdminNote = "The Global Standards have no Stationkeeper Admins list yet, so the admin tools show for everyone."
+    ElseIf SKW_IsAdmin() Then
+        SKW_AdminNote = "You are listed as a Stationkeeper Admin. The admin tools show."
+    Else
+        SKW_AdminNote = "You are not listed as a Stationkeeper Admin. The tools that change the Global Standards are hidden."
+    End If
+End Function
+
+' The tools the menu leaves out for this person, as |Module.Macro|...|, or "".
+Public Function SKW_AdminHiddenList() As String
+    If Not SKW_IsAdmin() Then SKW_AdminHiddenList = SKW_ADMIN_TOOLS
+End Function
+
+Public Function SKW_NotAdminMsg() As String
+    SKW_NotAdminMsg = "You are not listed as a Stationkeeper Admin. This tool changes the Global Standards, so it is for the people on the " & _
+        SKW_ADMIN_SHEET & " sheet of the workbook. Nothing was written."
+End Function
+
+' True when this person may run an admin tool; otherwise says why.
+Public Function SKW_AdminGate() As Boolean
+    If SKW_IsAdmin() Then SKW_AdminGate = True: Exit Function
+    SKW_Say SKW_NotAdminMsg()
 End Function
 
 Public Function SKW_Setting(ByVal key As String, ByVal dflt As String) As String
