@@ -23,12 +23,15 @@ Public Sub BannedPhrasesReview()
 End Sub
 
 Public Function SKW_BannedPhrases() As Collection
-    Dim c As New Collection, r As Object, d As Object, v As Variant
+    Dim c As New Collection, r As Object, d As Object, v As Variant, st As String
     ' The Stationkeeper app's Phrases sheet first (Phrase, Level, Use instead, Why). Its "Use instead" is advice,
     ' not replacement text, so these phrases are flagged with a comment and never replaced.
     For Each r In SKW_WbRows("Phrases")
         If r.Exists("phrase") Then
-            If Len(r("phrase")) > 0 Then
+            ' 1.24.0: a Draft or Retired phrase is not flagged. A blank Status counts as Approved.
+            st = ""
+            If r.Exists("status") Then st = LCase$(Trim$(r("status")))
+            If Len(r("phrase")) > 0 And (Len(st) = 0 Or st = "approved") Then
                 Set d = CreateObject("Scripting.Dictionary")
                 d("phrase") = r("phrase"): d("replacement") = "": d("match case") = "No": d("whole word") = "Yes"
                 d("rule id") = IIf(r.Exists("level"), r("level"), "Banned")

@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.23.0"
+Public Const SKW_VERSION As String = "1.24.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
@@ -1080,7 +1080,8 @@ Public Function SKW_Workbook() As Object
 End Function
 
 ' Lays an effort's workbook over the Global Standards, sheet by sheet. A row is matched by its Name (Setting on
-' the Settings sheet, Label and Part on Captions). A cell the effort fills wins; a blank cell keeps the Global
+' the Settings sheet, Label and Part on Captions; since 1.24.0 Phrase, Word, Heading, Text or From on the lists
+' whose rows have no Name, and Name with Used for on Fonts allowed). A cell the effort fills wins; a blank cell keeps the Global
 ' value; a row only the effort has is added. Rows set for one volume are not used: a document does not say
 ' which volume it is. Returns what happened, in words.
 Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As String
@@ -1095,7 +1096,7 @@ Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As Strin
                 If Len(v) > 0 Then
                     nVol = nVol + 1
                 Else
-                    key = SKW_RowKey(e)
+                    key = SKW_RowKey(e, CStr(k))
                     If Len(key) > 0 Then Set idx(key) = e
                 End If
             Next
@@ -1105,7 +1106,7 @@ Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As Strin
                 Set rows = New Collection
                 If glob.Exists(k) Then Set rows = glob(k)
                 For Each r In rows
-                    key = SKW_RowKey(r)
+                    key = SKW_RowKey(r, CStr(k))
                     If Len(key) > 0 And idx.Exists(key) Then
                         Set e = idx(key)
                         Set d = CreateObject("Scripting.Dictionary")
@@ -1146,9 +1147,31 @@ Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As Strin
         IIf(nVol > 0, "; " & nVol & " row(s) set for one volume were not used", "")
 End Function
 
-Private Function SKW_RowKey(ByVal r As Object) As String
+' The column that tells a row apart on a tab whose rows have no Name (1.24.0), or "".
+Public Function SKW_KeyColumn(ByVal tabName As String) As String
+    Select Case LCase$(Trim$(tabName))
+        Case "phrases", "suggestion rules": SKW_KeyColumn = "phrase"
+        Case "compliance words": SKW_KeyColumn = "word"
+        Case "page limits": SKW_KeyColumn = "heading"
+        Case "placeholders", "ignore": SKW_KeyColumn = "text"
+        Case "style map": SKW_KeyColumn = "from"
+    End Select
+End Function
+
+Private Function SKW_RowKey(ByVal r As Object, Optional ByVal tabName As String = "") As String
+    Dim col As String
     On Error Resume Next
+    col = SKW_KeyColumn(tabName)
+    If Len(col) > 0 Then
+        If r.Exists(col) Then SKW_RowKey = LCase$(Trim$(r(col)))
+        Exit Function
+    End If
     If r.Exists("name") Then SKW_RowKey = LCase$(Trim$(r("name")))
+    ' Fonts allowed: a row is told apart by Name and Used for together (agreed 2026-11-19).
+    If LCase$(Trim$(tabName)) = "fonts allowed" And Len(SKW_RowKey) > 0 Then
+        If r.Exists("used for") Then SKW_RowKey = SKW_RowKey & "|" & LCase$(Trim$(r("used for")))
+        Exit Function
+    End If
     If Len(SKW_RowKey) = 0 And r.Exists("setting") Then SKW_RowKey = LCase$(Trim$(r("setting")))
     If Len(SKW_RowKey) = 0 And r.Exists("label") Then
         SKW_RowKey = LCase$(Trim$(r("label")))
@@ -1601,7 +1624,10 @@ Private Function SKW_ReadWorkbook(ByVal path As String) As Object
                         If Len(d(h)) > 0 Then hasAny = True
                     End If
                 Next
-                If hasAny Then rows.Add d
+                If hasAny Then
+                    SKW_OldNames LCase$(Trim$(ws.Name)), d
+                    rows.Add d
+                End If
             Next
         End If
         Set res(LCase$(Trim$(ws.Name))) = rows
@@ -1619,6 +1645,46 @@ Fail:
     SKW_StdError = ed
     SKW_Say "Could not read the standards workbook (" & ed & ")."
 End Function
+
+' ---------------------------------------------------------------------
+' 1.24.0: plain column names beside the code-like ones (agreed in principle 2026-11-19; the list is not final).
+' The tools ask for a column by its older name. A workbook that names the column the new way is read the same:
+' each new name is also given its older name when a row is read. Nothing is written under a new name yet.
+' ---------------------------------------------------------------------
+' The pairs for a tab, as new=old|new=old, or "".
+Public Function SKW_NewNames(ByVal tabName As String) As String
+    Select Case LCase$(Trim$(tabName))
+        Case "table looks"
+            SKW_NewNames = "alignment=align|vertical alignment=valign|repeat as header row=repeat|shading (hex, or none)=fill|" & _
+                "edge above=edges: top|edge below=edges: bottom|edge left=edges: left|edge right=edges: right|" & _
+                "edge inside, vertical=edges: inside v|edge between columns=edges: inside v|row style=tag style|recognized by=recognize"
+        Case "table types"
+            SKW_NewNames = "alignment=align|width (%)=width pct|cell margin top (pt)=cell margins: top|cell margin bottom (pt)=cell margins: bottom|" & _
+                "cell margin left (pt)=cell margins: left|cell margin right (pt)=cell margins: right"
+        Case "heading numbering"
+            SKW_NewNames = "number format=fmt|number text=text|number at (in)=number at|text at (in)=text at"
+        Case "list numbering"
+            SKW_NewNames = "number format=fmt|number text=text"
+    End Select
+End Function
+
+' Gives a row its older column names beside the new ones. A value already under the older name is kept.
+Public Sub SKW_OldNames(ByVal tabName As String, ByVal d As Object)
+    Dim pairs As String, v As Variant, p As Long, nw As String, od As String
+    pairs = SKW_NewNames(tabName)
+    If Len(pairs) = 0 Then Exit Sub
+    For Each v In Split(pairs, "|")
+        p = InStr(v, "=")
+        nw = Left$(v, p - 1): od = Mid$(v, p + 1)
+        If d.Exists(nw) Then
+            If Not d.Exists(od) Then
+                d(od) = d(nw)
+            ElseIf Len(d(od)) = 0 Then
+                d(od) = d(nw)
+            End If
+        End If
+    Next
+End Sub
 
 Private Function SKW_Cell(ByVal v As Variant) As String
     If IsError(v) Or IsEmpty(v) Or IsNull(v) Then Exit Function

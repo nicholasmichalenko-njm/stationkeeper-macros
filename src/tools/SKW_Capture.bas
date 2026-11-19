@@ -118,6 +118,13 @@ Public Function SKW_BookWriteTo(ByVal p As String, ByVal sheet As String, ByVal 
         h = LCase$(Trim$(CellText(ws.Cells(1, c).Value)))
         If Len(h) > 0 And Not hdr.Exists(h) Then hdr(h) = c
     Next
+    ' 1.24.0: a column the workbook names the new, plain way is written to under the name the tools use.
+    If Len(SKW_NewNames(sheet)) > 0 Then
+        For Each k In Split(SKW_NewNames(sheet), "|")
+            h = Left$(k, InStr(k, "=") - 1)
+            If hdr.Exists(h) And Not hdr.Exists(Mid$(k, InStr(k, "=") + 1)) Then hdr(Mid$(k, InStr(k, "=") + 1)) = hdr(h)
+        Next
+    End If
     If Not hdr.Exists(LCase$(keyHeader)) Then
         wb.Close False: xl.Quit
         SKW_BookWriteTo = "The " & sheet & " sheet has no " & keyHeader & " column. Nothing was written."

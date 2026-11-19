@@ -2708,3 +2708,107 @@ Bad:
     SKW_SetStandardsPath prev
     SKW_SetEffortStdPath prevE
 End Function
+
+' ---------------------------------------------------------------------
+' 1.24.0: the plain column names read beside the older ones; an effort's lists laid over the Global Standards;
+' a Draft phrase not flagged; Fonts allowed told apart by Name and Used for. arg: a folder holding
+'   Heron Standards (old names).xlsx, Heron Standards (new names).xlsx, Heron Effort Standards.xlsx
+' ---------------------------------------------------------------------
+Private Function DumpStd() As String
+    Dim s As String, ty As Object, roles As Object, ro As Object, rk As Variant, f As Variant, r As Object
+    For Each ty In SKW_TableTypes()
+        s = s & "{" & ty("type") & " w=" & ty("width percent") & " al=" & ty("table align") & " m=" & ty("margins pt")
+        Set roles = SKW_TableRoles(ty("type"))
+        For Each rk In Array("caption", "header", "header2", "divider", "long text", "subtotal", "total", "notes")
+            Set ro = roles(rk)
+            If ro("absent") = "yes" Then
+                s = s & " " & rk & ":absent"
+            Else
+                s = s & " " & rk & ":"
+                For Each f In Array("paragraph style", "align", "vertical", "shading", "bold", "italic", "font", "size", "color", "before", "after", "left pt", "right pt", "repeat")
+                    s = s & ro(f) & ","
+                Next
+                For Each f In Array("edge top", "edge bottom", "edge left", "edge right", "edge inside v")
+                    s = s & SKW_EdgeParts(ro(f)) & ","
+                Next
+            End If
+        Next
+        s = s & "}"
+    Next
+    For Each r In SKW_WbRows("Heading numbering")
+        s = s & " H:" & r("style") & "," & r("fmt") & "," & r("text") & "," & r("number at") & "," & r("text at")
+    Next
+    For Each r In SKW_WbRows("List numbering")
+        s = s & " L:" & r("style") & "," & r("fmt") & "," & r("text") & "," & r("level")
+    Next
+    DumpStd = s
+End Function
+
+Private Function PhraseNames() As String
+    Dim d As Object, s As String
+    For Each d In SKW_BannedPhrases()
+        s = s & IIf(Len(s) > 0, ";", "") & d("phrase")
+    Next
+    PhraseNames = s
+End Function
+
+Public Function TW_NewNames(ByVal folder As String) As String
+    Dim s As String, prev As String, prevE As String, stage As String, a As String, b As String, oldP As String, newP As String, effP As String
+    Dim ty As Object, r As Object, rows As New Collection, row As Object, nA As Long, nC As Long, nS As Long, e As String, cp As String, lim As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    oldP = folder & "\Heron Standards (old names).xlsx"
+    newP = folder & "\Heron Standards (new names).xlsx"
+    effP = folder & "\Heron Effort Standards.xlsx"
+    SKW_SetEffortStdPath ""
+    stage = "old"
+    SKW_SetStandardsPath oldP
+    a = DumpStd()
+    s = "phrases=[" & PhraseNames() & "]"
+    stage = "new"
+    SKW_SetStandardsPath newP
+    b = DumpStd()
+    For Each ty In SKW_TableTypes()
+        e = e & ty("type") & "=" & ty("rows may break across pages") & ";"
+    Next
+    s = s & " same=" & (a = b) & " len=" & Len(a) & " breaks=[" & e & "] old=[" & a & "]"
+    If a <> b Then s = s & " new=[" & b & "]"
+    stage = "edges"
+    s = s & " ## edges: " & SKW_EdgeParts("[0.5, ""8EA9DB""]") & " " & SKW_EdgeParts("0.5, 8EA9DB") & " " & SKW_EdgeParts("") & " " & SKW_EdgeParts("none") & " [" & SKW_EdgeParts("thick") & "]"
+    stage = "write"
+    cp = folder & "\Heron written.xlsx"
+    FileCopy newP, cp
+    Set row = CreateObject("Scripting.Dictionary")
+    row("Name") = "Heading 1": row("Style") = "Heading 1": row("Fmt") = "upperRoman": row("Text") = "%1": row("Number at") = 0.1: row("Text at") = 0.6
+    rows.Add row
+    e = SKW_BookWriteTo(cp, "Heading numbering", "Style", rows, True, nA, nC, nS)
+    SKW_SetStandardsPath cp
+    s = s & " ## write: [" & e & "] added=" & nA & " changed=" & nC
+    For Each r In SKW_WbRows("Heading numbering")
+        If r("style") = "Heading 1" Then s = s & " now=" & r("number format") & "," & r("number at (in)") & "," & r("text at (in)")
+    Next
+    stage = "effort"
+    SKW_SetStandardsPath oldP
+    SKW_SetEffortStdPath effP
+    For Each r In SKW_Rows("Page limits")
+        lim = lim & r("heading") & "=" & r("max pages") & ";"
+    Next
+    s = s & " ## effort: phrases=[" & PhraseNames() & "] placeholders=" & SKW_Placeholders().Count & ":" & SKW_Placeholders()(1) & _
+        " ignore=" & SKW_Column("Ignore", "Text").Count & " limits=[" & lim & "] fonts=" & SKW_Rows("Fonts allowed").Count & " std=" & SKW_StdNote()
+    SKW_SetEffortStdPath ""
+    stage = "check"
+    s = s & " ## check new: " & SKW_CheckWorkbook(newP) & " ## " & ReportText()
+    CloseReport
+    s = s & " ## check effort: " & SKW_CheckWorkbook(effP)
+    CloseReport
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    TW_NewNames = s
+    Exit Function
+Bad:
+    TW_NewNames = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+End Function

@@ -55,6 +55,7 @@ End Function
 Private Sub CheckList(ByVal tabName As String, ByVal v As Variant, ByVal firstRow As Long, ByVal keyName As String, ByVal altKey As String)
     Dim c As Long, r As Long, nHdr As Long, kc As Long, sc As Long, seen As Object, k As String, s As String, hasAny As Boolean
     Dim blanks As String, nBlank As Long, dups As String, nDup As Long, badStatus As String, nBad As Long, nRows As Long, rowNo As Long
+    Dim uc As Long, vc As Long, also As String
     For c = LBound(v, 2) To UBound(v, 2)
         If Len(CellText(v(LBound(v, 1), c))) > 0 Then nHdr = nHdr + 1
     Next
@@ -72,6 +73,12 @@ Private Sub CheckList(ByVal tabName As String, ByVal v As Variant, ByVal firstRo
         Exit Sub
     End If
     sc = ColOf(v, "Status")
+    ' 1.24.0: on Fonts allowed a row is told apart by Name and Used for together; in an effort's workbook a row
+    ' set for one volume is its own row.
+    If LCase$(tabName) = "fonts allowed" Then uc = ColOf(v, "Used for")
+    vc = ColOf(v, "Volume")
+    If uc > 0 Then also = " with the same Used for"
+    If vc > 0 Then also = also & IIf(Len(also) > 0, " and", " with the same") & " Volume"
     Set seen = CreateObject("Scripting.Dictionary")
     For r = LBound(v, 1) + 1 To UBound(v, 1)
         hasAny = False
@@ -82,6 +89,8 @@ Private Sub CheckList(ByVal tabName As String, ByVal v As Variant, ByVal firstRo
             nRows = nRows + 1
             rowNo = firstRow + r - LBound(v, 1)
             k = LCase$(CellText(v(r, kc)))
+            If Len(k) > 0 And uc > 0 Then k = k & "|" & LCase$(CellText(v(r, uc)))
+            If Len(k) > 0 And vc > 0 Then k = k & "|" & LCase$(CellText(v(r, vc)))
             If Len(k) = 0 Then
                 nBlank = nBlank + 1
                 If nBlank <= 12 Then blanks = blanks & IIf(Len(blanks) > 0, ", ", "") & rowNo
@@ -102,8 +111,9 @@ Private Sub CheckList(ByVal tabName As String, ByVal v As Variant, ByVal firstRo
     Next
     If nBlank > 0 Then Found tabName, "Problem", nBlank & " row(s) have values and no " & keyName & ": row " & blanks & IIf(nBlank > 12, " and more", "") & ".", _
         "Give each row a " & keyName & ", or clear the row. A row with no " & keyName & " is not used."
-    If nDup > 0 Then Found tabName, "Problem", nDup & " " & keyName & "(s) are there more than once: " & dups & IIf(nDup > 8, " and more", "") & ".", _
-        "A " & keyName & " is used once on a tab. Rename or remove the second row; only one of them is used."
+    If nDup > 0 Then Found tabName, "Problem", nDup & " " & keyName & "(s) are there more than once" & also & ": " & dups & IIf(nDup > 8, " and more", "") & ".", _
+        IIf(Len(also) > 0, "On this tab a row is told apart by its " & keyName & IIf(uc > 0, " and its Used for", "") & IIf(vc > 0, " and its Volume", "") & " together. Change or remove the second row; only one of them is used.", _
+        "A " & keyName & " is used once on a tab. Rename or remove the second row; only one of them is used.")
     If nBad > 0 Then Found tabName, "Problem", nBad & " row(s) have a Status that is not Approved, Draft or Retired: " & badStatus & IIf(nBad > 8, " and more", "") & ".", _
         "Use Approved, Draft or Retired. Only Approved rows are used in documents and templates."
     If nBlank = 0 And nDup = 0 And nBad = 0 Then Found tabName, "Fine", nRows & " row(s), each with its " & keyName & IIf(sc > 0, " and a Status the tools know", "") & ".", ""

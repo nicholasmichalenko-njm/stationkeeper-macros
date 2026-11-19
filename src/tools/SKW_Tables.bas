@@ -39,6 +39,12 @@ Public Function SKW_TableTypes() As Collection
                     AppVal(r, "cell margins: left") & ";" & AppVal(r, "cell margins: right")
                 d("roles") = AppVal(r, "roles")
                 d("override") = AppVal(r, "override")
+                ' 1.24.0: the plain columns that are to replace Roles and Override, read when they are there.
+                If Len(d("roles")) = 0 Then d("roles") = HasRoles(r)
+                d("looks") = LookNames(r)
+                If Len(AppVal(r, "rows may break across pages")) > 0 Then
+                    d("rows may break across pages") = IIf(SKW_IsYes(AppVal(r, "rows may break across pages")), "Yes", "No")
+                End If
                 d("caption position") = AppVal(r, "caption position")
                 d("app") = "yes"
                 c.Add d
@@ -70,6 +76,32 @@ Public Function SKW_TableTypes() As Collection
         c.Add d
     End If
     Set SKW_TableTypes = c
+End Function
+
+' The kinds of row a table type has, from its yes or no columns, written the way the Roles cell holds them.
+' "" when no such column says anything: then every look is used, as with no list.
+Private Function HasRoles(ByVal r As Object) As String
+    Dim v As Variant, p As Long, s As String, said As Boolean, cell As String
+    For Each v In Split("has caption row=caption|has header row=header|has second header row=header2|has subhead rows=subhead|" & _
+                        "has subtotal rows=subtotal|has total row=total|has notes row=note|rows may be left as they are=keep", "|")
+        p = InStr(v, "=")
+        cell = AppVal(r, Left$(v, p - 1))
+        If Len(cell) > 0 Then said = True
+        If SKW_IsYes(cell) Then s = s & ", """ & Mid$(v, p + 1) & """"
+    Next
+    If said Then HasRoles = "[""body""" & s & "]"
+End Function
+
+' The look each kind of row uses when the type names one, as |kind=look name|...|, lower case. "" when it names none.
+Private Function LookNames(ByVal r As Object) As String
+    Dim v As Variant, p As Long, s As String, cell As String
+    For Each v In Split("caption look=caption|header look=header|second header look=header2|subhead look=subhead|body look=body|" & _
+                        "subtotal look=subtotal|total look=total|notes look=note", "|")
+        p = InStr(v, "=")
+        cell = LCase$(AppVal(r, Left$(v, p - 1)))
+        If Len(cell) > 0 Then s = s & "|" & Mid$(v, p + 1) & "=" & cell
+    Next
+    If Len(s) > 0 Then LookNames = s & "|"
 End Function
 
 Private Function TypeFor(ByVal types As Collection, ByVal styleName As String) As Object
@@ -998,6 +1030,7 @@ End Sub
 Private Function AppRoles(ByVal tyName As String) As Object
     Dim res As Object, r As Object, nm As String, ty As Object, k As Object, ov As Object, used As Object, v As Variant
     Dim role As Variant, key As Variant, o As Object, ed As Variant, names As Object
+    Dim looks As String, kd As Variant, p As Long, serves As Boolean
     Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = 1
     Set names = CreateObject("Scripting.Dictionary")
@@ -1033,16 +1066,32 @@ Private Function AppRoles(ByVal tyName As String) As Object
             End If
         End If
     End If
+    ' 1.24.0: a type may name the look a kind of row uses. Then that row of Table looks is the kind's look,
+    ' whatever it is called; a kind the type does not name still uses the look called by the kind's own word.
+    looks = ""
+    If Not ty Is Nothing Then
+        If ty.Exists("looks") Then looks = ty("looks")
+    End If
     For Each r In AppRows("Table looks")
         nm = ""
         If r.Exists("name") Then nm = LCase$(Trim$(r("name")))
-        If AppApproved(r) And names.Exists(nm) Then
-            ' number, short and keep are the macros' own looks: a type's list does not have to name them.
-            If used Is Nothing Then
-                AppLook res, names(nm), r, res(names(nm))("recognize")
-            ElseIf used.Exists(nm) Or nm = "number" Or nm = "short" Or nm = "keep" Or nm = "figure caption" Then
-                AppLook res, names(nm), r, res(names(nm))("recognize")
-            End If
+        If AppApproved(r) And Len(nm) > 0 Then
+            For Each kd In names.Keys
+                p = InStr(looks, "|" & kd & "=")
+                If p > 0 Then
+                    serves = (InStr(looks, "|" & kd & "=" & nm & "|") > 0)
+                Else
+                    serves = (kd = nm)
+                End If
+                If serves Then
+                    ' number, short and keep are the macros' own looks: a type's list does not have to name them.
+                    If used Is Nothing Then
+                        AppLook res, names(kd), r, res(names(kd))("recognize")
+                    ElseIf used.Exists(kd) Or kd = "number" Or kd = "short" Or kd = "keep" Or kd = "figure caption" Then
+                        AppLook res, names(kd), r, res(names(kd))("recognize")
+                    End If
+                End If
+            Next
         End If
     Next
     ' The type's overrides: {"header": {"fill": "D9E2F3", "edges": {"top": null}}}
@@ -1134,16 +1183,35 @@ Private Function MakeLookStyle(ByVal d As Object, ByVal nm As String, ByVal st A
 End Function
 
 ' One edge: "[1.0, ""1F3864""]" is a single line of that width and color; "" is no line.
-Private Sub OneEdge(ByVal b As Object, ByVal spec As String)
-    Dim o As Object, w As Long, c As Long
+' An edge cell as width|color, "none" for no line, or "" when it cannot be read (1.24.0).
+' Two forms are read: the app's of today, [0.5, "8EA9DB"], and the plain one a person could type, 0.5, 8EA9DB.
+Public Function SKW_EdgeParts(ByVal spec As String) As String
+    Dim o As Object, a() As String
     On Error Resume Next
-    If Len(Trim$(spec)) = 0 Then b.LineStyle = 0: Exit Sub
-    Set o = SKW_Json(spec)
-    If o Is Nothing Then Exit Sub
-    If TypeName(o) <> "Collection" Then Exit Sub
-    If o.Count < 2 Then Exit Sub
-    w = BorderWidthValue(CStr(o(1)))
-    c = ShadeValue(CStr(o(2)))
+    spec = Trim$(spec)
+    If Len(spec) = 0 Or LCase$(spec) = "none" Then SKW_EdgeParts = "none": Exit Function
+    If Left$(spec, 1) = "[" Then
+        Set o = SKW_Json(spec)
+        If o Is Nothing Then Exit Function
+        If TypeName(o) <> "Collection" Then Exit Function
+        If o.Count < 2 Then Exit Function
+        SKW_EdgeParts = CStr(Val(CStr(o(1)))) & "|" & Replace(Trim$(CStr(o(2))), "#", "")
+    Else
+        a = Split(spec, ",")
+        If UBound(a) <> 1 Then Exit Function
+        If Not IsNumeric(Trim$(Replace(LCase$(a(0)), "pt", ""))) Then Exit Function
+        SKW_EdgeParts = CStr(Val(Trim$(a(0)))) & "|" & Replace(Replace(Trim$(a(1)), "#", ""), """", "")
+    End If
+End Function
+
+Private Sub OneEdge(ByVal b As Object, ByVal spec As String)
+    Dim w As Long, c As Long, parts As String
+    On Error Resume Next
+    parts = SKW_EdgeParts(spec)
+    If parts = "none" Then b.LineStyle = 0: Exit Sub
+    If Len(parts) = 0 Then Exit Sub
+    w = BorderWidthValue(Left$(parts, InStr(parts, "|") - 1))
+    c = ShadeValue(Mid$(parts, InStr(parts, "|") + 1))
     b.LineStyle = 1
     If w > 0 Then b.LineWidth = w
     If c <> -2 Then b.Color = c

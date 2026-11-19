@@ -833,6 +833,23 @@ try {
         Check '1.23.0: a workbook with the older name Effort Formatting and no Read me line is found by its name' ($fe -match '## older: use=\[Fictional Effort Formatting\.xlsx\] line=\[effort\|Fictional Effort Formatting\.xlsx\] lists=7 ') ''
         Check '1.23.0: nothing in the folder or above it, or a workbook more than three folders above: the Global Standards stand alone' (($fe -match '## none: use=\[\] line=\[\] lists=6 std=Standards: Global Standards \(quick\)\.xlsx ##') -and ($fe -match '## deep: use=\[\] line=\[\] lists=6 std=Standards: Global Standards \(quick\)\.xlsx ##')) ''
         Check '1.23.0: a workbook pointed to wins over the one in the folder, and clearing it says where the tools look' (($fe -match '## pointed: (use=\[Osprey standards\.xlsx\] line=\[\] lists=7 std=Standards: Global Standards \(quick\)\.xlsx, with the program''s Osprey standards\.xlsx over it .*?) ## cleared:') -and ($Matches[1] -notmatch 'found by') -and ($fe -match '## cleared: No effort''s workbook is pointed to now\. The tools look for one in the folder of the document in front')) ''
+        # 12p. 1.24.0: the plain column names read beside the older ones; an effort's lists; a Draft phrase; Fonts allowed.
+        [string]$names = Join-Path $work 'Names'
+        Remove-Item $names -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force $names | Out-Null
+        foreach ($f in 'Heron Standards (old names).xlsx', 'Heron Standards (new names).xlsx', 'Heron Effort Standards.xlsx') { Copy-Item (Join-Path $Root "test\fixtures\$f") (Join-Path $names $f) -Force }
+        $nn = RunW $word 'SKW_Test.TW_NewNames' $names
+        Write-Output "NEWNAMES: $nn"
+        Check '1.24.0: a workbook under the new, plain column names gives the table types, looks, heading and list numbering the same values as one under the older names' (($nn -match ' same=True len=\d{3,} ') -and ($nn -notmatch 'ERROR')) $nn
+        Check '1.24.0: the values are really read: a look''s row style, its shading from a Settings name, an edge, and a type''s margins' (($nn -match 'old=\[\{std w=100 al=center m=2;2;7\.2;7\.2 caption:ZZ Table Caption,left,center,,yes,,Arial,10,') -and ($nn -match ' header:ZZ Table Head,left,center,1F3864,yes,,Arial,9,FFFFFF,2,2,,,yes,1\|1F3864,1\|1F3864,0\.5\|8EA9DB,')) $nn
+        Check '1.24.0: a type that names its header look uses that row of Table looks, as the older Override cell did; kinds it does not have are absent' ($nn -match '\{key w=90 al=left m=3;3;6;6 caption:absent header:ZZ Table Head,left,center,D9E2F3,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,[^}]* total:absent notes:absent\}') $nn
+        Check '1.24.0: a Draft look is not used, and Rows may break across pages is read from a table type' (($nn -match '\{std [^}]* divider:absent ') -and ($nn -match ' breaks=\[std=No;key=;\] ')) $nn
+        Check '1.24.0: an edge cell is read in the app''s form and in the plain form a person could type' ($nn -match '## edges: 0\.5\|8EA9DB 0\.5\|8EA9DB none none \[\]') $nn
+        Check '1.24.0: Capture''s writer fills the column a workbook names the new way' ($nn -match '## write: \[\] added=0 changed=1 now=upperRoman,0\.1,0\.6') $nn
+        Check '1.24.0: a Draft phrase is not flagged' ($nn -match '^phrases=\[leverage;world-class\] ') $nn
+        Check '1.24.0: an effort''s Phrases, Placeholders, Ignore, Page limits and Fonts allowed rows are laid over the Global Standards; a phrase it retires is dropped' (($nn -match '## effort: phrases=\[world-class;best of breed\] placeholders=1:\[Heron to supply\] ignore=1 limits=\[Volume I=25;\] fonts=2 std=') -and ($nn -match '7 row\(s\) added by the effort; 1 row\(s\) set for one volume were not used')) $nn
+        Check '1.24.0: Check This Workbook tells Fonts allowed rows apart by Name and Used for, and names a true repeat' (($nn -match '## check new: Heron Standards \(new names\)\.xlsx \(Global Standards\): 1 problem\(s\)') -and ($nn -match 'Fonts allowed \| Problem \| 1 Name\(s\) are there more than once with the same Used for: Arial \(rows 2 and 4\)\.[^|]*\| On this tab a row is told apart by its Name and its Used for together')) $nn
+        Check '1.24.0: one font for two uses, and a setting set again for one volume, are not problems' ($nn -match '## check effort: Heron Effort Standards\.xlsx \(Effort Standards\): 0 problem\(s\)') $nn
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp
