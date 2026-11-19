@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.24.0
+STATIONKEEPER MACROS 1.25.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -79,6 +79,15 @@ STATIONKEEPER TOOLS (checks and fixes for Word documents)
    - 1.5.0 adds checks and fixes for acronyms at first use, the footer and marking (CUI),
      text that does not fit, titles that moved, pictures, colors, proofing language, links
      and table style. Fill in DeckFooterText, DeckMarking and DeckTableStyle on Settings.
+
+NEW WORKBOOK AND ADD A READ ME TAB (1.25.0: two tools under "Tools setup")
+   New Workbook makes a blank Global Standards, Effort Standards or Program
+   Standards workbook: a Read me tab that says what it is, and every tab with all
+   its columns and no rows. It never writes over a file.
+   It uses the plain column names. Stationkeeper 4.57.0 or later reads them. An
+   older Stationkeeper misreads them: update the app on a PC before it opens
+   such a workbook. With no Stationkeeper app on a PC it is fine.
+   Add a Read Me Tab gives an older workbook that tab and changes nothing else.
 
 WORK PC PROOFS (1.21.0: four tools under the category "Work PC proofs")
    They find out what Word, Excel and a synced folder allow on this PC. They change no

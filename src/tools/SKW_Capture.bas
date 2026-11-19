@@ -164,6 +164,14 @@ Public Function SKW_BookWriteTo(ByVal p As String, ByVal sheet As String, ByVal 
                         If hdr.Exists(h) Then
                             If CellText(ws.Cells(at, hdr(h)).Value) <> CellText(row(k)) Then
                                 ws.Cells(at, hdr(h)).Value = row(k)
+                                ' 1.25.0: Excel turns some text into something else as it lands (%1 becomes 0.01, a
+                                ' leading = becomes a formula). Such a cell is made a text cell and written again.
+                                If VarType(row(k)) = vbString Then
+                                    If CellText(ws.Cells(at, hdr(h)).Value) <> CellText(row(k)) Then
+                                        ws.Cells(at, hdr(h)).NumberFormat = "@"
+                                        ws.Cells(at, hdr(h)).Value = row(k)
+                                    End If
+                                End If
                                 did = True
                             End If
                         ElseIf Not keys Is Nothing Then

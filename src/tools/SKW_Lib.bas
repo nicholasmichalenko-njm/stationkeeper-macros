@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.24.0"
+Public Const SKW_VERSION As String = "1.25.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's

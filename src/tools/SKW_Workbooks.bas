@@ -2,6 +2,8 @@ Attribute VB_Name = "SKW_Workbooks"
 ' =====================================================================
 ' Stationkeeper Tools: the standards workbooks (1.22.0).
 '   CheckThisWorkbook   says what is wrong with a standards workbook, in plain words. It only reads.
+'   NewWorkbook         makes a new, blank standards workbook with every tab and column (1.25.0).
+'   AddReadMeTab        adds the Read me tab that says what a workbook is (1.25.0).
 ' The workbooks are the record both tools read and write (UX decisions 128 to 163). A workbook says
 ' what it is on its Read me tab; nothing is hidden. Nothing fails silently: a tab, a column or a row
 ' that cannot be used is named with its place and the reason (decision 134).
@@ -18,6 +20,20 @@ Private Const TABS_PLAIN As String = "|read me|about|columns|history|"
 ' Tabs only the macros' own older workbook has, and where the one layout keeps that list.
 Private Const TABS_OLD As String = "|allowed styles=the Styles tab|fonts=the Fonts allowed tab|banned phrases=the Phrases tab|acronyms=an acronym workbook of its own|" & _
     "dictionaries=the dictionary files beside the workbook|"
+
+' 1.25.0: what a new workbook holds.
+Private Const ORG12 As String = "ID|Name|Category|Status|Changed|Used on|Set|Menu group|Show in menu|Notes|Tags|Owner"
+' Columns folded away on a new workbook (decision 146: every column is there, the everyday ones open). The last
+' column of a tab is never folded: Excel would mark the empty column after it as part of the sheet.
+Private Const FOLDED As String = "|Category|Changed|Used on|Menu group|Show in menu|Tags|Owner|"
+' The Styles columns left open.
+Private Const STYLES_OPEN As String = "|Name|Volume|Status|Set|Notes|Font|Size (pt)|Bold|Italic|Color (hex)|Alignment|Space before (pt)|Space after (pt)|Other Word settings|"
+' Columns that hold TRUE, FALSE or nothing.
+Private Const SWITCHES As String = "|Show in menu|Required|Bold|Italic|All caps|Small caps|Hidden text|Strikethrough|Double strikethrough|Do not check spelling|" & _
+    "Keep with next|Keep lines together|Page break before|Widow control|No hyphenation|No space between paragraphs of the same style|Automatically update|Locked|" & _
+    "Show in the Styles gallery|Semi-hidden|Unhide when used|Repeat as header row|One cell across the table|Rows may break across pages|Has caption row|Has header row|" & _
+    "Has second header row|Has subhead rows|Has subtotal rows|Has total row|Has notes row|Rows may be left as they are|Page numbers restart|" & _
+    "Header and footer continue from the section before|Continues from the part before|Include chapter number|Also in the Quick Parts gallery|"
 
 Private mFound As Collection      ' where Found adds its rows
 Private mProblems As Long
@@ -213,12 +229,12 @@ Public Function SKW_CheckWorkbook(ByVal path As String) As String
         sayKind = fromName
         Found "Read me", "Note", "An older workbook from the Stationkeeper app: it has an About tab and no Read me tab. It is still read." & _
             IIf(Len(fromName) > 0, " Going by the file's name it is " & fromName & ".", " The file's name does not say what it is."), _
-            "Nothing to do now. A Read me tab that says what the workbook is will be added by the tools in a later release."
+            "Nothing breaks without one. Add a Read Me Tab (Tools setup) adds the tab that says what the workbook is."
     Else
         sayKind = fromName
         Found "Read me", "Problem", "There is no Read me tab, so the workbook does not say what it is." & _
             IIf(Len(fromName) > 0, " Going by the file's name it is read as " & fromName & ".", ""), _
-            "Add a tab named Read me. Type This workbook is in one cell and Global Standards, Effort Standards or Program Standards in the cell to its right."
+            "Run Add a Read Me Tab (Tools setup). Or add a tab named Read me yourself: type This workbook is in one cell and Global Standards, Effort Standards or Program Standards in the cell to its right."
     End If
     ' Other workbooks beside it that could be taken for it.
     folder = Left$(path, InStrRev(path, "\") - 1)
@@ -266,4 +282,396 @@ Public Sub CheckThisWorkbook()
         p = .SelectedItems(1)
     End With
     SKW_Show SKW_CheckWorkbook(p)
+End Sub
+
+' =====================================================================
+' 1.25.0: New Workbook and Add a Read Me Tab.
+' A new workbook carries every tab and column of the one layout (project page "the column list of every tab,
+' for both tools", 2026-11-19), under the plain names, with no rows. The Stationkeeper app reads those names
+' since 4.57.0; an older app misreads them. No format number is stated yet (agreed with the app's build thread).
+' =====================================================================
+
+' The three kinds, as the Read me tab writes them; "" for anything else.
+Public Function SKW_KindWords(ByVal kind As String) As String
+    Select Case LCase$(Trim$(kind))
+        Case "global standards", "global", "1": SKW_KindWords = "Global Standards"
+        Case "effort standards", "effort", "2": SKW_KindWords = "Effort Standards"
+        Case "program standards", "program", "3": SKW_KindWords = "Program Standards"
+    End Select
+End Function
+
+' The tabs of a new workbook of a kind, after Read me, in order, as a|b|c.
+Public Function SKW_BookTabs(ByVal kind As String) As String
+    Dim s As String
+    s = "Settings|Styles|Fonts allowed|Table looks|Table types|Heading numbering|List numbering|Captions|Page setups|Page numbering|Templates|Theme|" & _
+        "Phrases|Placeholders|Ignore|Style map|"
+    If SKW_KindWords(kind) <> "Global Standards" Then s = s & "Page limits|"
+    s = s & "Quick Parts|Pages"
+    If SKW_KindWords(kind) = "Global Standards" Then s = s & "|Stationkeeper Admins"
+    SKW_BookTabs = s
+End Function
+
+' The columns of a tab, in order, as a|b|c. In an effort's or a program's workbook Volume follows Name on the
+' standards tabs and on Settings.
+Public Function SKW_BookColumns(ByVal tabName As String, ByVal kind As String) As String
+    Dim s As String, std As Boolean
+    std = True
+    Select Case LCase$(Trim$(tabName))
+        Case "styles"
+            s = ORG12 & "|Required|" & _
+                "Font|Theme font|Size (pt)|Bold|Italic|Underline|All caps|Small caps|Hidden text|Strikethrough|Double strikethrough|Superscript or subscript|" & _
+                "Color (hex)|Character spacing (pt)|Kerning from (pt)|Character shading (hex, or none)|Do not check spelling|" & _
+                "Type|Based on|Next style|Alignment|Outline level|Keep with next|Keep lines together|Page break before|Widow control|No hyphenation|" & _
+                "Space before (pt)|Space after (pt)|Line spacing (lines, or pt if exact)|Line rule|No space between paragraphs of the same style|" & _
+                "Left indent (pt)|Right indent (pt)|First line (pt)|Hanging (pt)|Tab stops|" & _
+                "Border above|Border below|Border left|Border right|Shading (hex, or none)|" & _
+                "Automatically update|Linked style|Locked|Show in the Styles gallery|Semi-hidden|Unhide when used|Order in the gallery|Other Word settings"
+        Case "fonts allowed"
+            s = ORG12 & "|Used for|Min size (pt)|Max size (pt)|RFP reference|Other Word settings"
+        Case "table looks"
+            s = ORG12 & "|Row style|Font|Size (pt)|Bold|Italic|Color (hex)|Alignment|Vertical alignment|Repeat as header row|One cell across the table|" & _
+                "Space before (pt)|Space after (pt)|Left indent (pt)|Right indent (pt)|Edge above|Edge below|Edge left|Edge right|Edge between columns|" & _
+                "Shading (hex, or none)|Recognized by|Tab stops|Other Word settings"
+        Case "table types"
+            s = ORG12 & "|Alignment|Width (%)|Cell margin top (pt)|Cell margin bottom (pt)|Cell margin left (pt)|Cell margin right (pt)|Caption position|" & _
+                "Rows may break across pages|Has caption row|Has header row|Has second header row|Has subhead rows|Has subtotal rows|Has total row|Has notes row|" & _
+                "Rows may be left as they are|Caption look|Header look|Second header look|Subhead look|Body look|Subtotal look|Total look|Notes look|Other Word settings"
+        Case "heading numbering"
+            s = ORG12 & "|Number format|Number text|Number at (in)|Text at (in)|Restart|Style|Other Word settings"
+        Case "list numbering"
+            s = ORG12 & "|List|Level|Number format|Number text|Font|Left indent (in)|Hanging (in)|Style|Other Word settings"
+        Case "captions"
+            s = ORG12 & "|Label|Part|Position|Chapter level|Separator|Identifier|After number|Style|Action style|Other Word settings"
+        Case "page setups"
+            s = ORG12 & "|Paper width (in)|Paper height (in)|Orientation|Top margin (in)|Bottom margin (in)|Left margin (in)|Right margin (in)|" & _
+                "Header distance (in)|Footer distance (in)|Page numbers restart|Header and footer continue from the section before|Other Word settings"
+        Case "page numbering"
+            s = ORG12 & "|Number format|Starts at|Continues from the part before|Include chapter number|Chapter level|Separator|Other Word settings"
+        Case "templates"
+            s = Replace(ORG12, "|Set|", "|") & "|Style set|Setup style set|Quick Part set|Page set|Page layout|Numbering"
+        Case "settings": s = "Name|Value|Notes"
+        Case "theme": s = "Name|Value|Notes": std = False
+        Case "phrases": s = "Phrase|Level|Use instead|Why|Status": std = False
+        Case "placeholders", "ignore": s = "Text|Notes": std = False
+        Case "style map": s = "From|To|Notes": std = False
+        Case "page limits": s = "Heading|Max pages|Does not count|Notes": std = False
+        Case "quick parts": s = "ID|Name|Gallery|Category|Source file|Styles used|Layout needed|Set|Status|Changed|Notes": std = False
+        Case "pages": s = "ID|Name|Kind|Gallery|Category|Source file|Styles used|Layout needed|Set|Also in the Quick Parts gallery|Status|Changed|Notes": std = False
+        Case "stationkeeper admins": s = "Name|Notes": std = False
+    End Select
+    If std And Len(s) > 0 And SKW_KindWords(kind) <> "Global Standards" And Len(SKW_KindWords(kind)) > 0 Then
+        If Left$(s, 5) = "Name|" Then
+            s = "Name|Volume|" & Mid$(s, 6)
+        Else
+            s = Replace(s, "|Name|", "|Name|Volume|", 1, 1)
+        End If
+    End If
+    SKW_BookColumns = s
+End Function
+
+' The choices a column offers in its drop-down, as a,b,c; "" for none. Only words both tools read are offered.
+Private Function ChoicesFor(ByVal tabName As String, ByVal col As String) As String
+    If InStr(1, SWITCHES, "|" & col & "|", vbTextCompare) > 0 Then ChoicesFor = "TRUE,FALSE": Exit Function
+    Select Case LCase$(col)
+        Case "status": ChoicesFor = "Approved,Draft,Retired"
+        Case "alignment"
+            Select Case LCase$(tabName)
+                Case "table types": ChoicesFor = "Left,Centered,Right"
+                Case Else: ChoicesFor = "Left,Centered,Right,Justified"
+            End Select
+        Case "line rule": ChoicesFor = "Multiple,Exactly,At least"
+        Case "orientation": ChoicesFor = "Portrait,Landscape"
+        Case "used for": ChoicesFor = "body,heading,table,caption,header and footer,footnote,graphic,any"
+    End Select
+End Function
+
+' The Read me tab: the two lines in the agreed cells, then the text both tools use word for word.
+Private Sub WriteReadMe(ByVal ws As Object, ByVal kind As String, ByVal owner As String, ByVal withText As Boolean)
+    Dim r As Long, v As Variant
+    ws.Range("A1").Value = "This workbook is"
+    ws.Range("B1").Value = kind
+    ws.Range("A2").Value = "It belongs to"
+    ws.Range("B2").NumberFormat = "@"
+    ws.Range("B2").Value = owner
+    On Error Resume Next
+    With ws.Range("B1").Validation
+        .Delete
+        .Add 3, 1, 1, "Global Standards,Effort Standards,Program Standards"
+        .IgnoreBlank = True
+    End With
+    ws.Range("A1:A2").Font.Bold = True
+    On Error GoTo 0
+    If Not withText Then Exit Sub
+    r = 4
+    For Each v In Array( _
+        "Stationkeeper and the Stationkeeper Macros both read and write this workbook. You can edit it in Excel.", _
+        "Free to change: the file's name; any row; the order of tabs and columns; colours and widths. You can add tabs and columns of your own; they are kept and never reach Word.", _
+        "Please do not change: the name of this tab; the name of any other tab; the first row of any tab (the column names).", _
+        "A blank cell means ""not set"". In an effort's workbook it means ""use the Global Standards value"".", _
+        "Only rows marked Approved are used in documents and templates. Draft rows are waiting for a Stationkeeper Admin.", _
+        "If something stops working: run ""Check this workbook"" from the Stationkeeper Macros menu or from Stationkeeper. It says what is wrong in plain words.", _
+        "Close the workbook when you are done. While it is open in Excel, neither tool can save to it; they keep your change and save it when the file is free.")
+        ws.Cells(r, 1).Value = CStr(v)
+        r = r + 1
+    Next
+    r = r + 1
+    ws.Cells(r, 1).Value = "Made by"
+    ws.Cells(r, 2).Value = "Stationkeeper Macros " & SKW_VERSION
+    On Error Resume Next
+    ws.Columns(1).ColumnWidth = 18
+    ws.Columns(2).ColumnWidth = 40
+    On Error GoTo 0
+End Sub
+
+' One list tab of a new workbook: its column names, the ID out of sight, the less used columns folded, drop-downs.
+Private Sub WriteListTab(ByVal xl As Object, ByVal ws As Object, ByVal tabName As String, ByVal kind As String)
+    Dim cols() As String, i As Long, n As Long, a As Long, fold As Boolean, ch As String, isStyles As Boolean
+    cols = Split(SKW_BookColumns(tabName, kind), "|")
+    n = UBound(cols) + 1
+    ws.Range(ws.Cells(1, 1), ws.Cells(1, n)).NumberFormat = "@"
+    For i = 1 To n
+        ws.Cells(1, i).Value = cols(i - 1)
+    Next
+    On Error Resume Next
+    ws.Range(ws.Cells(1, 1), ws.Cells(1, n)).Font.Bold = True
+    ws.Range(ws.Cells(1, 1), ws.Cells(1, n)).EntireColumn.AutoFit
+    For i = 1 To n
+        ' Number text holds %1 and the like, which Excel would turn into a number: the column is a text column.
+        If cols(i - 1) = "Number text" Then ws.Columns(i).NumberFormat = "@"
+        ch = ChoicesFor(tabName, cols(i - 1))
+        If Len(ch) > 0 Then
+            With ws.Range(ws.Cells(2, i), ws.Cells(2000, i)).Validation
+                .Delete
+                .Add 3, 1, 1, ch
+                .IgnoreBlank = True
+                .ShowError = False
+            End With
+        End If
+    Next
+    ' Fold the runs of less used columns.
+    isStyles = (LCase$(tabName) = "styles")
+    a = 0
+    For i = 1 To n + 1
+        fold = False
+        If i <= n Then
+            If cols(i - 1) = "ID" Then
+                fold = False
+            ElseIf isStyles Then
+                fold = (InStr(1, STYLES_OPEN, "|" & cols(i - 1) & "|", vbTextCompare) = 0)
+            Else
+                fold = (InStr(1, FOLDED, "|" & cols(i - 1) & "|", vbTextCompare) > 0)
+            End If
+        End If
+        If fold Then
+            If a = 0 Then a = i
+        ElseIf a > 0 Then
+            ws.Range(ws.Columns(a), ws.Columns(i - 1)).Group
+            a = 0
+        End If
+    Next
+    ws.Outline.ShowLevels 0, 1
+    If cols(0) = "ID" Then ws.Columns(1).Hidden = True
+    ws.Activate
+    xl.ActiveWindow.SplitRow = 1
+    xl.ActiveWindow.FreezePanes = True
+    On Error GoTo 0
+End Sub
+
+' Makes a new, blank standards workbook of a kind at path. Never writes over a file. Returns what happened, in words.
+Public Function SKW_NewWorkbook(ByVal path As String, ByVal kind As String, ByVal owner As String) As String
+    Dim xl As Object, wb As Object, ws As Object, t As Variant, ed As String, nTabs As Long, folder As String, i As Long
+    kind = SKW_KindWords(kind)
+    owner = Trim$(owner)
+    If Len(kind) = 0 Then SKW_NewWorkbook = "Say which kind: Global Standards, Effort Standards or Program Standards. Nothing was made.": Exit Function
+    If kind <> "Global Standards" And Len(owner) = 0 Then
+        SKW_NewWorkbook = IIf(kind = "Effort Standards", "An effort's workbook needs the effort's name.", "A program's workbook needs the program's name.") & " Nothing was made."
+        Exit Function
+    End If
+    path = SKW_LocalPath(path)
+    If LCase$(Left$(path, 4)) = "http" Then SKW_NewWorkbook = "That folder is kept in OneDrive or SharePoint, and its copy on this PC was not found in a synced folder. Nothing was made.": Exit Function
+    If LCase$(Right$(path, 5)) <> ".xlsx" Then path = path & ".xlsx"
+    If InStrRev(path, "\") < 2 Then SKW_NewWorkbook = "The workbook needs a folder. Nothing was made.": Exit Function
+    folder = Left$(path, InStrRev(path, "\") - 1)
+    If Len(Dir$(folder, vbDirectory)) = 0 Then SKW_NewWorkbook = "The folder was not found. Nothing was made.": Exit Function
+    If Len(Dir$(path)) > 0 Then
+        SKW_NewWorkbook = "A file named " & Mid$(path, InStrRev(path, "\") + 1) & " is already in that folder. Nothing was made and nothing was changed. Choose another name or folder."
+        Exit Function
+    End If
+    SKW_ProgressTitle "New Workbook"
+    SKW_Status "Making the workbook..."
+    On Error GoTo Fail
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Add
+    Do While wb.Worksheets.Count > 1
+        wb.Worksheets(wb.Worksheets.Count).Delete
+    Loop
+    wb.Worksheets(1).Name = "Read me"
+    WriteReadMe wb.Worksheets(1), kind, owner, True
+    For Each t In Split(SKW_BookTabs(kind), "|")
+        Set ws = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.Count))
+        ws.Name = CStr(t)
+        WriteListTab xl, ws, CStr(t), kind
+        nTabs = nTabs + 1
+    Next
+    wb.Worksheets(1).Activate
+    wb.SaveAs FileName:=path, FileFormat:=51
+    wb.Close False
+    xl.Quit
+    Set wb = Nothing
+    Set xl = Nothing
+    SKW_ProgressDone
+    SKW_NewWorkbook = "Made " & Mid$(path, InStrRev(path, "\") + 1) & ": " & IIf(kind = "Effort Standards", "an ", "a ") & kind & " workbook" & IIf(Len(owner) > 0, " for " & owner, "") & _
+        ", with a Read me tab and " & nTabs & " tabs, each with all its columns and no rows." & vbCr & _
+        "To use it, choose it on the menu's standards line. Check This Workbook reads it back." & vbCr & _
+        "It uses the plain column names. Stationkeeper 4.57.0 or later reads them; an older Stationkeeper misreads them, so update the app on a PC before it opens this workbook."
+    Exit Function
+Fail:
+    ed = Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+    SKW_ProgressDone
+    SKW_NewWorkbook = "The workbook could not be made (" & ed & "). Nothing was changed."
+End Function
+
+' Adds a Read me tab that says what a workbook is, as its first tab. Changes nothing else. A workbook that
+' already says what it is is left alone. Returns what happened, in words.
+Public Function SKW_AddReadMe(ByVal path As String, ByVal kind As String, ByVal owner As String) As String
+    Dim xl As Object, wb As Object, ws As Object, rm As Object, has As String, hasOwner As String, ed As String, nm As String, filled As Boolean, c As Variant, added As Boolean
+    path = SKW_LocalPath(path)
+    If LCase$(Left$(path, 4)) = "http" Then SKW_AddReadMe = "That workbook is kept in OneDrive or SharePoint, and its copy on this PC was not found in a synced folder. Nothing was changed.": Exit Function
+    If Len(Dir$(path)) = 0 Then SKW_AddReadMe = "The workbook was not found. Nothing was changed.": Exit Function
+    nm = Mid$(path, InStrRev(path, "\") + 1)
+    If Len(Trim$(kind)) = 0 Then kind = SKW_KindFromName(path)
+    kind = SKW_KindWords(kind)
+    owner = Trim$(owner)
+    If Len(kind) = 0 Then SKW_AddReadMe = "Say which kind " & nm & " is: Global Standards, Effort Standards or Program Standards. Its name does not say. Nothing was changed.": Exit Function
+    SKW_ProgressTitle "Add a Read Me Tab"
+    SKW_Status "Opening the workbook..."
+    On Error GoTo Fail
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Open(FileName:=path, UpdateLinks:=0, ReadOnly:=False, AddToMru:=False)
+    If wb.ReadOnly Then
+        wb.Close False
+        xl.Quit
+        SKW_ProgressDone
+        SKW_AddReadMe = nm & " is open somewhere else or cannot be written to. Nothing was changed. Close it and run this again."
+        Exit Function
+    End If
+    For Each ws In wb.Worksheets
+        If LCase$(Trim$(ws.Name)) = "read me" Then Set rm = ws
+    Next
+    If Not rm Is Nothing Then
+        SKW_ReadMeLines rm.Range("A1:C40").Value, has, hasOwner
+        If Len(has) > 0 Then
+            wb.Close False
+            xl.Quit
+            SKW_ProgressDone
+            SKW_AddReadMe = nm & " already says what it is: " & has & IIf(Len(hasOwner) > 0, ", belonging to " & hasOwner, "") & ". Nothing was changed."
+            Exit Function
+        End If
+        For Each c In rm.Range("A1:B2").Cells
+            If Len(Trim$(CellText(c.Value))) > 0 Then filled = True
+        Next
+        If filled Then
+            wb.Close False
+            xl.Quit
+            SKW_ProgressDone
+            SKW_AddReadMe = nm & " has a Read me tab with other words in its first two rows. Nothing was changed. Type This workbook is in one cell there and " & kind & " in the cell to its right."
+            Exit Function
+        End If
+        WriteReadMe rm, kind, owner, False
+    Else
+        Set rm = wb.Worksheets.Add(Before:=wb.Worksheets(1))
+        rm.Name = "Read me"
+        WriteReadMe rm, kind, owner, True
+        added = True
+    End If
+    wb.Save
+    wb.Close False
+    xl.Quit
+    Set wb = Nothing
+    Set xl = Nothing
+    SKW_ProgressDone
+    SKW_AddReadMe = nm & " now says what it is: " & kind & IIf(Len(owner) > 0, ", belonging to " & owner, "") & ". " & _
+        IIf(added, "A Read me tab was added as its first tab.", "The two lines were written at the top of its Read me tab.") & " No other tab was changed."
+    Exit Function
+Fail:
+    ed = Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+    SKW_ProgressDone
+    SKW_AddReadMe = "The workbook could not be changed (" & ed & "). Nothing was saved."
+End Function
+
+Private Function SafeFileName(ByVal s As String) As String
+    Dim v As Variant
+    For Each v In Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+        s = Replace(s, CStr(v), " ")
+    Next
+    SafeFileName = Trim$(s)
+End Function
+
+' Makes a new, blank standards workbook: the team's Global Standards, one effort's Effort Standards or one program's Program Standards. It has a Read me tab that says what it is, and every tab with all its columns and no rows, under the plain column names. It asks for the kind, the name and the folder, and never writes over a file. Stationkeeper 4.57.0 or later reads the plain names; an older Stationkeeper misreads them.
+Public Sub NewWorkbook()
+    Dim kind As String, owner As String, folder As String, p As String, f As String
+    If SKW_IsQuiet() Then Exit Sub   ' needs a person to choose
+    kind = SKW_KindWords(InputBox("Which kind of workbook? Type its number." & vbCr & vbCr & "1  Global Standards: the team's" & vbCr & _
+        "2  Effort Standards: one effort's own values, laid over the team's" & vbCr & "3  Program Standards: one program's own values", "New Workbook", "2"))
+    If Len(kind) = 0 Then Exit Sub
+    If kind = "Global Standards" Then
+        owner = Trim$(InputBox("The team's name, for the line ""It belongs to"". You can leave it blank.", "New Workbook"))
+    Else
+        owner = Trim$(InputBox("The " & IIf(kind = "Effort Standards", "effort's", "program's") & " name. It goes on the line ""It belongs to"" and starts the file's name.", "New Workbook"))
+        If Len(owner) = 0 Then Exit Sub
+    End If
+    With Application.FileDialog(4)
+        .Title = "Choose the folder for the new workbook"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Sub
+        folder = .SelectedItems(1)
+    End With
+    If Right$(folder, 1) = "\" Then folder = Left$(folder, Len(folder) - 1)
+    f = IIf(kind = "Global Standards", "Global Standards", SafeFileName(owner) & " " & kind) & ".xlsx"
+    p = folder & "\" & f
+    If MsgBox("Make " & f & " in this folder?" & vbCr & folder & vbCr & vbCr & "It will have every tab with all its columns, and no rows." & vbCr & vbCr & _
+        "It uses the plain column names. Stationkeeper 4.57.0 or later reads them; an older Stationkeeper misreads them. With no Stationkeeper app on a PC it is fine.", _
+        vbOKCancel + vbQuestion, "New Workbook") <> vbOK Then Exit Sub
+    SKW_Show SKW_NewWorkbook(p, kind, owner)
+End Sub
+
+' Adds a Read me tab to a standards workbook that has none, as its first tab, so the workbook says what it is: Global Standards, Effort Standards or Program Standards, and who it belongs to. Nothing else in the workbook is changed. A workbook that already says what it is is left alone. The workbook must be closed in Excel.
+Public Sub AddReadMeTab()
+    Dim p As String, kind As String, owner As String, nm As String, v As Variant
+    If SKW_IsQuiet() Then Exit Sub   ' needs a person to choose the file
+    With Application.FileDialog(3)
+        .Title = "Choose the workbook to add a Read me tab to"
+        .Filters.Clear
+        .Filters.Add "Excel workbooks", "*.xlsx;*.xlsm"
+        .AllowMultiSelect = False
+        If Len(SKW_StandardsPath()) > 0 Then .InitialFileName = SKW_StandardsPath()
+        If .Show <> -1 Then Exit Sub
+        p = .SelectedItems(1)
+    End With
+    nm = Mid$(p, InStrRev(p, "\") + 1)
+    kind = SKW_KindFromName(p)
+    If Len(kind) = 0 Then
+        kind = SKW_KindWords(InputBox("What is " & nm & "? Type its number." & vbCr & vbCr & "1  Global Standards" & vbCr & "2  Effort Standards" & vbCr & "3  Program Standards", "Add a Read Me Tab"))
+        If Len(kind) = 0 Then Exit Sub
+    End If
+    owner = nm
+    If InStrRev(owner, ".") > 1 Then owner = Left$(owner, InStrRev(owner, ".") - 1)
+    For Each v In Array("Effort Standards", "Program Standards", "Effort Formatting", "Global Standards")
+        owner = Trim$(Replace(owner, CStr(v), "", 1, -1, vbTextCompare))
+    Next
+    owner = Trim$(InputBox("Who does it belong to? The " & IIf(kind = "Global Standards", "team's", IIf(kind = "Effort Standards", "effort's", "program's")) & _
+        " name, for the line ""It belongs to""." & IIf(kind = "Global Standards", " You can leave it blank.", ""), "Add a Read Me Tab", owner))
+    If MsgBox("Add a Read me tab to " & nm & " that says it is " & kind & IIf(Len(owner) > 0, ", belonging to " & owner, "") & "?" & vbCr & vbCr & _
+        "Nothing else in the workbook is changed. Close the workbook in Excel first.", vbOKCancel + vbQuestion, "Add a Read Me Tab") <> vbOK Then Exit Sub
+    SKW_Show SKW_AddReadMe(p, kind, owner)
 End Sub

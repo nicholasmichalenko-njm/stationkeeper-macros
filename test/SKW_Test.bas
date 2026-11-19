@@ -2812,3 +2812,178 @@ Bad:
     SKW_SetStandardsPath prev
     SKW_SetEffortStdPath prevE
 End Function
+
+' ---------------------------------------------------------------------
+' 1.25.0: New Workbook and Add a Read Me Tab. arg: a folder holding copies of three workbooks with no Read me tab.
+' ---------------------------------------------------------------------
+' Every tab of a workbook: its name, how many columns, the first and last column name and its rows; then whether
+' each tab's columns are the ones the layout lists for that kind (kind "" skips that).
+Private Function BookShape(ByVal p As String, ByVal kind As String) As String
+    Dim xl As Object, wb As Object, ws As Object, s As String, lastC As Long, c As Long, got As String, nOk As Long, nTabs As Long, bad As String
+    On Error GoTo Bad
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Open(FileName:=p, UpdateLinks:=0, ReadOnly:=True, AddToMru:=False)
+    s = "first=" & wb.Worksheets(1).Name & " tabs=" & wb.Worksheets.Count
+    For Each ws In wb.Worksheets
+        If LCase$(ws.Name) = "read me" Then
+            s = s & " readme=[" & ws.Range("A1").Value & "|" & ws.Range("B1").Value & "|" & ws.Range("A2").Value & "|" & ws.Range("B2").Value & "|" & ws.Range("A4").Value & "]"
+        ElseIf Len(kind) > 0 Then
+            lastC = LastHeader(ws)
+            got = ""
+            For c = 1 To lastC
+                got = got & IIf(c > 1, "|", "") & CStr(ws.Cells(1, c).Value)
+            Next
+            nTabs = nTabs + 1
+            If got = SKW_BookColumns(ws.Name, kind) And ws.UsedRange.Rows.Count = 1 Then
+                nOk = nOk + 1
+            Else
+                bad = bad & ws.Name & ";"
+            End If
+            s = s & " {" & ws.Name & ":" & lastC & IIf(ws.UsedRange.Columns.Count <> lastC, "!" & ws.UsedRange.Columns.Count, "") & "}"
+        End If
+    Next
+    If Len(kind) > 0 Then s = s & " match=" & nOk & " of " & nTabs & " bad=[" & bad & "]"
+    wb.Close False
+    xl.Quit
+    BookShape = s
+    Exit Function
+Bad:
+    BookShape = s & " SHAPE ERROR " & Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+End Function
+
+' One tab closely: the first four column names, whether the ID is out of sight, how many columns are folded, and two drop-downs.
+Private Function TabDetail(ByVal p As String, ByVal tabName As String, ByVal colA As String, ByVal colB As String) As String
+    Dim xl As Object, wb As Object, ws As Object, s As String, lastC As Long, c As Long, nHid As Long, f As String
+    On Error GoTo Bad
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    Set wb = xl.Workbooks.Open(FileName:=p, UpdateLinks:=0, ReadOnly:=True, AddToMru:=False)
+    Set ws = wb.Worksheets(tabName)
+    lastC = LastHeader(ws)
+    s = "cols=" & lastC & " starts=" & ws.Cells(1, 1).Value & "|" & ws.Cells(1, 2).Value & "|" & ws.Cells(1, 3).Value & "|" & ws.Cells(1, 4).Value & " idHidden=" & ws.Columns(1).Hidden
+    For c = 1 To lastC
+        If ws.Columns(c).Hidden Then nHid = nHid + 1
+        If CStr(ws.Cells(1, c).Value) = colA Or CStr(ws.Cells(1, c).Value) = colB Then
+            f = ""
+            On Error Resume Next
+            f = ws.Cells(2, c).Validation.Formula1
+            On Error GoTo Bad
+            s = s & " " & CStr(ws.Cells(1, c).Value) & "=[" & f & "]" & IIf(ws.Columns(c).Hidden, "folded", "open")
+        End If
+    Next
+    s = s & " hidden=" & nHid
+    wb.Close False
+    xl.Quit
+    TabDetail = s
+    Exit Function
+Bad:
+    TabDetail = s & " DETAIL ERROR " & Err.Description
+    On Error Resume Next
+    If Not wb Is Nothing Then wb.Close False
+    If Not xl Is Nothing Then xl.Quit
+End Function
+
+' The last column with a name in row 1. End(xlToLeft) passes over folded columns, so the cells are read.
+Private Function LastHeader(ByVal ws As Object) As Long
+    Dim c As Long
+    For c = 1 To ws.UsedRange.Columns.Count + 1
+        If Len(Trim$(CStr(ws.Cells(1, c).Value))) > 0 Then LastHeader = c
+    Next
+End Function
+
+Private Function FirstLine(ByVal s As String) As String
+    If InStr(s, vbCr) > 0 Then FirstLine = Left$(s, InStr(s, vbCr) - 1) Else FirstLine = s
+End Function
+
+Public Function TW_NewBook(ByVal folder As String) As String
+    Dim s As String, prev As String, prevE As String, stage As String, g As String, e As String, q As String, f As String, co As String
+    Dim rows As New Collection, row As Object, r As Object, nA As Long, nC As Long, nS As Long, er As String, nLooks As Long, full As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    SKW_SetEffortStdPath ""
+    g = folder & "\Global Standards.xlsx"
+    e = folder & "\Kite Effort Standards.xlsx"
+    q = folder & "\Global Standards (quick).xlsx"
+    f = folder & "\Fictional Effort Formatting.xlsx"
+    co = folder & "\Company Standards (app format 2).xlsx"
+    stage = "make"
+    full = SKW_NewWorkbook(folder & "\Global Standards", "Global Standards", "Heron")
+    s = "g: " & Replace(full, vbCr, " / ")
+    s = s & " ## again: " & SKW_NewWorkbook(g, "global", "Heron")
+    s = s & " ## e: " & FirstLine(SKW_NewWorkbook(e, "effort", "Kite"))
+    s = s & " ## noname: " & SKW_NewWorkbook(folder & "\x.xlsx", "program", "")
+    s = s & " ## nokind: " & SKW_NewWorkbook(folder & "\x.xlsx", "team", "x")
+    s = s & " ## nofolder: " & SKW_NewWorkbook(folder & "\No such folder\x.xlsx", "global", "") & " x=" & Len(Dir$(folder & "\x.xlsx"))
+    stage = "shape"
+    s = s & " ## shape g: " & BookShape(g, "Global Standards")
+    s = s & " ## shape e: " & BookShape(e, "Effort Standards")
+    s = s & " ## styles e: " & TabDetail(e, "Styles", "Status", "Line rule")
+    s = s & " ## types g: " & TabDetail(g, "Table types", "Has header row", "Alignment")
+    stage = "read"
+    SKW_SetStandardsPath g
+    s = s & " ## read: kind=" & SKW_StdKind() & " tabs=" & SKW_Workbook().Count & " looks=" & SKW_WbRows("Table looks").Count
+    SKW_SetEffortStdPath e
+    s = s & " eff=" & SKW_EffKind() & "/" & SKW_EffOwner() & " std=" & SKW_StdNote()
+    SKW_SetEffortStdPath ""
+    stage = "write"
+    Set row = CreateObject("Scripting.Dictionary")
+    row("Name") = "Heading 1": row("Style") = "Heading 1": row("Fmt") = "decimal": row("Text") = "%1": row("Number at") = 0: row("Text at") = 0.5
+    rows.Add row
+    er = SKW_BookWriteTo(g, "Heading numbering", "Style", rows, True, nA, nC, nS)
+    SKW_SetStandardsPath ""
+    SKW_SetStandardsPath g
+    s = s & " ## write: [" & er & "] added=" & nA
+    For Each r In SKW_WbRows("Heading numbering")
+        s = s & " row=" & r("name") & "," & r("style") & "," & r("number format") & "," & r("number text") & "," & r("text at (in)") & ",id=[" & r("id") & "]"
+    Next
+    ' The same text written into a plain cell of an older workbook: the writer keeps it as text.
+    Set rows = New Collection
+    Set row = CreateObject("Scripting.Dictionary")
+    row("Name") = "Heading 2": row("Style") = "Heading 2": row("Fmt") = "decimal": row("Text") = "%1.%2"
+    rows.Add row
+    Set row = CreateObject("Scripting.Dictionary")
+    row("Name") = "ZZ Level One": row("Style") = "ZZ Level One": row("Fmt") = "decimal": row("Text") = "%1"
+    rows.Add row
+    er = SKW_BookWriteTo(co, "Heading numbering", "Style", rows, True, nA, nC, nS)
+    SKW_SetStandardsPath co
+    s = s & " hand=" & er
+    For Each r In SKW_WbRows("Heading numbering")
+        If r("style") = "Heading 2" Then s = s & r("text") & "/"
+        If r("style") = "ZZ Level One" Then s = s & r("text")
+    Next
+    SKW_SetStandardsPath g
+    stage = "check"
+    s = s & " ## check g: " & SKW_CheckWorkbook(g)
+    CloseReport
+    s = s & " ## check e: " & SKW_CheckWorkbook(e)
+    CloseReport
+    stage = "readme"
+    SKW_SetStandardsPath q
+    nLooks = SKW_WbRows("Table looks").Count
+    s = s & " ## add nokind: " & SKW_AddReadMe(co, "", "")
+    s = s & " ## add g: " & SKW_AddReadMe(q, "", "Heron")
+    SKW_SetStandardsPath ""
+    SKW_SetStandardsPath q
+    s = s & " ## after: kind=" & SKW_StdKind() & " looks " & nLooks & "=" & SKW_WbRows("Table looks").Count & " " & BookShape(q, "")
+    s = s & " ## add again: " & SKW_AddReadMe(q, "", "")
+    s = s & " ## add e: " & SKW_AddReadMe(f, "", "Fictional")
+    s = s & " ## add named: " & SKW_AddReadMe(co, "program", "Osprey") & " " & BookShape(co, "")
+    s = s & " ## check q: " & SKW_CheckWorkbook(q) & " ## " & ReportText()
+    CloseReport
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    TW_NewBook = s
+    Exit Function
+Bad:
+    TW_NewBook = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+End Function

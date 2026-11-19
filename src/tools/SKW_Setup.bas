@@ -350,6 +350,12 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKW_Workbooks.CheckThisWorkbook", "Check This Workbook", "Tools setup", _
         "Asks for a standards workbook and says what is wrong with it in plain words: what it says it is on its Read me tab, each tab the tools know and each tab of your own, a first row without column names, a missing Name column, blank and repeated Names, a Status that is not Approved, Draft or Retired, and merged cells in a list. It names the tab, the row and the reason. The workbook is only read.", _
         "standards, workbook, excel, check, read me, tabs, columns, names, status", "Template", "Template", "No, it only reports")
+    s = s & "," & T("SKW_Workbooks.NewWorkbook", "New Workbook", "Tools setup", _
+        "Makes a new, blank standards workbook: the team's Global Standards, one effort's Effort Standards or one program's Program Standards. It has a Read me tab that says what it is, and every tab with all its columns and no rows, under the plain column names. It asks for the kind, the name and the folder, and never writes over a file. Stationkeeper 4.57.0 or later reads the plain names; an older Stationkeeper misreads them.", _
+        "standards, workbook, excel, new, blank, make, effort standards, program standards, global standards, read me, tabs, columns", "Template", "Template", "No: it makes a new file and changes no document")
+    s = s & "," & T("SKW_Workbooks.AddReadMeTab", "Add a Read Me Tab", "Tools setup", _
+        "Adds a Read me tab to a standards workbook that has none, as its first tab, so the workbook says what it is: Global Standards, Effort Standards or Program Standards, and who it belongs to. Nothing else in the workbook is changed. A workbook that already says what it is is left alone. Close the workbook in Excel first.", _
+        "standards, workbook, excel, read me, this workbook is, it belongs to, kind, older workbook", "Template", "Template", "No: it changes the workbook, not a document")
     s = s & "," & T("SKW_Capture.CaptureStyles", "Capture Styles to the Global Standards", "Standards", _
         "For Stationkeeper Admins. Adds the document's styles that the Global Standards' Styles sheet lacks, as Draft rows the Stationkeeper app holds until they are approved there. Reports first; writes only on a yes. A style already on the sheet is never changed. A dated copy of the workbook is kept first.", _
         "standards, styles, capture, global standards, excel, draft", "Styles", "Whole document", "No, it writes to the workbook on a yes")
