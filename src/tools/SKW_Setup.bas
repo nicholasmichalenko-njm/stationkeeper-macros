@@ -70,7 +70,7 @@ End Sub
 
 ' ---------------------------------------------------------------------
 Public Function SKW_ChooseStandards(ByVal p As String) As String
-    Dim found As Boolean, was As String
+    Dim found As Boolean, was As String, said As String
     ' A workbook in OneDrive or SharePoint comes back from the picker as a web address: use its copy on this PC.
     p = SKW_LocalPath(p)
     If LCase$(Left$(p, 4)) = "http" Then
@@ -92,15 +92,27 @@ Public Function SKW_ChooseStandards(ByVal p As String) As String
             ". Nothing was changed." & vbCr & "If it is open in Excel with a cell being typed in, press Enter there and choose it again."
         Exit Function
     End If
+    ' A workbook that says it is an effort's or a program's is not the Global Standards (1.22.0).
+    If SKW_StdKind() = "Effort Standards" Or SKW_StdKind() = "Program Standards" Then
+        said = SKW_StdKind()
+        SKW_SetStandardsPath was
+        SKW_ChooseStandards = "That workbook says it is " & IIf(said = "Effort Standards", "an Effort Standards", "a Program Standards") & " workbook (the line ""This workbook is"" on its Read me tab). " & _
+            "Nothing was changed." & vbCr & "Choose it as this effort's standards instead: it is laid over the Global Standards."
+        Exit Function
+    End If
     SKW_ChooseStandards = "The tools now use " & Mid$(p, InStrRev(p, "\") + 1) & " for " & ThisDocument.Name & "." & vbCr & vbCr & _
-        SKW_StandardsSummary()
+        SKW_StandardsSummary() & vbCr & vbCr & IIf(SKW_StdKind() = "Global Standards", "Its Read me tab says it is the Global Standards.", _
+        "It does not say what it is yet (no line ""This workbook is"" on a Read me tab). It is read as before. Check This Workbook says more.")
 End Function
 
 ' Chooses the effort's own standards workbook, laid over the Global Standards. p "" clears it.
 Public Function SKW_ChooseEffortStandards(ByVal p As String) As String
-    Dim found As Boolean, was As String, note As String
+    Dim found As Boolean, was As String, note As String, kindWord As String
     If Len(Trim$(p)) = 0 Then
         SKW_SetEffortStdPath ""
+        On Error Resume Next
+        DeleteSetting SKW_APP, "EffortKind", ThisDocument.Name
+        On Error GoTo 0
         SKW_ChooseEffortStandards = "No effort's standards are laid over the Global Standards now. The tools use the Global Standards alone."
         Exit Function
     End If
@@ -127,15 +139,27 @@ Public Function SKW_ChooseEffortStandards(ByVal p As String) As String
             "If it is open in Excel with a cell being typed in, press Enter there and choose it again."
         Exit Function
     End If
+    ' A workbook that says it is the Global Standards is not an effort's (1.22.0).
+    If SKW_EffKind() = "Global Standards" Then
+        SKW_SetEffortStdPath was
+        SKW_ChooseEffortStandards = "That workbook says it is a Global Standards workbook (the line ""This workbook is"" on its Read me tab). Nothing was changed." & vbCr & _
+            "An effort's workbook says Effort Standards there, and a program's says Program Standards."
+        Exit Function
+    End If
+    ' The menu's line says effort or program by what the workbook says, or by its file name for an older one.
+    kindWord = IIf(SKW_EffKind() = "Program Standards" Or (Len(SKW_EffKind()) = 0 And SKW_KindFromName(p) = "Program Standards"), "program", "effort")
+    SaveSetting SKW_APP, "EffortKind", ThisDocument.Name, kindWord
     SKW_ChooseEffortStandards = "The tools now lay " & Mid$(p, InStrRev(p, "\") + 1) & " over the Global Standards for " & ThisDocument.Name & ": " & note & "." & vbCr & vbCr & _
-        "Where the effort sets a value it wins. A blank cell keeps the Global Standards' value. Every report names both workbooks."
+        "Where the " & kindWord & " sets a value it wins. A blank cell keeps the Global Standards' value. Every report names both workbooks." & _
+        IIf(Len(SKW_EffKind()) > 0, vbCr & vbCr & "Its Read me tab says it is " & IIf(kindWord = "program", "a Program Standards", "an Effort Standards") & " workbook" & _
+            IIf(Len(SKW_EffOwner()) > 0, " and that it belongs to " & SKW_EffOwner(), "") & ".", "")
 End Function
 
 Public Sub ChooseEffortStandardsWorkbook()
     Dim p As String
     If SKW_IsQuiet() Then Exit Sub   ' needs a person to choose the file
     With Application.FileDialog(3)
-        .Title = "Choose the effort's standards workbook (Effort Formatting)"
+        .Title = "Choose the effort's or the program's standards workbook"
         .Filters.Clear
         .Filters.Add "Excel workbooks", "*.xlsx;*.xlsm;*.xls"
         .AllowMultiSelect = False
@@ -321,8 +345,11 @@ Public Function SKW_ToolList() As String
         "Points the tools at your team's standards workbook. Each person does this once per template.", _
         "standards, excel, setup, rules", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Setup.ChooseEffortStandardsWorkbook", "Choose Effort Standards Workbook", "Tools setup", _
-        "Lays an effort's own standards workbook (the app's Effort Formatting file) over the Global Standards. Where the effort sets a value it wins; a blank keeps the Global value. The menu's standards lines do the same.", _
-        "standards, effort, excel, setup, rules, effort formatting", "Template", "Template", "No, it only reports")
+        "Lays an effort's or a program's own standards workbook (Effort Standards or Program Standards; the app's older Effort Formatting file too) over the Global Standards. Where it sets a value it wins; a blank keeps the Global value. A workbook that says it is the Global Standards is refused. The menu's standards lines do the same.", _
+        "standards, effort, program, excel, setup, rules, effort standards, program standards, effort formatting", "Template", "Template", "No, it only reports")
+    s = s & "," & T("SKW_Workbooks.CheckThisWorkbook", "Check This Workbook", "Tools setup", _
+        "Asks for a standards workbook and says what is wrong with it in plain words: what it says it is on its Read me tab, each tab the tools know and each tab of your own, a first row without column names, a missing Name column, blank and repeated Names, a Status that is not Approved, Draft or Retired, and merged cells in a list. It names the tab, the row and the reason. The workbook is only read.", _
+        "standards, workbook, excel, check, read me, tabs, columns, names, status", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Capture.CaptureStyles", "Capture Styles to the Global Standards", "Standards", _
         "For Stationkeeper Admins. Adds the document's styles that the Global Standards' Styles sheet lacks, as Draft rows the Stationkeeper app holds until they are approved there. Reports first; writes only on a yes. A style already on the sheet is never changed. A dated copy of the workbook is kept first.", _
         "standards, styles, capture, global standards, excel, draft", "Styles", "Whole document", "No, it writes to the workbook on a yes")

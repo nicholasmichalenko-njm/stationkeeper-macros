@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.21.0"
+Public Const SKW_VERSION As String = "1.22.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
@@ -39,6 +39,12 @@ Private mStdRead As Boolean
 Private mEffPath As String             ' the effort's standards workbook laid over the Global Standards, or ""
 Private mEffStamp As Date
 Private mEffNote As String             ' what the overlay did, for reports
+Private mReadKind As String            ' what the workbook last read says it is on its Read me tab, or ""
+Private mReadOwner As String           ' and whose it says it is
+Private mStdKind As String
+Private mStdOwner As String
+Private mEffKind As String
+Private mEffOwner As String
 Private mMerged As Object
 Private mMergedKey As String
 Private mRules As Object
@@ -737,6 +743,70 @@ Public Function SKW_EffortStdNote() As String
     If Not (SKW_Workbook() Is Nothing) Then SKW_EffortStdNote = mEffNote
 End Function
 
+' ---------------------------------------------------------------------
+' What a workbook says it is (1.22.0). Its Read me tab carries two visible lines, "This workbook is" and
+' "It belongs to" (UX decisions 134, 135, 149). Nothing is hidden and there is no id. The label may be followed
+' by the value in the same cell, or the value may sit in the next cell to the right.
+' ---------------------------------------------------------------------
+' v: the top left cells of the Read me tab. kind comes back as Global Standards, Effort Standards,
+' Program Standards, or "" when the line is not there or says something else.
+Public Sub SKW_ReadMeLines(ByVal v As Variant, ByRef kind As String, ByRef owner As String)
+    Dim r As Long, c As Long, c2 As Long, t As String, rest As String, k As Variant
+    kind = ""
+    owner = ""
+    If Not IsArray(v) Then Exit Sub
+    For r = LBound(v, 1) To UBound(v, 1)
+        For c = LBound(v, 2) To UBound(v, 2)
+            t = Trim$(SKW_Cell(v(r, c)))
+            If LCase$(Left$(t, 16)) = "this workbook is" Or LCase$(Left$(t, 13)) = "it belongs to" Then
+                rest = Trim$(Mid$(t, IIf(LCase$(Left$(t, 1)) = "t", 17, 14)))
+                If Left$(rest, 1) = ":" Then rest = Trim$(Mid$(rest, 2))
+                If Len(rest) = 0 Then
+                    For c2 = c + 1 To UBound(v, 2)
+                        If Len(rest) = 0 Then rest = Trim$(SKW_Cell(v(r, c2)))
+                    Next
+                End If
+                If LCase$(Left$(t, 1)) = "t" Then
+                    If Len(kind) = 0 Then
+                        For Each k In Array("Global Standards", "Effort Standards", "Program Standards")
+                            If InStr(1, rest, CStr(k), vbTextCompare) > 0 Then kind = CStr(k)
+                        Next
+                    End If
+                ElseIf Len(owner) = 0 Then
+                    owner = rest
+                End If
+            End If
+        Next
+    Next
+End Sub
+
+' What a workbook's file name says it is, for a workbook made before the Read me lines: the app's
+' "Global Standards.xlsx", "<name> Effort Formatting.xlsx", and the names of decision 133.
+Public Function SKW_KindFromName(ByVal p As String) As String
+    Dim nm As String
+    nm = LCase$(Mid$(p, InStrRev(p, "\") + 1))
+    If InStr(nm, "effort standards") > 0 Or InStr(nm, "effort formatting") > 0 Then
+        SKW_KindFromName = "Effort Standards"
+    ElseIf InStr(nm, "program standards") > 0 Then
+        SKW_KindFromName = "Program Standards"
+    ElseIf InStr(nm, "global standards") > 0 Then
+        SKW_KindFromName = "Global Standards"
+    End If
+End Function
+
+' What the chosen Global Standards workbook says it is, and the effort's or program's workbook laid over it.
+Public Function SKW_StdKind() As String
+    If Not (SKW_Workbook() Is Nothing) Then SKW_StdKind = mStdKind
+End Function
+
+Public Function SKW_EffKind() As String
+    If Not (SKW_Workbook() Is Nothing) Then SKW_EffKind = mEffKind
+End Function
+
+Public Function SKW_EffOwner() As String
+    If Not (SKW_Workbook() Is Nothing) Then SKW_EffOwner = mEffOwner
+End Function
+
 Public Function SKW_HasStandards() As Boolean
     SKW_HasStandards = Not (SKW_Std() Is Nothing)
 End Function
@@ -746,7 +816,7 @@ Public Function SKW_StdNote() As String
     Dim e As Object, wb As String
     Set e = SKW_Effort()
     If Not (SKW_Workbook() Is Nothing) Then wb = Mid$(mStdPath, InStrRev(mStdPath, "\") + 1)
-    If Len(wb) > 0 And Len(mEffNote) > 0 Then wb = wb & ", with the effort's " & Mid$(mEffPath, InStrRev(mEffPath, "\") + 1) & " over it (" & mEffNote & ")"
+    If Len(wb) > 0 And Len(mEffNote) > 0 Then wb = wb & ", with the " & IIf(mEffKind = "Program Standards", "program's ", "effort's ") & Mid$(mEffPath, InStrRev(mEffPath, "\") + 1) & " over it (" & mEffNote & ")"
     If e("ok") Then
         SKW_StdNote = "Rules: effort " & e("effort") & " rev " & e("revision") & _
             IIf(e("fromCache"), " (last complete copy: " & LCase$(e("state")) & ")", "") & _
@@ -792,6 +862,10 @@ Public Function SKW_Workbook() As Object
     On Error GoTo 0
     If mStdRead And p = mStdPath And stamp = mStdStamp And ep = mEffPath And estamp = mEffStamp Then Set SKW_Workbook = mStd: Exit Function
     Set mStd = SKW_ReadWorkbook(p)
+    mStdKind = mReadKind
+    mStdOwner = mReadOwner
+    mEffKind = ""
+    mEffOwner = ""
     mStdPath = p
     mStdStamp = stamp
     mEffPath = ep
@@ -804,6 +878,8 @@ Public Function SKW_Workbook() As Object
         Else
             keepErr = SKW_StdError
             Set eff = SKW_ReadWorkbook(ep)
+            mEffKind = mReadKind
+            mEffOwner = mReadOwner
             If eff Is Nothing Then
                 mEffNote = "the effort's workbook could not be read, so the Global Standards stand alone"
             Else
@@ -823,7 +899,7 @@ Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As Strin
     Dim k As Variant, rows As Collection, out As Collection, r As Object, e As Object, d As Object, f As Variant, idx As Object
     Dim key As String, nCells As Long, nRows As Long, nVol As Long, used As Object, v As String
     For Each k In eff.Keys
-        If k <> "about" And k <> "columns" Then
+        If k <> "about" And k <> "columns" And k <> "read me" Then
             Set idx = CreateObject("Scripting.Dictionary")
             For Each e In eff(k)
                 v = ""
@@ -1314,6 +1390,8 @@ Private Function SKW_ReadWorkbook(ByVal path As String) As Object
     Dim rows As Collection, d As Object, h As String, hasAny As Boolean, ed As String
     Set res = CreateObject("Scripting.Dictionary")
     SKW_StdError = ""
+    mReadKind = ""
+    mReadOwner = ""
     On Error GoTo Fail
     SKW_Status "Reading the standards workbook..."
     Set xl = CreateObject("Excel.Application")
@@ -1321,6 +1399,7 @@ Private Function SKW_ReadWorkbook(ByVal path As String) As Object
     xl.DisplayAlerts = False
     Set wb = xl.Workbooks.Open(FileName:=path, UpdateLinks:=0, ReadOnly:=True, AddToMru:=False)
     For Each ws In wb.Worksheets
+        If LCase$(Trim$(ws.Name)) = "read me" Then SKW_ReadMeLines ws.Range("A1:C40").Value, mReadKind, mReadOwner
         v = ws.UsedRange.Value
         Set rows = New Collection
         If IsArray(v) Then

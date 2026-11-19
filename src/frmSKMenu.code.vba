@@ -200,7 +200,7 @@ Private Sub UserForm_Initialize()
     Set lblStdE = AddLabel("lblStdE", "", 10, 420, 300, 14)
     Set btnEff = AddCtl("Forms.CommandButton.1", "btnEff", 346, 420, 84, 22)
     btnEff.Caption = "Choose..."
-    btnEff.ControlTipText = "The effort's own standards workbook (Effort Formatting). Where it sets a value it wins; a blank keeps the Global Standards' value."
+    btnEff.ControlTipText = "The effort's or the program's own standards workbook. Where it sets a value it wins; a blank keeps the Global Standards' value."
     Set btnEffClear = AddCtl("Forms.CommandButton.1", "btnEffClear", 432, 420, 56, 22)
     btnEffClear.Caption = "Clear"
     btnEffClear.ControlTipText = "Stop laying an effort's standards over the Global Standards"
@@ -1005,8 +1005,10 @@ Private Sub StdLines()
     tagWords = AdminWords("SKW_AdminTag"): noteWords = AdminWords("SKW_AdminNote")
     lblStdG.Caption = "Global Standards: " & IIf(Len(g) > 0, Mid$(g, InStrRev(g, "\") + 1), "not chosen") & IIf(Len(tagWords) > 0, " (" & tagWords & ")", "")
     lblStdG.ControlTipText = StdTip() & IIf(Len(noteWords) > 0, " " & noteWords, "")
-    lblStdE.Caption = "This effort's standards: " & IIf(Len(e) > 0, Mid$(e, InStrRev(e, "\") + 1), "none (the Global Standards stand alone)")
-    lblStdE.ControlTipText = IIf(Len(e) > 0, "Laid over the Global Standards: " & e, "Choose the effort's Effort Formatting workbook to lay its values over the Global Standards.")
+    ' A program's workbook says so on its Read me tab (1.22.0); the tools keep the word when it is chosen.
+    lblStdE.Caption = "This " & IIf(Len(e) > 0 And GetSetting("Stationkeeper Tools", "EffortKind", ThisDocument.Name, "") = "program", "program", "effort") & "'s standards: " & _
+        IIf(Len(e) > 0, Mid$(e, InStrRev(e, "\") + 1), "none (the Global Standards stand alone)")
+    lblStdE.ControlTipText = IIf(Len(e) > 0, "Laid over the Global Standards: " & e, "Choose the effort's Effort Standards workbook (or a program's Program Standards) to lay its values over the Global Standards.")
     btnStd.ControlTipText = StdTip()
     btnEffClear.Enabled = (Len(e) > 0)
 End Sub

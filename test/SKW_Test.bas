@@ -2572,3 +2572,73 @@ Bad:
     On Error Resume Next
     Close #f
 End Function
+
+' ---------------------------------------------------------------------
+' 1.22.0: a workbook says what it is on its Read me tab. arg: the work folder, holding the fixtures
+' Global Standards (quick).xlsx (no Read me), Team book.xlsx (says Global Standards), Kestrel Effort Standards.xlsx,
+' Osprey standards.xlsx (says Program Standards in one cell) and Standards with problems.xlsx.
+' ---------------------------------------------------------------------
+Public Function TW_Kinds(ByVal folder As String) As String
+    Dim s As String, prev As String, prevE As String, prevK As String, stage As String, g As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    prevK = GetSetting(SKW_APP, "EffortKind", ThisDocument.Name, "")
+    SKW_SetEffortStdPath ""
+    g = folder & "\Global Standards (quick).xlsx"
+    stage = "older global"
+    s = "older: " & Replace(SKW_ChooseStandards(g), vbCr, " / ") & " kind=[" & SKW_StdKind() & "]"
+    stage = "effort as global"
+    s = s & " ## effort as global: " & Replace(SKW_ChooseStandards(folder & "\Kestrel Effort Standards.xlsx"), vbCr, " / ") & " kept=" & (SKW_StandardsPath() = g)
+    stage = "program as global"
+    s = s & " ## program as global: " & Replace(SKW_ChooseStandards(folder & "\Osprey standards.xlsx"), vbCr, " / ") & " kept=" & (SKW_StandardsPath() = g)
+    stage = "global as effort"
+    s = s & " ## global as effort: " & Replace(SKW_ChooseEffortStandards(folder & "\Team book.xlsx"), vbCr, " / ") & " kept=[" & SKW_EffortStdPath() & "]"
+    stage = "effort"
+    s = s & " ## effort: " & Replace(SKW_ChooseEffortStandards(folder & "\Kestrel Effort Standards.xlsx"), vbCr, " / ") & " word=" & GetSetting(SKW_APP, "EffortKind", ThisDocument.Name, "") & _
+        " kind=[" & SKW_EffKind() & "] owner=[" & SKW_EffOwner() & "] std=" & SKW_StdNote()
+    stage = "program"
+    s = s & " ## program: " & Replace(SKW_ChooseEffortStandards(folder & "\Osprey standards.xlsx"), vbCr, " / ") & " word=" & GetSetting(SKW_APP, "EffortKind", ThisDocument.Name, "") & _
+        " kind=[" & SKW_EffKind() & "] owner=[" & SKW_EffOwner() & "] std=" & SKW_StdNote() & " lists=" & SKW_WbRows("List numbering").Count
+    stage = "clear"
+    s = s & " ## clear: " & SKW_ChooseEffortStandards("") & " word=[" & GetSetting(SKW_APP, "EffortKind", ThisDocument.Name, "") & "]"
+    stage = "says global"
+    s = s & " ## says global: " & Replace(SKW_ChooseStandards(folder & "\Team book.xlsx"), vbCr, " / ") & " kind=[" & SKW_StdKind() & "]"
+    stage = "names"
+    s = s & " ## names: " & SKW_KindFromName("C:\x\Global Standards.xlsx") & "|" & SKW_KindFromName("C:\x\Kestrel Effort Formatting.xlsx") & "|" & _
+        SKW_KindFromName("C:\x\Kestrel Effort Standards.xlsx") & "|" & SKW_KindFromName("C:\x\Osprey Program Standards.xlsx") & "|" & SKW_KindFromName("C:\x\Book1.xlsx") & "|"
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    If Len(prevK) > 0 Then SaveSetting SKW_APP, "EffortKind", ThisDocument.Name, prevK
+    TW_Kinds = s
+    Exit Function
+Bad:
+    TW_Kinds = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+End Function
+
+' 1.22.0: Check This Workbook. arg: the work folder.
+Public Function TW_CheckBook(ByVal folder As String) As String
+    Dim s As String, stage As String, p As String, stamp As Date
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "problems"
+    p = folder & "\Standards with problems.xlsx"
+    stamp = FileDateTime(p)
+    s = "problems: " & SKW_CheckWorkbook(p) & " same=" & (FileDateTime(p) = stamp) & " ## " & ReportText()
+    CloseReport
+    stage = "app"
+    s = s & " ## app: " & SKW_CheckWorkbook(folder & "\Global Standards (quick).xlsx") & " ## " & ReportText()
+    CloseReport
+    stage = "says"
+    s = s & " ## says: " & SKW_CheckWorkbook(folder & "\Kestrel Effort Standards.xlsx")
+    CloseReport
+    stage = "missing"
+    s = s & " ## missing: " & SKW_CheckWorkbook(folder & "\no such workbook.xlsx")
+    TW_CheckBook = s
+    Exit Function
+Bad:
+    TW_CheckBook = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+End Function
