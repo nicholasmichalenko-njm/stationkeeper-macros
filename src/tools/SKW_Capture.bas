@@ -79,20 +79,25 @@ End Function
 ' Returns "" when it worked, else why not. added, changed and same count rows.
 Public Function SKW_BookWrite(ByVal sheet As String, ByVal keyHeader As String, ByVal rows As Collection, ByVal update As Boolean, _
                               ByRef added As Long, ByRef changed As Long, ByRef same As Long) As String
-    Dim p As String, xl As Object, wb As Object, ws As Object, hdr As Object, c As Long, lastCol As Long, lastRow As Long, r As Long
+    SKW_BookWrite = SKW_BookWriteTo(SKW_StandardsPath(), sheet, keyHeader, rows, update, added, changed, same)
+End Function
+
+' The same writer for a workbook named by its path (1.21.0): the work PC proofs write a scratch workbook and a copy with it.
+Public Function SKW_BookWriteTo(ByVal p As String, ByVal sheet As String, ByVal keyHeader As String, ByVal rows As Collection, ByVal update As Boolean, _
+                                ByRef added As Long, ByRef changed As Long, ByRef same As Long) As String
+    Dim xl As Object, wb As Object, ws As Object, hdr As Object, c As Long, lastCol As Long, lastRow As Long, r As Long
     Dim have As Object, row As Object, k As Variant, key As String, at As Long, h As String, other As String, o As Object, keys As Object
     Dim did As Boolean, ed As String, isNew As Boolean
     added = 0: changed = 0: same = 0
     SKW_LastBookBackup = ""
-    p = SKW_StandardsPath()
-    If Len(p) = 0 Then SKW_BookWrite = "No Global Standards workbook is chosen. Choose the Stationkeeper app's Global Standards.xlsx first. Nothing was written.": Exit Function
-    If Len(Dir$(p)) = 0 Then SKW_BookWrite = "The Global Standards workbook was not found: " & p & ". Nothing was written.": Exit Function
+    If Len(p) = 0 Then SKW_BookWriteTo = "No Global Standards workbook is chosen. Choose the Stationkeeper app's Global Standards.xlsx first. Nothing was written.": Exit Function
+    If Len(Dir$(p)) = 0 Then SKW_BookWriteTo = "The Global Standards workbook was not found: " & p & ". Nothing was written.": Exit Function
     If Not FileFree(p) Then
-        SKW_BookWrite = "The Global Standards workbook is open in Excel or held by another program. Close it there and run this again. Nothing was written."
+        SKW_BookWriteTo = "The Global Standards workbook is open in Excel or held by another program. Close it there and run this again. Nothing was written."
         Exit Function
     End If
     SKW_LastBookBackup = BackupOf(p)
-    If Len(SKW_LastBookBackup) = 0 Then SKW_BookWrite = "A copy of the workbook could not be kept first, so nothing was written.": Exit Function
+    If Len(SKW_LastBookBackup) = 0 Then SKW_BookWriteTo = "A copy of the workbook could not be kept first, so nothing was written.": Exit Function
     On Error GoTo Fail
     SKW_Status "Writing to the Global Standards workbook..."
     Set xl = CreateObject("Excel.Application")
@@ -104,7 +109,7 @@ Public Function SKW_BookWrite(ByVal sheet As String, ByVal keyHeader As String, 
     On Error GoTo Fail
     If ws Is Nothing Then
         wb.Close False: xl.Quit
-        SKW_BookWrite = "The workbook has no " & sheet & " sheet. The Stationkeeper app writes that sheet; open the app once so it does, then run this again. Nothing was written."
+        SKW_BookWriteTo = "The workbook has no " & sheet & " sheet. The Stationkeeper app writes that sheet; open the app once so it does, then run this again. Nothing was written."
         Exit Function
     End If
     Set hdr = CreateObject("Scripting.Dictionary")
@@ -115,7 +120,7 @@ Public Function SKW_BookWrite(ByVal sheet As String, ByVal keyHeader As String, 
     Next
     If Not hdr.Exists(LCase$(keyHeader)) Then
         wb.Close False: xl.Quit
-        SKW_BookWrite = "The " & sheet & " sheet has no " & keyHeader & " column. Nothing was written."
+        SKW_BookWriteTo = "The " & sheet & " sheet has no " & keyHeader & " column. Nothing was written."
         Exit Function
     End If
     lastRow = ws.Cells(ws.Rows.Count, hdr(LCase$(keyHeader))).End(-4162).Row
@@ -183,14 +188,14 @@ Public Function SKW_BookWrite(ByVal sheet As String, ByVal keyHeader As String, 
     wb.Close False
     xl.Quit
     ' The tools read the workbook again.
-    SKW_SetStandardsPath p
+    If LCase$(p) = LCase$(SKW_StandardsPath()) Then SKW_SetStandardsPath p
     Exit Function
 Fail:
     ed = Err.Description
     On Error Resume Next
     If Not wb Is Nothing Then wb.Close False
     If Not xl Is Nothing Then xl.Quit
-    SKW_BookWrite = "Stopped: " & ed & ". The workbook was closed without saving. The copy kept first is " & SKW_LastBookBackup & "."
+    SKW_BookWriteTo = "Stopped: " & ed & ". The workbook was closed without saving. The copy kept first is " & SKW_LastBookBackup & "."
 End Function
 
 Private Function AfterWrite(ByVal added As Long, ByVal changed As Long) As String

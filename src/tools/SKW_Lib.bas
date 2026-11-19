@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.20.0"
+Public Const SKW_VERSION As String = "1.21.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
@@ -663,6 +663,22 @@ Private Function SKW_SyncRoots() As Collection
     End If
     For Each v In Array("OneDriveCommercial", "OneDrive", "OneDriveConsumer")
         If Len(Environ$(CStr(v))) > 0 Then c.Add Environ$(CStr(v))
+    Next
+End Function
+
+' How many synced folders this PC knows of (the work PC proofs report the count, never the folders).
+Public Function SKW_SyncRootCount() As Long
+    SKW_SyncRootCount = SKW_SyncRoots().Count
+End Function
+
+' Is this file or folder inside one of this PC's synced folders?
+Public Function SKW_InSyncRoot(ByVal p As String) As Boolean
+    Dim root As Variant, r As String
+    For Each root In SKW_SyncRoots()
+        r = CStr(root)
+        If Right$(r, 1) = "\" Then r = Left$(r, Len(r) - 1)
+        If Len(r) > 0 And LCase$(Left$(p, Len(r) + 1)) = LCase$(r) & "\" Then SKW_InSyncRoot = True: Exit Function
+        If Len(r) > 0 And LCase$(p) = LCase$(r) Then SKW_InSyncRoot = True: Exit Function
     Next
 End Function
 

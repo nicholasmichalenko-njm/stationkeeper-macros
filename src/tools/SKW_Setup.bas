@@ -563,6 +563,18 @@ Public Function SKW_ToolList() As String
     s = s & "," & T("SKX_Book.BookDeliveryCopy", "Book Delivery Copy", "Excel", _
         "Saves a copy of the open workbook beside it with notes and comments out, links to other files turned into values, and personal details out. The open workbook is not changed.", _
         "excel, workbook, delivery, clean, comments, links, metadata", "Whole document", "Whole document", "No, it saves a clean copy")
+    s = s & "," & T("SKW_Proof.ProofThisPC", "Work PC Proof 1: This PC and Word's Styles", "Work PC proofs", _
+        "Finds out what this PC allows: Excel started from Word, settings and files kept on the PC, a Stationkeeper window, synced folders. Then, in a scratch document that is not saved, tries each of the 49 style settings and whether a value can be given back to the base style. The report holds setting names and counts only. Changes nothing.", _
+        "proof, work pc, styles, excel, policy, check", "Template", "Template", "No, it only reports")
+    s = s & "," & T("SKW_Proof.ProofThisDocumentStyles", "Work PC Proof 2: This Document's Styles", "Work PC proofs", _
+        "Reads every paragraph and character style of the document in front: which of the 49 settings Word hands over, which differ from the base style, and which the style itself holds. Then makes the styles again in a scratch document and counts what came back different. Setting names and counts only: no style name and no value. Changes nothing.", _
+        "proof, work pc, styles, round trip, capture, build, compare", "Styles", "Whole document", "No, it only reports")
+    s = s & "," & T("SKW_Proof.ProofAWorkbook", "Work PC Proof 3: A Workbook", "Work PC proofs", _
+        "Asks for a workbook. Times how long it takes to read whole, then saves one row to a copy through the tools' own writer and counts, tab by tab, whether the columns, hidden columns, folded columns and drop-downs are still there. The workbook you choose is only read; the copy is deleted.", _
+        "proof, work pc, workbook, excel, save, columns, drop-downs, time", "Template", "Template", "No, it reads the workbook and works on a copy it deletes")
+    s = s & "," & T("SKW_Proof.ProofSharedWorkbook", "Work PC Proof 4: A Shared Workbook", "Work PC proofs", _
+        "Asks for a synced folder. The first run makes a scratch workbook there. Run it again while a colleague has that scratch workbook open: it writes one row and reports whether this PC saw the file as held, whether the row landed, and whether a conflict copy appeared. Only the scratch workbook is written.", _
+        "proof, work pc, workbook, onedrive, sharepoint, sync, conflict, shared", "Template", "Template", "Only its own scratch workbook")
     s = s & "]}"
     SKW_ToolList = s
 End Function

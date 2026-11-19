@@ -305,7 +305,7 @@ try {
         param($word)
         $k = OpenDoc $word $kit $true
         $msg = RunW $word 'SK_Install.SK_InstallToolsInto' $sample
-        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(20 modules and 4 forms)*') ($msg -replace "`r", ' / ')
+        Check 'tools install via Organizer' ($msg -like 'Stationkeeper Tools are in*(21 modules and 4 forms)*') ($msg -replace "`r", ' / ')
         $k.Close([ref]0)
     }
     Invoke-WordJob -Root $Root -Job {
@@ -317,7 +317,7 @@ try {
         Check 'tool modules are in the template' (($names -match 'SKW_Lib') -and ($names -match 'SKW_Tables') -and ($names -match 'SKW_Review') -and ($names -match 'SKW_Layout') -and ($names -match 'SKW_Captions') -and ($names -match 'SKW_Lists')) $names
         $tc = RunW $word 'SKW_Test.TW_ToolCount'
         Write-Output "TOOLS: $tc"
-        Check 'catalog: 83 tools arrive described, categorised and in the menu' (($tc -like '83 |*') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
+        Check 'catalog: 87 tools arrive described, categorised and in the menu' (($tc -like '87 |*') -and ($tc -match 'SKW_Proof\.ProofThisPC\[[^/]*/Work PC proofs/Template/1\]') -and ($tc -match 'SKW_Fields\.SafeUpdateAllFields\[[^/]*/Fields/Whole document/1\]') -and ($tc -match 'SKW_Tables\.ApplyTableRolesHere\[[^/]*/Tables/Table at the cursor/1\]') -and ($tc -notmatch 'ApplyTeamTableType|AddTableRolesSheet') -and ($tc -notmatch '/0\]|//')) ''
         $ms = TR1 $word 'T_MenuSearch' 'broken'
         Check 'menu search finds a tool' ($ms -match '^[1-9]') $ms
         $sum = TR $word 'T_ModelSummary'
@@ -764,6 +764,30 @@ try {
         Check '1.20.0: a person not on the list does not see the three Capture tools; the rest of the menu is unchanged' (($ad -match '^nolist: [^#]*menu\{rows=(\d+) capture=3') -and ([int]$Matches[1] -gt 3) -and ($ad -match ('## other: admin=False hide=\[\|SKW_Capture\.CaptureStyles\|SKW_Capture\.CaptureBannedPhrase\|SKW_Capture\.CaptureHeadingNumbering\|\] note=You are not listed as a Stationkeeper Admin\.[^#]*menu\{rows=' + ([int]$Matches[1] - 3) + ' capture=0 line=Global Standards: Global Standards \(admins\)\.xlsx\}'))) $ad
         Check '1.20.0: run another way, each admin tool refuses a person not listed and writes nothing' ($ad -match '## refused: phrase=You are not listed as a Stationkeeper Admin\.[^#]*Nothing was written\. styles=You are not listed as a Stationkeeper Admin\.[^#]*Nothing was written\. heads=You are not listed as a Stationkeeper Admin\.') $ad
         Check '1.20.0: a listed person (name matched without regard to case) sees the admin tools, and the list is kept so the menu does not read the workbook again' (($ad -match '## listed: admin=True hide=\[\] note=You are listed as a Stationkeeper Admin\.[^#]*menu\{rows=\d+ capture=3 line=Global Standards: Global Standards \(admins\)\.xlsx \(you are an admin\)\}') -and ($ad -match '## kept=True')) $ad
+        # 12m. 1.21.0: the work PC proofs. Each changes nothing of the test's and reports names and counts.
+        $pf = RunW $word 'SKW_Test.TW_ProofPC'
+        Write-Output "PROOFPC: $pf"
+        Check '1.21.0: proof 1 runs to its end and the checks of this PC pass (Excel from Word, settings, files, a window)' (($pf -match '^Proof 1 ran in [\d.]+ s\. 0 check\(s\) of this PC failed\.') -and ($pf -match 'P1 This PC \| Excel started from Word \| Works \|') -and ($pf -match 'A Stationkeeper window can be made \| Works \|') -and ($pf -notmatch 'Stopped \|')) $pf
+        Check '1.21.0: proof 1 sets and reads back each setting on a scratch paragraph style and character style, and never sets a style link' ((([regex]::Matches($pf, 'P4 Set and read each value \| [^|]+ \| Works \|')).Count -eq 47) -and ($pf -match 'P4 Set and read each value \| Linked style \| Not set \| Read only; the proof never sets it') -and ($pf -notmatch 'See detail')) ''
+        Check '1.21.0: proof 1 says for each of 38 settings what a value set equal to its base does; on this PC every one follows the base again' ((([regex]::Matches($pf, 'P2 Set a value back to its base \| [^|]+ \| Follows the base again \|')).Count -eq 38) -and ($pf -match 'follows the base again for 38 setting\(s\), stays as set for 0, and 0 did something else')) ''
+        Check '1.21.0: proof 1 tries the other ways to clear a value, and a style handed over as XML' ((([regex]::Matches($pf, 'P2 Other ways to clear \|')).Count -eq 10) -and ($pf -match 'A new style arrives from XML \| Works \|') -and ($pf -match 'A style that came from XML follows its base \| Follows the base \|') -and ($pf -match 'handed over again with a change \| Left as it was \|') -and ($pf -match 'deleted, then handed over again with a change \| Takes the change \|')) ''
+        Check '1.21.0: proof 1 reads the styles'' own XML and how a theme font reads back' (($pf -match 'Word hands over the styles'' own XML \| Works \| \d+ styles in the XML of an empty spot') -and ($pf -match 'Theme font \| Works \| paragraph: reads back as a (theme font|font name), (not )?written as a theme font in the XML')) ''
+        $pd = RunW $word 'SKW_Test.TW_ProofDoc'
+        Write-Output "PROOFDOC: $pd"
+        Check '1.21.0: proof 2 reads the styles the file holds and leaves the document as it was' (($pd -match '^\d+ style\(s\) kept in the file were read: \d+ paragraph, \d+ character\.') -and ($pd -match '## saved=True styles=True text=One/Two/ ##') -and ($pd -notmatch 'ERROR')) $pd
+        Check '1.21.0: proof 2 builds the styles again in a scratch document and every value comes back the same' (($pd -match '\((\d+) values set, 0 style\(s\) could not be made\)') -and ([int]$Matches[1] -ge 5) -and ($pd -match ' 0 value\(s\) came back different after the round trip\.')) ''
+        Check '1.21.0: proof 2 reports the 49 settings by name with counts only, and no style name' (($pd -match 'Tab stops \| \d+ \| 0 \| 1 \| 1 \| 0 \| 0 \| 0 \| 0') -and ($pd -match 'Shading \(hex, or none\) \| \d+ \| 0 \|') -and ($pd -match 'Linked style \| \d+ \| 0 \| - \| \d+ \| - \| - \| - \| 0') -and ($pd -notmatch 'ZZ Trip')) ''
+        $pb = RunW $word 'SKW_Test.TW_ProofBook' $capStd
+        Write-Output "PROOFBOOK: $pb"
+        Check '1.21.0: proof 3 times the read, saves one row to a copy through the tools'' writer, and every tab keeps its columns, hidden and folded columns' (($pb -match '^The workbook was read in [\d.]+ s \(\d+ cells') -and ($pb -match 'One row was written to a copy through the tools'' own writer and the copy saved\. (\d+) of \1 tab\(s\) kept') -and ($pb -match 'Styles \| The same, plus the proof''s one row \|')) $pb
+        Check '1.21.0: proof 3 only reads the workbook it is given, deletes its copy, and refuses a missing file' (($pb -match '## orig=True copies=0 ##') -and ($pb -match '## missing: The workbook was not found\. Nothing was done\.')) ''
+        [string]$pshare = Join-Path $work 'Proof shared'
+        New-Item -ItemType Directory -Force $pshare | Out-Null
+        $ps4 = RunW $word 'SKW_Test.TW_ProofShared' $pshare
+        Write-Output "PROOFSHARED: $ps4"
+        Check '1.21.0: proof 4 makes its scratch workbook on the first run and says what to do next' ($ps4 -match '^first: Made Stationkeeper proof scratch\.xlsx in that folder\. It holds nothing of yours\.[^#]*made=True') $ps4
+        Check '1.21.0: proof 4 writes one row with nobody in the workbook and counts the scratch workbooks before and after' ($ps4 -match '## free: Someone else had it open: no\. This PC saw the workbook as free\. The row was written\. Scratch workbooks in the folder: 1 before, 1 after; proof rows on this PC: 1\.') ''
+        Check '1.21.0: proof 4 writes nothing while the workbook is held on this PC, and refuses a folder that is not there' (($ps4 -match '## held: Someone else had it open: yes\. This PC saw the workbook as held\. The row was not written\.') -and ($ps4 -match '## nofolder: That folder was not found on this PC\. Nothing was done\.')) ''
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

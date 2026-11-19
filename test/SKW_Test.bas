@@ -2476,3 +2476,99 @@ Bad:
     On Error Resume Next
     SKW_SetStandardsPath prev
 End Function
+
+' 1.21.0: the work PC proofs. Each gives its message and its report's text. Nothing of the test's is changed by them.
+Public Function TW_ProofPC() As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    TW_ProofPC = SKW_ProofPC() & " ## " & ReportText()
+    CloseReport
+    Exit Function
+Bad:
+    TW_ProofPC = "ERROR: " & Err.Number & " " & Err.Description
+End Function
+
+Public Function TW_ProofDoc() As String
+    Dim d As Object, st As Object, s As String, stage As String, n As Long
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "setup"
+    Set d = Documents.Add(Template:=ThisDocument.FullName)
+    d.Content.Delete
+    Set st = d.Styles.Add("ZZ Trip Base", wdStyleTypeParagraph)
+    st.Font.Name = "Arial"
+    st.Font.Size = 11
+    st.ParagraphFormat.SpaceAfter = 6
+    Set st = d.Styles.Add("ZZ Trip Follower", wdStyleTypeParagraph)
+    st.BaseStyle = "ZZ Trip Base"
+    st.Font.Bold = True
+    st.ParagraphFormat.LeftIndent = 18
+    st.ParagraphFormat.TabStops.Add Position:=144, Alignment:=wdAlignTabRight, Leader:=wdTabLeaderDots
+    st.ParagraphFormat.Borders(wdBorderBottom).LineStyle = wdLineStyleSingle
+    Set st = d.Styles.Add("ZZ Trip Char", wdStyleTypeCharacter)
+    st.Font.Italic = True
+    st.Font.Color = RGB(0, 51, 102)
+    d.Content.InsertAfter "One" & vbCr & "Two"
+    d.Paragraphs(1).Style = d.Styles("ZZ Trip Base")
+    d.Paragraphs(2).Style = d.Styles("ZZ Trip Follower")
+    n = d.Styles.Count
+    d.UndoClear
+    d.Saved = True
+    stage = "run"
+    s = SKW_ProofDocStyles()
+    s = s & " ## saved=" & d.Saved & " styles=" & (d.Styles.Count = n) & " text=" & Replace(d.Content.Text, vbCr, "/") & " ## " & ReportText()
+    CloseReport
+    d.Close SaveChanges:=0
+    TW_ProofDoc = s
+    Exit Function
+Bad:
+    TW_ProofDoc = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    d.Close SaveChanges:=0
+End Function
+
+Public Function TW_ProofBook(ByVal path As String) As String
+    Dim s As String, stamp As Date, size As Long, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    stage = "run"
+    stamp = FileDateTime(path)
+    size = FileLen(path)
+    s = SKW_ProofWorkbook(path)
+    s = s & " ## orig=" & (FileDateTime(path) = stamp And FileLen(path) = size) & " copies=" & Len(Dir$(Environ$("TEMP") & "\Stationkeeper proof\*.xlsx")) & " ## " & ReportText()
+    CloseReport
+    stage = "missing"
+    s = s & " ## missing: " & SKW_ProofWorkbook(path & ".nope.xlsx")
+    TW_ProofBook = s
+    Exit Function
+Bad:
+    TW_ProofBook = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+End Function
+
+Public Function TW_ProofShared(ByVal folder As String) As String
+    Dim s As String, stage As String, f As Integer, p As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    p = folder & "\Stationkeeper proof scratch.xlsx"
+    If Len(Dir$(p)) > 0 Then Kill p
+    stage = "first"
+    s = "first: " & Replace(SKW_ProofShared(folder, ""), vbCr, " / ") & " made=" & (Len(Dir$(p)) > 0)
+    stage = "free"
+    s = s & " ## free: " & SKW_ProofShared(folder, "no") & " ## " & ReportText()
+    CloseReport
+    stage = "held"
+    f = FreeFile
+    Open p For Binary Access Read Write Lock Write As #f
+    s = s & " ## held: " & SKW_ProofShared(folder, "yes")
+    Close #f
+    CloseReport
+    stage = "no folder"
+    s = s & " ## nofolder: " & SKW_ProofShared(folder & "\no such folder", "")
+    Kill p
+    TW_ProofShared = s
+    Exit Function
+Bad:
+    TW_ProofShared = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    Close #f
+End Function

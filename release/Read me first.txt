@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.20.0
+STATIONKEEPER MACROS 1.21.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -79,6 +79,24 @@ STATIONKEEPER TOOLS (checks and fixes for Word documents)
    - 1.5.0 adds checks and fixes for acronyms at first use, the footer and marking (CUI),
      text that does not fit, titles that moved, pictures, colors, proofing language, links
      and table style. Fill in DeckFooterText, DeckMarking and DeckTableStyle on Settings.
+
+WORK PC PROOFS (1.21.0: four tools under the category "Work PC proofs")
+   They find out what Word, Excel and a synced folder allow on this PC. They change no
+   document and no workbook of yours. Each report holds setting names and counts only:
+   no style name, no value, no file name. Copy the whole report back to whoever builds
+   the tools.
+   - Proof 1: This PC and Word's Styles. Run it from the menu. It needs nothing.
+   - Proof 2: This Document's Styles. Open a document made from the team template
+     first, then run it. It can take a few minutes on a template with many styles.
+   - Proof 3: A Workbook. It asks for a workbook, reads it, and tries a save on a copy
+     it deletes. The workbook you choose is only read.
+   - Proof 4: A Shared Workbook. Choose a synced folder. The first run makes
+     "Stationkeeper proof scratch.xlsx" there. Have a colleague open that file on
+     another PC (or open it in the browser), then run the proof again and answer Yes.
+     Run it once more a few minutes later. Delete the scratch file when done.
+   - If Word closes in the middle of a proof, the file "Stationkeeper proof trace.txt" in
+     your temporary folder (type %TEMP% in File Explorer's address bar) names the step.
+     It holds step and setting names only. Send it back with the reports.
 
 TO TAKE IT OUT
    Open the kit, run StationkeeperMacrosRemove (or StationkeeperToolsRemove), pick the template.
