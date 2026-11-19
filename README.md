@@ -47,6 +47,7 @@ The "What it affects" filter is gone; Search still finds those words. The Show f
 
 - **Global Standards:** the app's `Global Standards.xlsx`. Always needed.
 - **A workbook says what it is (1.22.0).** Its Read me tab may carry the line **This workbook is** with Global Standards, Effort Standards or Program Standards, and **It belongs to** with a name. The tools go by that line, not by the file's name, so a workbook can be renamed or copied. A workbook that says it is an effort's or a program's is refused as the Global Standards, and the other way round. A program's workbook is chosen on the same line, which then reads "This program's standards". A workbook with no such line is read as before. Nothing is hidden in the workbook.
+- **Found by its folder (1.23.0).** With no effort's workbook pointed to, the tools look in the folder of the document in front, then in up to three folders above it, for a workbook that says Effort Standards or Program Standards (or carries the older name Effort Formatting). The first one found is laid over the Global Standards; every report says it was found by the document's folder, and the menu's line names it. Pointing to a workbook always wins. Two such workbooks in one folder: none is used, and the report says so. A document that is not saved gets no search. The search never looks in a drive's top folder, a share's top folder, or your own profile folder. What each workbook says is kept on the PC by its date and size, so Excel is opened only for a new or changed workbook. The Global Standards are still chosen by pointing.
 - **This effort's standards:** optional. The app writes an effort's own values to `<effort name> Effort Formatting.xlsx`: only what the effort changes. Choose it and its values are laid over the Global Standards: where the effort sets a value it wins, a blank cell keeps the Global value, a row only the effort has is added. **Clear** goes back to the Global Standards alone. Rows the effort sets for one volume are not used, because a document does not say which volume it is. Every report names both workbooks.
 
 Below them, the **effort data** link (Link a folder...) is a third, separate thing: the folder of data the app publishes for an effort, used by the macros marked as needing Stationkeeper data.
@@ -152,7 +153,7 @@ Keep one list with the latest titles, categories, descriptions and the rest, and
 - **Check the code health** (Bulk tools) runs nothing. It finds missing reference libraries (the usual cause of "works on my PC, not hers") and notes risky lines in each macro: saves, closes or deletes files; a fixed file path; Word alerts or screen updating switched off and never back on; On Error Resume Next (a test can't see errors the macro hides); a Stop line. To check the code compiles, use Debug > Compile in the VBA editor.
 - Limit: a test shows the macro runs without an error. It doesn't check the result is right.
 
-## Stationkeeper Tools (0.4.0 and later; 88 tools in 1.22.0)
+## Stationkeeper Tools (0.4.0 and later; 88 tools in 1.23.0)
 
 Checking and fixing tools for Word documents, PowerPoint decks and Excel workbooks, in the same kit. They work on their own (View > Macros) and need nothing from the Stationkeeper app. With the menu installed, they show up in it already described.
 

@@ -9,7 +9,7 @@ Option Explicit
 Option Private Module
 
 Public Const SKW_APP As String = "Stationkeeper Tools"
-Public Const SKW_VERSION As String = "1.22.0"
+Public Const SKW_VERSION As String = "1.23.0"
 
 Public SKW_StdError As String            ' why the standards workbook could not be read, last time
 Public SKW_TestRoots As String           ' tests: sync folders to look in, in place of this PC's
@@ -45,6 +45,11 @@ Private mStdKind As String
 Private mStdOwner As String
 Private mEffKind As String
 Private mEffOwner As String
+Private mEffFound As Boolean           ' the effort's workbook in use was found by the document's folder, not pointed to
+Private mFindDoc As String             ' the document the last folder search was for
+Private mFindAt As Single
+Private mFindPath As String
+Private mFindNote As String            ' why nothing was used, when the folder holds more than one
 Private mMerged As Object
 Private mMergedKey As String
 Private mRules As Object
@@ -734,9 +739,189 @@ Public Sub SKW_SetEffortStdPath(ByVal p As String)
     Else
         SaveSetting SKW_APP, "EffortStandards", ThisDocument.Name, p
     End If
+    SKW_FindReset
     Set mStd = Nothing
     mStdRead = False
 End Sub
+
+' ---------------------------------------------------------------------
+' Found by its folder (1.23.0; his answer of 2026-11-18 20:01, rule 2 of UX decision 135). With no effort's
+' workbook pointed to, the tools look in the folder of the document in front, then in up to three folders
+' above it, for a workbook that says Effort Standards or Program Standards on its Read me tab (or carries
+' the older name Effort Formatting). Pointing always wins. Two in one folder: none is used, and reports say so.
+' ---------------------------------------------------------------------
+' Forget the last search, so the next one looks again at once (a search is otherwise kept for five seconds).
+Public Sub SKW_FindReset()
+    mFindDoc = ""
+    mFindPath = ""
+    mFindNote = ""
+End Sub
+
+' The effort's or program's workbook in use: the one pointed to, else the one found by the document's folder.
+Public Function SKW_EffortStdInUse() As String
+    mEffFound = False
+    SKW_EffortStdInUse = SKW_EffortStdPath()
+    If Len(SKW_EffortStdInUse) > 0 Then mFindNote = "": Exit Function
+    SKW_EffortStdInUse = SKW_FindEffortStd(False)
+    mEffFound = (Len(SKW_EffortStdInUse) > 0)
+End Function
+
+' A folder the search may look in: not a drive, not a share's top, not the person's own profile folder or above it.
+Private Function SKW_Searchable(ByVal folder As String) As Boolean
+    Dim prof As String, parts As Long
+    If Len(folder) <= 3 Then Exit Function
+    If Left$(folder, 2) = "\\" Then
+        parts = UBound(Split(Mid$(folder, 3), "\")) + 1
+        If parts <= 2 Then Exit Function
+    End If
+    prof = Environ$("USERPROFILE")
+    If Len(prof) > 0 Then
+        If StrComp(folder, prof, vbTextCompare) = 0 Then Exit Function
+        If StrComp(Left$(prof, Len(folder) + 1), folder & "\", vbTextCompare) = 0 Then Exit Function
+    End If
+    SKW_Searchable = True
+End Function
+
+' What each workbook in a list says it is, read in one visit to Excel. Returns path -> "kind|owner".
+' A workbook is opened read-only, with its macros and links off; one that needs a password is passed over.
+Private Function SKW_ReadKinds(ByVal paths As Collection) As Object
+    Dim xl As Object, wb As Object, ws As Object, p As Variant, kind As String, owner As String, res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    Set SKW_ReadKinds = res
+    On Error Resume Next
+    Set xl = CreateObject("Excel.Application")
+    If xl Is Nothing Then Exit Function
+    xl.Visible = False
+    xl.DisplayAlerts = False
+    xl.AutomationSecurity = 3
+    xl.EnableEvents = False
+    xl.AskToUpdateLinks = False
+    For Each p In paths
+        kind = ""
+        owner = ""
+        Set wb = Nothing
+        Set wb = xl.Workbooks.Open(FileName:=CStr(p), UpdateLinks:=0, ReadOnly:=True, Password:="-", AddToMru:=False)
+        If Not wb Is Nothing Then
+            Set ws = Nothing
+            Set ws = wb.Worksheets("Read me")
+            If Not ws Is Nothing Then SKW_ReadMeLines ws.Range("A1:C40").Value, kind, owner
+            wb.Close False
+        End If
+        res(CStr(p)) = kind & "|" & owner
+        Err.Clear
+    Next
+    xl.Quit
+End Function
+
+' The workbooks in one folder that are an effort's or a program's standards. What a workbook says is kept on
+' this PC by its file date and size, so Excel is opened only for a workbook that is new or changed.
+' cacheOnly: never open Excel; unknown comes back True when a workbook's answer was not on hand.
+Private Function SKW_FolderEffortBooks(ByVal folder As String, ByVal cacheOnly As Boolean, ByRef unknown As Boolean) As Collection
+    Dim f As String, names As Collection, p As Variant, sig As String, kept As String, kinds As Object, toOpen As Collection, got As Object
+    Dim kind As String, hits As Collection, glob As String, n As Long
+    Set hits = New Collection
+    Set SKW_FolderEffortBooks = hits
+    Set names = New Collection
+    glob = LCase$(SKW_StandardsPath())
+    On Error Resume Next
+    f = Dir$(folder & "\*.xlsx")
+    Do While Len(f) > 0
+        If Left$(f, 2) <> "~$" And LCase$(folder & "\" & f) <> glob And names.Count < 60 Then names.Add folder & "\" & f
+        f = Dir$
+    Loop
+    Set kinds = CreateObject("Scripting.Dictionary")
+    Set toOpen = New Collection
+    For Each p In names
+        sig = Format$(FileDateTime(CStr(p)), "yyyymmddhhnnss") & "/" & FileLen(CStr(p))
+        kept = GetSetting(SKW_APP, "BookKind", LCase$(CStr(p)), "")
+        If Left$(kept, Len(sig) + 1) = sig & "|" Then
+            kinds(CStr(p)) = Mid$(kept, Len(sig) + 2)
+        ElseIf cacheOnly Then
+            unknown = True
+        ElseIf FileLen(CStr(p)) > 30000000 Or toOpen.Count >= 12 Then
+            ' Too large, or too many new workbooks in one folder: go by the file's name alone.
+            kinds(CStr(p)) = "|"
+        Else
+            toOpen.Add CStr(p)
+        End If
+    Next
+    If toOpen.Count > 0 Then
+        SKW_Status "Looking for the effort's standards beside the document..."
+        Set got = SKW_ReadKinds(toOpen)
+        For Each p In toOpen
+            If got.Exists(CStr(p)) Then
+                kinds(CStr(p)) = got(CStr(p))
+                sig = Format$(FileDateTime(CStr(p)), "yyyymmddhhnnss") & "/" & FileLen(CStr(p))
+                SaveSetting SKW_APP, "BookKind", LCase$(CStr(p)), sig & "|" & got(CStr(p))
+            End If
+        Next
+        Application.StatusBar = False
+    End If
+    For Each p In names
+        If kinds.Exists(CStr(p)) Then
+            kind = Split(kinds(CStr(p)) & "|", "|")(0)
+            ' No line on a Read me tab: the older name still says what it is.
+            If Len(kind) = 0 Then kind = SKW_KindFromName(CStr(p))
+            If kind = "Effort Standards" Or kind = "Program Standards" Then hits.Add CStr(p)
+        End If
+    Next
+End Function
+
+' The effort's or program's workbook for the document in front, by its folder, or "".
+Public Function SKW_FindEffortStd(ByVal cacheOnly As Boolean) As String
+    Dim d As Object, key As String, folder As String, lvl As Long, hits As Collection, unknown As Boolean, found As String, note As String
+    On Error Resume Next
+    If Documents.Count = 0 Then
+        mFindDoc = ""
+        mFindPath = ""
+        mFindNote = ""
+        Exit Function
+    End If
+    Set d = ActiveDocument
+    key = d.FullName
+    folder = d.Path
+    On Error GoTo 0
+    If key = mFindDoc And Abs(Timer - mFindAt) < 5 Then SKW_FindEffortStd = mFindPath: Exit Function
+    If Len(folder) > 0 And LCase$(Left$(folder, 4)) = "http" Then
+        ' Kept in OneDrive or SharePoint: use the folder of its copy on this PC.
+        folder = SKW_LocalPath(key)
+        If LCase$(Left$(folder, 4)) = "http" Then folder = "" Else folder = Left$(folder, InStrRev(folder, "\") - 1)
+    End If
+    If Len(folder) > 0 Then
+        For lvl = 0 To 3
+            If Not SKW_Searchable(folder) Then Exit For
+            Set hits = SKW_FolderEffortBooks(folder, cacheOnly, unknown)
+            If unknown Then Exit For
+            If hits.Count = 1 Then found = hits(1): Exit For
+            If hits.Count > 1 Then
+                note = hits.Count & " workbooks in " & folder & " are an effort's or a program's standards, so none is used: keep one there, or point to one"
+                Exit For
+            End If
+            If InStrRev(folder, "\") <= 3 Then Exit For
+            folder = Left$(folder, InStrRev(folder, "\") - 1)
+        Next
+    End If
+    If cacheOnly And unknown Then Exit Function    ' not known without opening Excel: nothing is remembered
+    mFindDoc = key
+    mFindAt = Timer
+    mFindPath = found
+    mFindNote = note
+    SKW_FindEffortStd = found
+End Function
+
+' For the menu's line, without opening Excel: "effort|file name" or "program|file name" when a workbook is
+' known to be found by the folder of the document in front, else "".
+Public Function SKW_EffortFoundLine() As String
+    Dim p As String, kept As String, kind As String
+    If Len(SKW_EffortStdPath()) > 0 Then Exit Function
+    p = SKW_FindEffortStd(True)
+    If Len(p) = 0 Then Exit Function
+    On Error Resume Next
+    kept = GetSetting(SKW_APP, "BookKind", LCase$(p), "")
+    kind = Split(kept & "||", "|")(1)
+    If Len(kind) = 0 Then kind = SKW_KindFromName(p)
+    SKW_EffortFoundLine = IIf(kind = "Program Standards", "program", "effort") & "|" & Mid$(p, InStrRev(p, "\") + 1)
+End Function
 
 ' What the effort's workbook changed, in words: "" when none is chosen.
 Public Function SKW_EffortStdNote() As String
@@ -816,7 +1001,9 @@ Public Function SKW_StdNote() As String
     Dim e As Object, wb As String
     Set e = SKW_Effort()
     If Not (SKW_Workbook() Is Nothing) Then wb = Mid$(mStdPath, InStrRev(mStdPath, "\") + 1)
-    If Len(wb) > 0 And Len(mEffNote) > 0 Then wb = wb & ", with the " & IIf(mEffKind = "Program Standards", "program's ", "effort's ") & Mid$(mEffPath, InStrRev(mEffPath, "\") + 1) & " over it (" & mEffNote & ")"
+    If Len(wb) > 0 And Len(mEffNote) > 0 Then wb = wb & ", with the " & IIf(mEffKind = "Program Standards", "program's ", "effort's ") & Mid$(mEffPath, InStrRev(mEffPath, "\") + 1) & " over it (" & mEffNote & _
+        IIf(mEffFound, "; found by the document's folder", "") & ")"
+    If Len(wb) > 0 And Len(mEffPath) = 0 And Len(mFindNote) > 0 Then wb = wb & " (" & mFindNote & ")"
     If e("ok") Then
         SKW_StdNote = "Rules: effort " & e("effort") & " rev " & e("revision") & _
             IIf(e("fromCache"), " (last complete copy: " & LCase$(e("state")) & ")", "") & _
@@ -852,7 +1039,7 @@ Public Function SKW_Workbook() As Object
     On Error Resume Next
     stamp = FileDateTime(p)
     If Err.Number <> 0 Then Set SKW_Workbook = Nothing: Exit Function
-    ep = SKW_EffortStdPath()
+    ep = SKW_EffortStdInUse()
     If Len(ep) > 0 Then
         Err.Clear
         estamp = FileDateTime(ep)
@@ -884,6 +1071,7 @@ Public Function SKW_Workbook() As Object
                 mEffNote = "the effort's workbook could not be read, so the Global Standards stand alone"
             Else
                 mEffNote = SKW_Overlay(mStd, eff)
+                If mEffKind = "Program Standards" Then mEffNote = Replace(mEffNote, "by the effort", "by the program")
             End If
             SKW_StdError = keepErr
         End If

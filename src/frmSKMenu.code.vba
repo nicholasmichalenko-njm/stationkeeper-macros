@@ -1000,7 +1000,7 @@ End Function
 
 ' The two lines that say which standards the tools read.
 Private Sub StdLines()
-    Dim g As String, e As String, tagWords As String, noteWords As String
+    Dim g As String, e As String, tagWords As String, noteWords As String, foundWords As String, fw() As String
     g = StdPath(): e = EffPath()
     tagWords = AdminWords("SKW_AdminTag"): noteWords = AdminWords("SKW_AdminNote")
     lblStdG.Caption = "Global Standards: " & IIf(Len(g) > 0, Mid$(g, InStrRev(g, "\") + 1), "not chosen") & IIf(Len(tagWords) > 0, " (" & tagWords & ")", "")
@@ -1009,6 +1009,15 @@ Private Sub StdLines()
     lblStdE.Caption = "This " & IIf(Len(e) > 0 And GetSetting("Stationkeeper Tools", "EffortKind", ThisDocument.Name, "") = "program", "program", "effort") & "'s standards: " & _
         IIf(Len(e) > 0, Mid$(e, InStrRev(e, "\") + 1), "none (the Global Standards stand alone)")
     lblStdE.ControlTipText = IIf(Len(e) > 0, "Laid over the Global Standards: " & e, "Choose the effort's Effort Standards workbook (or a program's Program Standards) to lay its values over the Global Standards.")
+    ' With none pointed to, the tools use the one found by the folder of the document in front (1.23.0).
+    If Len(e) = 0 Then
+        foundWords = AdminWords("SKW_EffortFoundLine")
+        If InStr(foundWords, "|") > 0 Then
+            fw = Split(foundWords, "|")
+            lblStdE.Caption = "This " & fw(0) & "'s standards: " & fw(1) & " (found by the document's folder)"
+            lblStdE.ControlTipText = "Nobody pointed to a workbook, so the tools use the one found in the folder of the document in front or up to three folders above it. Pointing to one wins."
+        End If
+    End If
     btnStd.ControlTipText = StdTip()
     btnEffClear.Enabled = (Len(e) > 0)
 End Sub
@@ -1044,7 +1053,7 @@ Private Sub btnEffClear_Click()
     msg = Application.Run("SKW_Setup.SKW_ChooseEffortStandards", "")
     On Error GoTo 0
     StdLines
-    lblStatus.Caption = "This effort's standards: none. The tools use the Global Standards alone."
+    lblStatus.Caption = "No effort's workbook is pointed to. The tools look beside the document in front."
 End Sub
 
 ' Tests: the Global Standards button.

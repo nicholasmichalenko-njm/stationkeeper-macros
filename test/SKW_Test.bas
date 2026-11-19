@@ -2642,3 +2642,69 @@ Public Function TW_CheckBook(ByVal folder As String) As String
 Bad:
     TW_CheckBook = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
 End Function
+
+' ---------------------------------------------------------------------
+' 1.23.0: an effort's workbook found by the folder of the document in front. arg: the Global Standards
+' workbook | the folder "Find" that test.ps1 laid out:
+'   Kestrel\Kestrel Effort Standards.xlsx, Kestrel\Volume 1\Drafts\   Osprey\Osprey standards.xlsx
+'   Two\ (both of those)   Older\Fictional Effort Formatting.xlsx   None\   Deep\(the Kestrel workbook)\a\b\c\d\
+' ---------------------------------------------------------------------
+Private Function FindCase(ByVal folder As String) As String
+    Dim d As Object, p As String, s As String
+    Set d = Documents.Add
+    If Len(folder) > 0 Then
+        p = folder & "\Find test.docx"
+        d.SaveAs2 FileName:=p, FileFormat:=wdFormatXMLDocument, AddToRecentFiles:=False
+    End If
+    d.Activate
+    SKW_FindReset
+    s = "use=[" & Mid$(SKW_EffortStdInUse(), InStrRev(SKW_EffortStdInUse(), "\") + 1) & "] line=[" & SKW_EffortFoundLine() & "] lists=" & SKW_WbRows("List numbering").Count & " std=" & SKW_StdNote()
+    d.Close SaveChanges:=0
+    If Len(p) > 0 Then Kill p
+    FindCase = s
+End Function
+
+Public Function TW_FindEffort(ByVal arg As String) As String
+    Dim a() As String, s As String, prev As String, prevE As String, prevK As String, stage As String, base As String, kp As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    a = Split(arg, "|")
+    base = a(1)
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    prevK = GetSetting(SKW_APP, "EffortKind", ThisDocument.Name, "")
+    SKW_SetEffortStdPath ""
+    SKW_SetStandardsPath a(0)
+    kp = base & "\Kestrel\Kestrel Effort Standards.xlsx"
+    On Error Resume Next
+    DeleteSetting SKW_APP, "BookKind", LCase$(kp)
+    On Error GoTo Bad
+    stage = "unsaved"
+    s = "unsaved: " & FindCase("")
+    stage = "two above"
+    s = s & " ## two above: " & FindCase(base & "\Kestrel\Volume 1\Drafts") & " kept=" & (Len(GetSetting(SKW_APP, "BookKind", LCase$(kp), "")) > 0)
+    stage = "program"
+    s = s & " ## program: " & FindCase(base & "\Osprey")
+    stage = "two"
+    s = s & " ## two: " & FindCase(base & "\Two")
+    stage = "older"
+    s = s & " ## older: " & FindCase(base & "\Older")
+    stage = "none"
+    s = s & " ## none: " & FindCase(base & "\None")
+    stage = "deep"
+    s = s & " ## deep: " & FindCase(base & "\Deep\a\b\c\d")
+    stage = "pointed"
+    SKW_ChooseEffortStandards base & "\Osprey\Osprey standards.xlsx"
+    s = s & " ## pointed: " & FindCase(base & "\Kestrel\Volume 1\Drafts")
+    stage = "cleared"
+    s = s & " ## cleared: " & SKW_ChooseEffortStandards("")
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    If Len(prevK) > 0 Then SaveSetting SKW_APP, "EffortKind", ThisDocument.Name, prevK
+    TW_FindEffort = s
+    Exit Function
+Bad:
+    TW_FindEffort = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+End Function

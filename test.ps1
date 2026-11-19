@@ -38,6 +38,8 @@ function TR($word, [string]$macro) { RunW $word "SK_Test.$macro" }
 function TR1($word, [string]$macro, [string]$a) { RunW $word "SK_Test.$macro" $a }
 
 Remove-Item (Join-Path $work 'Stationkeeper Macros backups') -Recurse -Force -ErrorAction SilentlyContinue
+# Before 1.23.0 the tests kept an effort's workbook beside their documents. One there is now found and used, so it goes.
+Remove-Item (Join-Path $work 'Fictional Effort Formatting.xlsx') -Force -ErrorAction SilentlyContinue
 Remove-Item $sample -Force -ErrorAction SilentlyContinue
 Get-ChildItem $work -Filter '~$*' -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 $excelBefore = @(Get-Process EXCEL -ErrorAction SilentlyContinue | ForEach-Object Id)
@@ -556,7 +558,9 @@ try {
     [string]$quickStdSeq = Join-Path $work 'Global Standards (quick sequential).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick).xlsx') $quickStd -Force
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (quick sequential).xlsx') $quickStdSeq -Force
-    [string]$effStd = Join-Path $work 'Fictional Effort Formatting.xlsx'
+    # The effort's workbook sits in a folder of its own: since 1.23.0 one beside a document is found and used.
+    New-Item -ItemType Directory -Force (Join-Path $work 'Effort book') | Out-Null
+    [string]$effStd = Join-Path $work 'Effort book\Fictional Effort Formatting.xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Fictional Effort Formatting.xlsx') $effStd -Force
     [string]$capStd = Join-Path $work 'Global Standards (capture).xlsx'
     Copy-Item (Join-Path $Root 'test\fixtures\Global Standards (capture).xlsx') $capStd -Force
@@ -728,7 +732,7 @@ try {
         Check '1.16.0: the effort''s values win where it sets one, a row it adds is added, and blanks keep the Global value' (($es -match '## choose: The tools now lay Fictional Effort Formatting\.xlsx over the Global Standards for [^:]+: 2 value\(s\) changed and 1 row\(s\) added by the effort; 1 row\(s\) set for one volume were not used\.') -and ($es -match '## after=1\|\. lists=7 top=5 figure=- ##')) $es
         Check '1.16.0: every report names both workbooks' ($es -match '## std: Standards: Global Standards \(quick\)\.xlsx, with the effort''s Fictional Effort Formatting\.xlsx over it \(2 value\(s\) changed') $es
         Check '1.16.0: the Global workbook itself and a missing file are refused, and the effort already chosen stays' (($es -match '## same: That is the Global Standards workbook itself\. Nothing was changed\.') -and ($es -match '## missing: Not found: [^#]* kept=True')) $es
-        Check '1.16.0: clearing the effort puts the Global Standards back alone' (($es -match '## clear: No effort''s standards are laid over the Global Standards now') -and ($es -match '## back=1\|- lists=6 path=\[\]$')) $es
+        Check '1.16.0: clearing the effort puts the Global Standards back alone' (($es -match '## clear: No effort''s workbook is pointed to now') -and ($es -match '## back=1\|- lists=6 path=\[\]$')) $es
         # 12i. 1.17.0: capture into the Global Standards workbook (a fresh copy in the work folder).
         $cp = RunW $word 'SKW_Test.TW_Capture' "$capStd|$quickStd"
         Write-Output "CAPTURE: $cp"
@@ -809,6 +813,26 @@ try {
         Check '1.22.0: an older tab, a tab of your own and an empty tab are notes, and the older Setting column is accepted' (($cb -match 'Allowed styles \| Note \| A tab of the macros'' own older workbook[^|]*\| In the one layout this list lives in the Styles tab') -and ($cb -match 'My notes \| Note \| A tab of your own\. The tools keep it and never read it\.') -and ($cb -match 'Fonts allowed \| Note \| The tab is empty') -and ($cb -match 'Settings \| Fine \| 1 row\(s\), each with its Setting\.')) ''
         Check '1.22.0: the app''s workbook of today has no problems, and is named as an older workbook with an About tab' (($cb -match '## app: Global Standards \(quick\)\.xlsx \(Global Standards\): 0 problem\(s\), 1 note\(s\)\. The tools can read every tab they know\.') -and ($cb -match 'Read me \| Note \| An older workbook from the Stationkeeper app: it has an About tab and no Read me tab\. It is still read\. Going by the file''s name it is Global Standards\.') -and ($cb -match 'Table looks \| Fine \| \d+ row\(s\), each with its Name and a Status the tools know\.')) ''
         Check '1.22.0: a workbook that says what it is has nothing to report, and a missing file is refused' (($cb -match '## says: Kestrel Effort Standards\.xlsx \(Effort Standards\): 0 problem\(s\), 0 note\(s\)\.') -and ($cb -match '## missing: The workbook was not found\. Nothing was checked\.')) ''
+        # 12o. 1.23.0: an effort's workbook found by the folder of the document in front.
+        [string]$find = Join-Path $work 'Find'
+        Remove-Item $find -Recurse -Force -ErrorAction SilentlyContinue
+        foreach ($sub in 'Kestrel\Volume 1\Drafts', 'Osprey', 'Two', 'Older', 'None', 'Deep\a\b\c\d') { New-Item -ItemType Directory -Force (Join-Path $find $sub) | Out-Null }
+        $fx = Join-Path $Root 'test\fixtures'
+        Copy-Item (Join-Path $fx 'Kestrel Effort Standards.xlsx') (Join-Path $find 'Kestrel') -Force
+        Copy-Item (Join-Path $fx 'Osprey standards.xlsx') (Join-Path $find 'Osprey') -Force
+        Copy-Item (Join-Path $fx 'Kestrel Effort Standards.xlsx') (Join-Path $find 'Two') -Force
+        Copy-Item (Join-Path $fx 'Osprey standards.xlsx') (Join-Path $find 'Two') -Force
+        Copy-Item (Join-Path $fx 'Fictional Effort Formatting.xlsx') (Join-Path $find 'Older') -Force
+        Copy-Item (Join-Path $fx 'Kestrel Effort Standards.xlsx') (Join-Path $find 'Deep') -Force
+        $fe = RunW $word 'SKW_Test.TW_FindEffort' "$quickStd|$find"
+        Write-Output "FINDEFFORT: $fe"
+        Check '1.23.0: a document that is not saved gets no search, and the Global Standards stand alone' (($fe -match '^unsaved: use=\[\] line=\[\] lists=6 std=Standards: Global Standards \(quick\)\.xlsx ##') -and ($fe -notmatch 'ERROR')) $fe
+        Check '1.23.0: an effort''s workbook two folders above the document is found, laid over, named in the report as found, and what it says is kept on the PC' ($fe -match '## two above: use=\[Kestrel Effort Standards\.xlsx\] line=\[effort\|Kestrel Effort Standards\.xlsx\] lists=7 std=Standards: Global Standards \(quick\)\.xlsx, with the effort''s Kestrel Effort Standards\.xlsx over it \(.*?; found by the document''s folder\) kept=True') ''
+        Check '1.23.0: a program''s workbook beside the document is found whatever its file is called' ($fe -match '## program: use=\[Osprey standards\.xlsx\] line=\[program\|Osprey standards\.xlsx\] lists=7 std=Standards: Global Standards \(quick\)\.xlsx, with the program''s Osprey standards\.xlsx over it \(.*?; found by the document''s folder\) ## two:') ''
+        Check '1.23.0: two such workbooks in one folder: none is used and the report says why' ($fe -match '## two: use=\[\] line=\[\] lists=6 std=Standards: Global Standards \(quick\)\.xlsx \(2 workbooks in [^)]*\\Find\\Two are an effort''s or a program''s standards, so none is used: keep one there, or point to one\)') ''
+        Check '1.23.0: a workbook with the older name Effort Formatting and no Read me line is found by its name' ($fe -match '## older: use=\[Fictional Effort Formatting\.xlsx\] line=\[effort\|Fictional Effort Formatting\.xlsx\] lists=7 ') ''
+        Check '1.23.0: nothing in the folder or above it, or a workbook more than three folders above: the Global Standards stand alone' (($fe -match '## none: use=\[\] line=\[\] lists=6 std=Standards: Global Standards \(quick\)\.xlsx ##') -and ($fe -match '## deep: use=\[\] line=\[\] lists=6 std=Standards: Global Standards \(quick\)\.xlsx ##')) ''
+        Check '1.23.0: a workbook pointed to wins over the one in the folder, and clearing it says where the tools look' (($fe -match '## pointed: (use=\[Osprey standards\.xlsx\] line=\[\] lists=7 std=Standards: Global Standards \(quick\)\.xlsx, with the program''s Osprey standards\.xlsx over it .*?) ## cleared:') -and ($Matches[1] -notmatch 'found by') -and ($fe -match '## cleared: No effort''s workbook is pointed to now\. The tools look for one in the folder of the document in front')) ''
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

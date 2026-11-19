@@ -113,7 +113,7 @@ Public Function SKW_ChooseEffortStandards(ByVal p As String) As String
         On Error Resume Next
         DeleteSetting SKW_APP, "EffortKind", ThisDocument.Name
         On Error GoTo 0
-        SKW_ChooseEffortStandards = "No effort's standards are laid over the Global Standards now. The tools use the Global Standards alone."
+        SKW_ChooseEffortStandards = "No effort's workbook is pointed to now. The tools look for one in the folder of the document in front and the folders above it; with none there, the Global Standards stand alone."
         Exit Function
     End If
     If SKW_Workbook() Is Nothing Then
@@ -345,7 +345,7 @@ Public Function SKW_ToolList() As String
         "Points the tools at your team's standards workbook. Each person does this once per template.", _
         "standards, excel, setup, rules", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Setup.ChooseEffortStandardsWorkbook", "Choose Effort Standards Workbook", "Tools setup", _
-        "Lays an effort's or a program's own standards workbook (Effort Standards or Program Standards; the app's older Effort Formatting file too) over the Global Standards. Where it sets a value it wins; a blank keeps the Global value. A workbook that says it is the Global Standards is refused. The menu's standards lines do the same.", _
+        "Lays an effort's or a program's own standards workbook (Effort Standards or Program Standards; the app's older Effort Formatting file too) over the Global Standards. Where it sets a value it wins; a blank keeps the Global value. A workbook that says it is the Global Standards is refused. With none pointed to, the tools use the one found in the folder of the document in front or up to three folders above it. The menu's standards lines do the same.", _
         "standards, effort, program, excel, setup, rules, effort standards, program standards, effort formatting", "Template", "Template", "No, it only reports")
     s = s & "," & T("SKW_Workbooks.CheckThisWorkbook", "Check This Workbook", "Tools setup", _
         "Asks for a standards workbook and says what is wrong with it in plain words: what it says it is on its Read me tab, each tab the tools know and each tab of your own, a first row without column names, a missing Name column, blank and repeated Names, a Status that is not Approved, Draft or Retired, and merged cells in a list. It names the tab, the row and the reason. The workbook is only read.", _
