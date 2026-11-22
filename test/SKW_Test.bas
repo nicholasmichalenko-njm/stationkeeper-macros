@@ -2987,3 +2987,22 @@ Bad:
     SKW_SetStandardsPath prev
     SKW_SetEffortStdPath prevE
 End Function
+
+' 1.26.0: a choice in Word's words and the same choice in an older word mean the same; letter case tells the
+' roman and letter formats apart; a word that is not known is never the same; List numbering knows its inch names.
+Public Function TW_Choices() As String
+    Dim s As String, v As Variant
+    For Each v In Array("both|Justified", "center|Centered", "left|Left", "right|Right", "both|Left")
+        s = s & "al:" & v & "=" & SKW_SameChoice("Styles", "Alignment", Split(v, "|")(0), Split(v, "|")(1)) & " "
+    Next
+    For Each v In Array("exact|Exactly", "atLeast|At least", "|Multiple", "exact|At least")
+        s = s & "lr:" & v & "=" & SKW_SameChoice("Styles", "Line rule", Split(v, "|")(0), Split(v, "|")(1)) & " "
+    Next
+    For Each v In Array("decimal|1, 2, 3", "upperRoman|I, II, III", "lowerRoman|i, ii, iii", "upperLetter|A, B, C", _
+            "lowerLetter|a, b, c", "bullet|Bullet", "upperRoman|i, ii, iii", "I, II, III|i, ii, iii", "decimal|1,2,3", "odd|odd")
+        s = s & "fm:" & v & "=" & SKW_SameChoice("Heading numbering", "Fmt", Split(v, "|")(0), Split(v, "|")(1)) & " "
+    Next
+    s = s & "old:" & SKW_ChoiceOld("Alignment", "Justified") & "," & SKW_ChoiceOld("Line rule", "At least") & ",[" & SKW_ChoiceOld("Line rule", "Multiple") & "]," & SKW_ChoiceOld("Fmt", "I, II, III") & "," & SKW_ChoiceOld("Font", "Arial") & " "
+    s = s & "nn:" & SKW_NewNames("List numbering")
+    TW_Choices = s
+End Function

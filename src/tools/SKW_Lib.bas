@@ -1664,8 +1664,77 @@ Public Function SKW_NewNames(ByVal tabName As String) As String
         Case "heading numbering"
             SKW_NewNames = "number format=fmt|number text=text|number at (in)=number at|text at (in)=text at"
         Case "list numbering"
-            SKW_NewNames = "number format=fmt|number text=text"
+            SKW_NewNames = "number format=fmt|number text=text|left indent (in)=left indent (pt)|hanging (in)=hanging (pt)"
     End Select
+End Function
+
+' ---------------------------------------------------------------------
+' 1.26.0: a choice is written in the words Word itself shows (column list rule 6: Justified, Exactly, 1, 2, 3).
+' The older words are still read. Two cells are compared by what they mean, not by their text, so "both" and
+' "Justified" are the same alignment. The words are the app's own (bookshape.py _FMT, _ALIGN, _RULE, 4.57.0).
+' ---------------------------------------------------------------------
+' What a choice means, as one word ("" when the column is not a choice or the word is not known).
+Public Function SKW_ChoiceMeaning(ByVal col As String, ByVal v As Variant) As String
+    Dim t As String, k As String
+    If IsError(v) Or IsNull(v) Or IsEmpty(v) Then t = "" Else t = Trim$(CStr(v))
+    Do While InStr(t, "  ") > 0: t = Replace(t, "  ", " "): Loop
+    k = LCase$(t)
+    Select Case LCase$(Trim$(col))
+        Case "alignment", "align"
+            Select Case k
+                Case "left": SKW_ChoiceMeaning = "left"
+                Case "centered", "center", "centre": SKW_ChoiceMeaning = "center"
+                Case "right": SKW_ChoiceMeaning = "right"
+                Case "justified", "both", "justify": SKW_ChoiceMeaning = "both"
+            End Select
+        Case "line rule"
+            Select Case k
+                Case "", "multiple": SKW_ChoiceMeaning = "multiple"
+                Case "exactly", "exact": SKW_ChoiceMeaning = "exact"
+                Case "at least", "atleast": SKW_ChoiceMeaning = "atleast"
+            End Select
+        Case "fmt", "number format"
+            ' Word's words differ only by letter case (I, II, III and i, ii, iii), so they are matched as written, as the app does.
+            Select Case t
+                Case "1, 2, 3": SKW_ChoiceMeaning = "decimal"
+                Case "I, II, III": SKW_ChoiceMeaning = "upperroman"
+                Case "i, ii, iii": SKW_ChoiceMeaning = "lowerroman"
+                Case "A, B, C": SKW_ChoiceMeaning = "upperletter"
+                Case "a, b, c": SKW_ChoiceMeaning = "lowerletter"
+                Case Else
+                    Select Case k
+                        Case "decimal", "upperroman", "lowerroman", "upperletter", "lowerletter", "bullet": SKW_ChoiceMeaning = k
+                    End Select
+            End Select
+    End Select
+End Function
+
+' A choice in the app's own older word, for the one place a column has no cell of its own: Other Word settings,
+' which the app reads as it is (standardsbook.py, 4.57.0) and does not take Word's words in. Multiple is "" there
+' (the app holds no line rule for it). A value that is not a known choice is given back unchanged.
+Public Function SKW_ChoiceOld(ByVal col As String, ByVal v As Variant) As Variant
+    Dim m As String
+    m = SKW_ChoiceMeaning(col, v)
+    SKW_ChoiceOld = v
+    If Len(m) = 0 Then Exit Function
+    Select Case m
+        Case "multiple": SKW_ChoiceOld = ""
+        Case "atleast": SKW_ChoiceOld = "atLeast"
+        Case "upperroman": SKW_ChoiceOld = "upperRoman"
+        Case "lowerroman": SKW_ChoiceOld = "lowerRoman"
+        Case "upperletter": SKW_ChoiceOld = "upperLetter"
+        Case "lowerletter": SKW_ChoiceOld = "lowerLetter"
+        Case Else: SKW_ChoiceOld = m
+    End Select
+End Function
+
+' True when two cells of a choice column mean the same thing. A column that is not a choice, or a word that is
+' not known, is never the same here, so the caller compares the text as before.
+Public Function SKW_SameChoice(ByVal tabName As String, ByVal col As String, ByVal a As Variant, ByVal b As Variant) As Boolean
+    Dim ma As String
+    ma = SKW_ChoiceMeaning(col, a)
+    If Len(ma) = 0 Then Exit Function
+    SKW_SameChoice = (ma = SKW_ChoiceMeaning(col, b))
 End Function
 
 ' Gives a row its older column names beside the new ones. A value already under the older name is kept.

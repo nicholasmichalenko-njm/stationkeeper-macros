@@ -162,7 +162,8 @@ Public Function SKW_BookWriteTo(ByVal p As String, ByVal sheet As String, ByVal 
                     If Left$(k, 1) <> "*" Then
                         h = LCase$(CStr(k))
                         If hdr.Exists(h) Then
-                            If CellText(ws.Cells(at, hdr(h)).Value) <> CellText(row(k)) Then
+                            ' 1.26.0: a choice in an older word and the same choice in Word's words are the same: left as it is.
+                            If CellText(ws.Cells(at, hdr(h)).Value) <> CellText(row(k)) And Not SKW_SameChoice(sheet, h, ws.Cells(at, hdr(h)).Value, row(k)) Then
                                 ws.Cells(at, hdr(h)).Value = row(k)
                                 ' 1.25.0: Excel turns some text into something else as it lands (%1 becomes 0.01, a
                                 ' leading = becomes a formula). Such a cell is made a text cell and written again.
@@ -176,7 +177,14 @@ Public Function SKW_BookWriteTo(ByVal p As String, ByVal sheet As String, ByVal 
                             End If
                         ElseIf Not keys Is Nothing Then
                             ' A value whose column this workbook does not have yet: it rides in Other Word settings.
-                            If keys.Exists(h) Then o(keys(h)) = row(k)
+                            ' 1.26.0: there a choice stays in the app's older word, which is what the app reads in that cell.
+                            If keys.Exists(h) Then
+                                If Len(SKW_ChoiceMeaning(h, row(k))) > 0 Then
+                                    If Len(SKW_ChoiceOld(h, row(k))) > 0 Then o(keys(h)) = SKW_ChoiceOld(h, row(k))
+                                Else
+                                    o(keys(h)) = row(k)
+                                End If
+                            End If
                         End If
                     End If
                 Next
@@ -264,22 +272,23 @@ Private Function StyleRow(ByVal d As Object, ByVal st As Object) As Object
     If isPara Then
         Set pf = st.ParagraphFormat
         Select Case pf.Alignment
-            Case wdAlignParagraphLeft: Prop row, keys, "Alignment", "jc", "left"
-            Case wdAlignParagraphCenter: Prop row, keys, "Alignment", "jc", "center"
-            Case wdAlignParagraphRight: Prop row, keys, "Alignment", "jc", "right"
-            Case wdAlignParagraphJustify: Prop row, keys, "Alignment", "jc", "both"
+            Case wdAlignParagraphLeft: Prop row, keys, "Alignment", "jc", "Left"
+            Case wdAlignParagraphCenter: Prop row, keys, "Alignment", "jc", "Centered"
+            Case wdAlignParagraphRight: Prop row, keys, "Alignment", "jc", "Right"
+            Case wdAlignParagraphJustify: Prop row, keys, "Alignment", "jc", "Justified"
         End Select
         Prop row, keys, "Space before (pt)", "before", Round(CDbl(pf.SpaceBefore), 2)
         Prop row, keys, "Space after (pt)", "after", Round(CDbl(pf.SpaceAfter), 2)
         Select Case pf.LineSpacingRule
             Case wdLineSpaceExactly
                 Prop row, keys, "Line spacing (lines, or pt if exact)", "line", Round(CDbl(pf.LineSpacing), 2)
-                Prop row, keys, "Line rule", "line_rule", "exact"
+                Prop row, keys, "Line rule", "line_rule", "Exactly"
             Case wdLineSpaceAtLeast
                 Prop row, keys, "Line spacing (lines, or pt if exact)", "line", Round(CDbl(pf.LineSpacing), 2)
-                Prop row, keys, "Line rule", "line_rule", "atLeast"
+                Prop row, keys, "Line rule", "line_rule", "At least"
             Case Else
                 Prop row, keys, "Line spacing (lines, or pt if exact)", "line", Round(CDbl(pf.LineSpacing) / 12, 2)
+                Prop row, keys, "Line rule", "line_rule", "Multiple"
         End Select
         Prop row, keys, "Left indent (pt)", "left", Round(CDbl(pf.LeftIndent), 2)
         Prop row, keys, "Right indent (pt)", "right", Round(CDbl(pf.RightIndent), 2)
@@ -450,14 +459,15 @@ End Sub
 ' ---------------------------------------------------------------------
 ' Heading numbering (the Heading numbering sheet: one row per heading style)
 ' ---------------------------------------------------------------------
+' 1.26.0: in the words Word itself shows (column list rule 6). The older words are still read (SKW_SameChoice).
 Private Function FmtOf(ByVal ns As Long) As String
     Select Case ns
-        Case wdListNumberStyleArabic: FmtOf = "decimal"
-        Case wdListNumberStyleUppercaseRoman: FmtOf = "upperRoman"
-        Case wdListNumberStyleLowercaseRoman: FmtOf = "lowerRoman"
-        Case wdListNumberStyleUppercaseLetter: FmtOf = "upperLetter"
-        Case wdListNumberStyleLowercaseLetter: FmtOf = "lowerLetter"
-        Case wdListNumberStyleBullet: FmtOf = "bullet"
+        Case wdListNumberStyleArabic: FmtOf = "1, 2, 3"
+        Case wdListNumberStyleUppercaseRoman: FmtOf = "I, II, III"
+        Case wdListNumberStyleLowercaseRoman: FmtOf = "i, ii, iii"
+        Case wdListNumberStyleUppercaseLetter: FmtOf = "A, B, C"
+        Case wdListNumberStyleLowercaseLetter: FmtOf = "a, b, c"
+        Case wdListNumberStyleBullet: FmtOf = "Bullet"
     End Select
 End Function
 
@@ -496,7 +506,7 @@ End Function
 
 Public Function SKW_CaptureHeadingsCheck() As String
     Dim d As Object, msg As String, rows As New Collection, have As Object, row As Object, r As Object, skipped As String, n As Long, k As Variant
-    Dim diff As String, wasSaved As Boolean, nNew As Long
+    Dim diff As String, wasSaved As Boolean, nNew As Long, same As Boolean
     Set SKW_LastReport = Nothing
     SKW_Fixable = 0
     msg = SKW_Begin("Capture heading numbering: reading", False)
@@ -509,7 +519,12 @@ Public Function SKW_CaptureHeadingsCheck() As String
             Set r = have(LCase$(row("Style")))
             diff = ""
             For Each k In Array("Fmt", "Text", "Number at", "Text at")
-                If CellText(row(k)) <> CellText(IIf(IsNumeric(r(LCase$(k))) And k <> "Text", Val(r(LCase$(k))), r(LCase$(k)))) Then
+                If k = "Fmt" Then
+                    same = SKW_SameChoice("Heading numbering", "Fmt", row(k), r(LCase$(k)))
+                Else
+                    same = (CellText(row(k)) = CellText(IIf(IsNumeric(r(LCase$(k))) And k <> "Text", Val(r(LCase$(k))), r(LCase$(k)))))
+                End If
+                If Not same Then
                     diff = diff & IIf(Len(diff) > 0, "; ", "") & k & ": " & r(LCase$(k)) & " becomes " & CellText(row(k))
                 End If
             Next
