@@ -3006,3 +3006,29 @@ Public Function TW_Choices() As String
     s = s & "nn:" & SKW_NewNames("List numbering")
     TW_Choices = s
 End Function
+
+' 1.27.0: an effort's workbook names a table type of its own whose header look holds only the effort's change (a fill
+' and a line taken away). It is laid over the Global header look, as the app does. arg: a folder holding copies of
+' "Heron Standards (new names).xlsx" and "Heron Effort Standards (type look).xlsx".
+Public Function TW_TypeLook(ByVal folder As String) As String
+    Dim s As String, prev As String, prevE As String, stage As String
+    SKW_Quiet = True
+    On Error GoTo Bad
+    prev = SKW_StandardsPath(): prevE = SKW_EffortStdPath()
+    stage = "global"
+    SKW_SetStandardsPath folder & "\Heron Standards (new names).xlsx"
+    SKW_SetEffortStdPath ""
+    s = "global=[" & DumpStd() & "]"
+    stage = "effort"
+    SKW_SetEffortStdPath folder & "\Heron Effort Standards (type look).xlsx"
+    s = s & " ## effort=[" & DumpStd() & "] ## std=" & SKW_StdNote()
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+    TW_TypeLook = s
+    Exit Function
+Bad:
+    TW_TypeLook = s & " ## ERROR at " & stage & ": " & Err.Number & " " & Err.Description
+    On Error Resume Next
+    SKW_SetStandardsPath prev
+    SKW_SetEffortStdPath prevE
+End Function

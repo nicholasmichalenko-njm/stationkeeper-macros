@@ -873,6 +873,15 @@ try {
         Check '1.26.0: an older word and Word''s word for the same choice are the same, for Alignment, Line rule and Number format' (($ch -match 'al:both\|Justified=True al:center\|Centered=True al:left\|Left=True al:right\|Right=True al:both\|Left=False ') -and ($ch -match 'lr:exact\|Exactly=True lr:atLeast\|At least=True lr:\|Multiple=True lr:exact\|At least=False ') -and ($ch -match 'fm:decimal\|1, 2, 3=True fm:upperRoman\|I, II, III=True fm:lowerRoman\|i, ii, iii=True fm:upperLetter\|A, B, C=True fm:lowerLetter\|a, b, c=True fm:bullet\|Bullet=True ')) $ch
         Check '1.26.0: letter case tells I, II, III from i, ii, iii; a word not known, or written otherwise than the app writes it, is never the same; List numbering knows Left indent (in) and Hanging (in)' (($ch -match 'fm:upperRoman\|i, ii, iii=False fm:I, II, III\|i, ii, iii=False fm:decimal\|1,2,3=False fm:odd\|odd=False ') -and ($ch -match 'left indent \(in\)=left indent \(pt\)\|hanging \(in\)=hanging \(pt\)')) $ch
         Check '1.26.0: in Other Word settings a choice stays in the app''s older word, and Multiple is left out' ($ch -match 'old:both,atLeast,\[\],upperRoman,Arial ') $ch
+        # 12s. 1.27.0: a table type's own look is laid over the kind's own look, as the app does (B24).
+        $tl = Join-Path $work 'type look'
+        Remove-Item $tl -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force $tl | Out-Null
+        foreach ($f in 'Heron Standards (new names).xlsx', 'Heron Effort Standards (type look).xlsx') { Copy-Item (Join-Path $Root "test\fixtures\$f") (Join-Path $tl $f) -Force }
+        $ty = RunW $word 'SKW_Test.TW_TypeLook' $tl
+        Write-Output "TYPELOOK: $ty"
+        Check '1.27.0: an effort''s type look that holds only its change is laid over the Global header look: its fill and the line it takes away change, every other value stays' (($ty -match '## effort=\[[^#]*\{heron [^}]*caption:absent header:ZZ Table Head,left,center,C00000,yes,,Arial,9,FFFFFF,2,2,,,yes,1\|1F3864,none,0\.5\|8EA9DB,0\.5\|8EA9DB,0\.5\|8EA9DB, [^}]*total:absent notes:absent\}') -and ($ty -notmatch 'ERROR')) $ty
+        Check '1.27.0: the Global types are read as before with the effort''s workbook laid over, and the key type still takes its whole named look' (($ty -match 'global=\[[^#]*\{key [^}]*header:ZZ Table Head,left,center,D9E2F3,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,') -and ($ty -match '## effort=\[[^#]*\{key [^}]*header:ZZ Table Head,left,center,D9E2F3,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,')) $ty
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

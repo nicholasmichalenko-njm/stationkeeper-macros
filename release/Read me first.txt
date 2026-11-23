@@ -1,4 +1,4 @@
-STATIONKEEPER MACROS 1.26.0
+STATIONKEEPER MACROS 1.27.0
 A menu and a bookshelf for the macros in a Word template. It never edits your code.
 
 1. TRY IT ON A COPY OF YOUR TEMPLATE FIRST.
@@ -79,6 +79,13 @@ STATIONKEEPER TOOLS (checks and fixes for Word documents)
    - 1.5.0 adds checks and fixes for acronyms at first use, the footer and marking (CUI),
      text that does not fit, titles that moved, pictures, colors, proofing language, links
      and table style. Fill in DeckFooterText, DeckMarking and DeckTableStyle on Settings.
+
+A TABLE TYPE'S OWN LOOK (1.27.0)
+   When a table type names the look a kind of row uses, that look is now laid over
+   the kind's own look: only its filled cells count, a blank cell is "not changed",
+   and none in an edge cell takes the line away. An effort's workbook can hold only
+   what it changes, as Stationkeeper 4.58.0 writes it. Before, a blank edge there
+   meant no line: type none where a line is to go.
 
 CHOICES IN WORD'S OWN WORDS (1.26.0)
    Capture Styles and Capture Heading Numbering now write a choice as Word shows

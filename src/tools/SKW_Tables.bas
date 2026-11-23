@@ -1030,7 +1030,7 @@ End Sub
 Private Function AppRoles(ByVal tyName As String) As Object
     Dim res As Object, r As Object, nm As String, ty As Object, k As Object, ov As Object, used As Object, v As Variant
     Dim role As Variant, key As Variant, o As Object, ed As Variant, names As Object
-    Dim looks As String, kd As Variant, p As Long, serves As Boolean
+    Dim looks As String, kd As Variant, p As Long, serves As Boolean, named As Object, tmp As Object, f As Variant, lk As String
     Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = 1
     Set names = CreateObject("Scripting.Dictionary")
@@ -1066,24 +1066,24 @@ Private Function AppRoles(ByVal tyName As String) As Object
             End If
         End If
     End If
-    ' 1.24.0: a type may name the look a kind of row uses. Then that row of Table looks is the kind's look,
-    ' whatever it is called; a kind the type does not name still uses the look called by the kind's own word.
+    ' 1.24.0: a type may name the look a kind of row uses.
+    ' 1.27.0: as the app does (bookshape.py, 4.58.0): each kind first takes the look called by its own word; a look the
+    ' type names is then laid over it, filled cells only. A blank cell there means "not changed"; "none" takes a line
+    ' away. In an effort's workbook such a look holds only the effort's change, and in the Global Standards the
+    ' whole look, so the two give the same result. With no look of the kind's own word, the named look is used whole.
     looks = ""
     If Not ty Is Nothing Then
         If ty.Exists("looks") Then looks = ty("looks")
     End If
+    Set named = CreateObject("Scripting.Dictionary")
+    named.CompareMode = 1
     For Each r In AppRows("Table looks")
         nm = ""
         If r.Exists("name") Then nm = LCase$(Trim$(r("name")))
         If AppApproved(r) And Len(nm) > 0 Then
+            If Not named.Exists(nm) Then Set named(nm) = r
             For Each kd In names.Keys
-                p = InStr(looks, "|" & kd & "=")
-                If p > 0 Then
-                    serves = (InStr(looks, "|" & kd & "=" & nm & "|") > 0)
-                Else
-                    serves = (kd = nm)
-                End If
-                If serves Then
+                If kd = nm Then
                     ' number, short and keep are the macros' own looks: a type's list does not have to name them.
                     If used Is Nothing Then
                         AppLook res, names(kd), r, res(names(kd))("recognize")
@@ -1092,6 +1092,29 @@ Private Function AppRoles(ByVal tyName As String) As Object
                     End If
                 End If
             Next
+        End If
+    Next
+    For Each kd In names.Keys
+        p = InStr(looks, "|" & kd & "=")
+        If p > 0 Then
+            lk = Mid$(looks, p + Len(kd) + 2)
+            lk = Left$(lk, InStr(lk, "|") - 1)
+            serves = (used Is Nothing)
+            If Not serves Then serves = used.Exists(kd) Or kd = "number" Or kd = "short" Or kd = "keep" Or kd = "figure caption"
+            If serves And lk <> kd And named.Exists(lk) Then
+                If res(names(kd))("absent") = "yes" Then
+                    AppLook res, names(kd), named(lk), res(names(kd))("recognize")
+                Else
+                    Set tmp = CreateObject("Scripting.Dictionary")
+                    tmp.CompareMode = 1
+                    AppLook tmp, "x", named(lk), res(names(kd))("recognize")
+                    For Each f In tmp("x").Keys
+                        If f <> "app" And f <> "absent" Then
+                            If Len(CStr(tmp("x")(f))) > 0 Then res(names(kd))(f) = tmp("x")(f)
+                        End If
+                    Next
+                End If
+            End If
         End If
     Next
     ' The type's overrides: {"header": {"fill": "D9E2F3", "edges": {"top": null}}}
