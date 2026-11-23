@@ -976,7 +976,7 @@ try {
             [void](TR1 $word 'T_SkAskPref' '1')
             $mn = TR $word 'T_SkMenu'
             Write-Output "MENU0: $mn"
-            Check 'menu link strip: not linked, Link a folder, legend' (($mn -match 'LINK Stationkeeper data: not linked / Not linked\.') -and ($mn -match 'button=Link a folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs Stationkeeper data')) ''
+            Check 'menu link strip: not linked, Link the effort''s folder, legend (1.28.0 words)' (($mn -match 'LINK The effort''s folder: not linked / Not linked\.') -and ($mn -match 'button=Link the effort''s folder\.\.\. unlink=False') -and ($mn -match 'legend=<o> SK  built for Stationkeeper, works alone +<f> SK  needs the effort''s folder')) ''
             Check '1.16.0: one row of filters; the first is Application: All, Word, Excel, PowerPoint' (($mn -match 'SHOW=All\|Word\|Excel\|PowerPoint ##') -and ($mn -match 'filters=True')) ''
             Check '1.16.0: each application lists its own macros, and together they are the whole list' (($mn -match '## APP=PowerPoint (\d+): \[[^#]*; Excel (\d+):[^#]*; Word (\d+): \[[^#]*; All (\d+): \[') -and ([int]$Matches[1] -gt 0) -and ([int]$Matches[3] -gt [int]$Matches[1]) -and ([int]$Matches[1] + [int]$Matches[2] + [int]$Matches[3] -eq [int]$Matches[4])) ''
             Check '1.16.0: sort by Name or by Category; What it affects is no longer a filter' (($mn -match '## SORT=Category\|Name\|Most used\|Recent -> Name: \[') -and ($mn -match '## SORT2=Category\|Name\|Most used\|Recent -> Category: \[')) ''
@@ -984,11 +984,11 @@ try {
             Check '1.13.1: the menu opens compact, its border can be dragged, and every control stays inside at any size' (($mn -match '## SIZE=w=500 h=600 list=\d+ inside=all cols=\d+ pt;34 pt;0 pt sizable=True') -and ($mn -match '\|\| wide: w=800 h=620 grew=True list=\d+ inside=all band=True cols=\d+ pt;34 pt;84 pt') -and ($mn -match '\|\| small: w=460 h=540 inside=all')) $mn
             Check 'filter Stationkeeper: tools with outlined badge, own macros left out' (($mn -match 'STATIONKEEPER \d+:[^|]*\[Style Inspector SK-\]') -and ($mn -match 'STATIONKEEPER \d+:[^|]*\[Fit All Tables\]') -and ($mn -notmatch 'STATIONKEEPER \d+:[^|]*Fit Tables To Margins')) ''
             Check 'filter Other: own macros only' (($mn -match 'OTHER \d+:[^|]*\[Fit Tables To Margins\]') -and ($mn -notmatch 'OTHER \d+:[^|]*(SK-|SK\+|Style Inspector)')) ''
-            Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link a folder\.\.\., Cancel \| Don''t ask again') ''
-            Check 'needs data, not linked: says what and where, offers the picker' ($mn -match 'GATE needs: needs \| Needs Stationkeeper data \| This macro is used with the Stationkeeper application\. Please point to the Stationkeeper data folder for your effort\.[^|]*It needs the effort rules\.[^|]*Stationkeeper Data\\rules\\rules\.json[^|]*Right now: Not linked\.[^|]*\| buttons: Point to the folder\.\.\., Cancel \|\|') ''
+            Check 'built, not linked: the gentle question' ($mn -match 'GATE built: ask \| Built for Stationkeeper \| This is built for Stationkeeper but is still functional\. Would you like to run it\?[^|]*\| buttons: Run it, Link the effort''s folder\.\.\., Cancel \| Don''t ask again') ''
+            Check 'needs data, not linked: says what and where, offers the picker' ($mn -match 'GATE needs: needs \| Needs the effort''s folder \| This macro is used with the Stationkeeper application\. Please point to your effort''s folder\.[^|]*It needs the effort rules\.[^|]*Stationkeeper Data\\rules\\rules\.json[^|]*Right now: Not linked\.[^|]*\| buttons: Point to the effort''s folder\.\.\., Cancel \|\|') ''
             Check 'not related: runs with no question' ($mn -match 'GATE none: run') ''
             $t1 = TR1 $word 'T_SkTestOne' 'Module2.WriteTestMarker'
-            Check 'test run skips a needs-data macro when not linked' ($t1 -like 'Skipped: it needs Stationkeeper data. Not linked*') $t1
+            Check 'test run skips a needs-data macro when not linked' ($t1 -like 'Skipped: it needs the effort''s folder. Not linked*') $t1
             [void](TR1 $word 'T_SkAskPref' '0')
             $mn = TR $word 'T_SkMenu'
             Check 'Don''t ask again: built runs with no question' ($mn -match 'GATE built: run') ''
@@ -1003,12 +1003,14 @@ try {
             Check 'link: current, rules present, effort named' (($l -like 'Current | parts=rules | rev=15 | effort=Effort A*') -and ($l -match 'by tester')) "$l ;; $md"
             $l2 = TR1 $word 'T_SkLink' (Join-Path $effort 'Stationkeeper Data')
             Check 'link: picking the Stationkeeper Data folder itself works too' ($l2 -like 'Current*') $l2
+            $ls = TR1 $word 'T_SkLinkShown' (Join-Path $effort 'Stationkeeper Data')
+            Check '1.28.0 (M6): with the Stationkeeper Data folder linked, the strip names the effort''s folder above it, and a picked Stationkeeper Data folder is kept as its effort''s folder' (($ls -match '^line=The effort''s folder: Current  \|  [^|]*\\Effort A \| ') -and ($ls -notmatch 'Effort A\\Stationkeeper Data \|') -and ($ls -match ' \| of=C:\\x\\Effort Q;C:\\x\\Effort Q;C:\\x\\Effort Q;C:\\$')) $ls
             [void](TR1 $word 'T_SkLink' $effort)
             $mn = TR $word 'T_SkMenu'
             Write-Output "MENU1: $mn"
-            Check 'menu link strip: current, Change, Unlink' (($mn -match 'LINK Stationkeeper data: Current  \|  ') -and ($mn -match 'Effort A, revision 15, saved') -and ($mn -match 'button=Change\.\.\. unlink=True')) ''
+            Check 'menu link strip: current, Change, Unlink' (($mn -match 'LINK The effort''s folder: Current  \|  ') -and ($mn -match 'Effort A, revision 15, saved') -and ($mn -match 'button=Change\.\.\. unlink=True')) ''
             Check 'linked: built and needs-rules run with no question' (($mn -match 'GATE built: run') -and ($mn -match 'GATE needs: run')) ''
-            Check 'linked, part missing: needs-template says the template is missing' ($mn -match 'GATE needsT: needs \| Needs Stationkeeper data \| [^|]*Right now: This effort''s Stationkeeper Data has no effort template yet\.') ''
+            Check 'linked, part missing: needs-template says the template is missing' ($mn -match 'GATE needsT: needs \| Needs the effort''s folder \| [^|]*Right now: This effort''s Stationkeeper Data has no effort template yet\.') ''
             [void](TR1 $word 'T_SkMakeData' "$effort|incomplete")
             $l = TR1 $word 'T_SkLink' $effort
             Check 'link: incomplete when rules.json is a revision behind' (($l -like 'Incomplete*') -and ($l -match 'rules/rules\.json \(revision 14\)')) $l
@@ -1093,13 +1095,13 @@ try {
             [void](TR1 $word 'T_SkMakeData' "$effA|current")
             [void](TR1 $word 'T_SkLink' '')
             $sg = TR1 $word 'T_SkSuggest' "$effC\Volume I|0"
-            Check 'not linked, document inside an effort folder: offers to link it' ($sg -eq 'suggest=This document is in the effort folder for Effort B. Link it? [Use this folder]') $sg
+            Check 'not linked, document inside an effort folder: offers to link it' ($sg -eq 'suggest=This document is in the effort''s folder for Effort B. Link it? [Use this folder]') $sg
             [void](TR1 $word 'T_SkLink' $effA)
             $sg = TR1 $word 'T_SkSuggest' "$effC\Volume I|0"
             Check 'linked to another effort: offers to switch' ($sg -eq 'suggest=This document is in Effort B, but the menu reads Effort A. Switch? [Use this folder]') $sg
             $sg = TR1 $word 'T_SkSuggest' "$effC\Volume I|1"
             $lf = TR $word 'T_SkLinkFiles'
-            Check 'Use this folder links the document''s effort, and the offer goes away' (($sg -match 'after: Stationkeeper data: Current  \|  [^|]*\\Effort C /') -and ($sg -match 'suggest now=none') -and ($lf -like 'Current*')) "$sg ;; $lf"
+            Check 'Use this folder links the document''s effort, and the offer goes away' (($sg -match 'after: The effort''s folder: Current  \|  [^|]*\\Effort C /') -and ($sg -match 'suggest now=none') -and ($lf -like 'Current*')) "$sg ;; $lf"
             $sg = TR1 $word 'T_SkSuggest' "$work|0"
             $sg2 = TR1 $word 'T_SkSuggest' "https://example.sharepoint.com/sites/p/Shared Documents|0"
             Check 'no offer for a document outside any effort folder or opened from the web' (($sg -eq 'suggest=none') -and ($sg2 -eq 'suggest=none')) "$sg ;; $sg2"
@@ -1107,7 +1109,7 @@ try {
             $w = TR1 $word 'T_SkWarn' ''
             Check 'a plain local folder: no sync warning' ($w -eq 'Current | warn=') $w
             $w = TR1 $word 'T_SkWarn' 'effort c=100000'
-            Check 'synced, not kept on this device: says how to fix it' ($w -match 'warn=The effort folder is synced but not kept on this device\. Right-click it > Always keep on this device') $w
+            Check 'synced, not kept on this device: says how to fix it' ($w -match 'warn=The effort''s folder is synced but not kept on this device\. Right-click it > Always keep on this device') $w
             $w = TR1 $word 'T_SkWarn' 'effort c=80000'
             Check 'kept on this device: no warning' ($w -eq 'Current | warn=') $w
             $w = TR1 $word 'T_SkWarn' 'effort c=80000;rules.json=400000'

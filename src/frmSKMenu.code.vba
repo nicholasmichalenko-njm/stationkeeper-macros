@@ -1,7 +1,7 @@
 ' =====================================================================
 ' Stationkeeper Macros: the menu
 ' Search as you type, sort, filter by what a macro affects or by its
-' tie to Stationkeeper, read, run. The link strip shows the effort folder.
+' tie to Stationkeeper, read, run. The link strip shows the effort's folder.
 ' The controls are built in code, so this form needs no designer work.
 ' =====================================================================
 Option Explicit
@@ -139,7 +139,7 @@ Private Sub UserForm_Initialize()
     lstMacros.ColumnWidths = "168 pt;34 pt;84 pt"
     lstMacros.IntegralHeight = False
     Set lblLegend = AddLabel("lblLegend", ChrW$(&H25C7) & " SK  built for Stationkeeper, works alone     " & _
-                             ChrW$(&H25C6) & " SK  needs Stationkeeper data", 10, 352, 300, 14)
+                             ChrW$(&H25C6) & " SK  needs the effort's folder", 10, 352, 300, 14)
     lblLegend.ForeColor = &H808080
     lblLegend.Font.Size = 8
 
@@ -170,12 +170,12 @@ Private Sub UserForm_Initialize()
     chkKeep.Caption = "Keep this menu open"
     chkKeep.BackStyle = fmBackStyleTransparent
 
-    ' The link strip: where the Stationkeeper data comes from.
-    Set lblLink = AddLabel("lblLink", "", 10, 374, 428, 42)
+    ' The link strip: the effort's folder (1.28.0: the words of decisions 253, 254 and M1).
+    Set lblLink = AddLabel("lblLink", "", 10, 374, 374, 42)
     lblLink.WordWrap = True
-    Set btnLink = AddCtl("Forms.CommandButton.1", "btnLink", 444, 376, 82, 22)
-    Set btnRefresh = AddCtl("Forms.CommandButton.1", "btnRefresh", 530, 376, 58, 22)
-    btnRefresh.Caption = "Refresh"
+    Set btnLink = AddCtl("Forms.CommandButton.1", "btnLink", 390, 376, 132, 22)
+    Set btnRefresh = AddCtl("Forms.CommandButton.1", "btnRefresh", 526, 376, 64, 22)
+    btnRefresh.Caption = "Check now"
     Set btnUnlink = AddCtl("Forms.CommandButton.1", "btnUnlink", 592, 376, 58, 22)
     btnUnlink.Caption = "Unlink"
 
@@ -348,11 +348,11 @@ Private Sub Layout()
     Place "lblSuggest", 10, y + 4, u - 146, 16
     Place "btnSuggest", w - 10 - 140, y, 140, 22
     y = y - 46
-    Place "lblLink", 10, y, u - 210, 42
-    Place "btnLink", w - 10 - 204, y + 2, 84, 22
-    Place "btnRefresh", w - 10 - 116, y + 2, 56, 22
+    Place "lblLink", 10, y, u - 266, 42
+    Place "btnLink", w - 10 - 260, y + 2, 132, 22
+    Place "btnRefresh", w - 10 - 124, y + 2, 64, 22
     Place "btnUnlink", w - 10 - 56, y + 2, 56, 22
-    ' Above the effort data link: the two standards workbooks, each with its own Choose.
+    ' Above the effort's folder link: the two standards workbooks, each with its own Choose.
     y = y - 26
     Place "lblStdE", 10, y + 4, u - 156, 14
     Place "btnEff", w - 10 - 146, y, 84, 22
@@ -829,10 +829,10 @@ Private Sub ShowLink()
         Case "Aging", "Stale", "Incomplete": lblLink.ForeColor = &H1A6FB8
         Case Else: lblLink.ForeColor = &H2828C0
     End Select
-    btnLink.Caption = IIf(st = "Not linked", "Link a folder...", "Change...")
+    btnLink.Caption = IIf(st = "Not linked", "Link the effort's folder...", "Change...")
     btnUnlink.Enabled = (st <> "Not linked")
     If Len(mInfo("warn")) > 0 And (st = "Current" Or st = "Aging" Or st = "Stale") Then lblLink.ForeColor = &H1A6FB8
-    ' Offer the effort folder this document sits in, when the menu reads another one (or none).
+    ' Offer the effort's folder this document sits in, when the menu reads another one (or none).
     Dim msg As String
     mSuggest = SK_SuggestLink(mDocPath, mInfo, msg)
     lblSuggest.Caption = msg
@@ -865,29 +865,28 @@ Private Sub ShowAsk(ByVal e As Object, ByVal kind As String, ByVal why As String
         lblAskHead.Caption = "Built for Stationkeeper"
         lblAskText.Caption = "This is built for Stationkeeper but is still functional. Would you like to run it?" & vbCrLf & vbCrLf & _
             "Without a linked effort it uses the team standards workbook, or its own defaults if there is none. " & _
-            "Link a folder to point it at an effort's data."
+            "Link the effort's folder to use what Stationkeeper saved for the effort."
         btnAskRun.Visible = True
         chkAskNever.Visible = True
-        btnAskLink.Caption = "Link a folder..."
+        btnAskLink.Caption = "Link the effort's folder..."
         btnAskRun.Default = True
     Else
         parts = SK_SkParts(e("stationkeeper"))
         For Each p In Split(parts, ",")
             files = files & IIf(Len(files) > 0, ", ", "") & SK_PartFile(p)
         Next
-        lblAskHead.Caption = "Needs Stationkeeper data"
-        lblAskText.Caption = "This macro is used with the Stationkeeper application. Please point to the Stationkeeper " & _
-            "data folder for your effort." & vbCrLf & vbCrLf & _
+        lblAskHead.Caption = "Needs the effort's folder"
+        lblAskText.Caption = "This macro is used with the Stationkeeper application. Please point to your effort's folder." & vbCrLf & vbCrLf & _
             "It needs " & SK_PartNames(parts) & ". Stationkeeper writes " & IIf(InStr(parts, ",") > 0, "them", "it") & _
-            " when you save the effort, to Stationkeeper Data\" & files & " inside the effort folder. " & _
-            "Pick the effort folder (or the Stationkeeper Data folder in it)." & vbCrLf & vbCrLf & "Right now: " & why
+            " when you save the effort, to Stationkeeper Data\" & files & " inside the effort's folder. " & _
+            "Pick the effort's folder (or the Stationkeeper Data folder in it)." & vbCrLf & vbCrLf & "Right now: " & why
         btnAskRun.Visible = False
         chkAskNever.Visible = False
-        btnAskLink.Caption = "Point to the folder..."
+        btnAskLink.Caption = "Point to the effort's folder..."
         btnAskLink.Default = True
     End If
     fraAsk.Visible = True
-    lblStatus.Caption = e("title") & ": " & IIf(kind = "ask", "run it, link a folder, or cancel.", "point to the effort folder, or cancel.")
+    lblStatus.Caption = e("title") & ": " & IIf(kind = "ask", "run it, link the effort's folder, or cancel.", "point to the effort's folder, or cancel.")
 End Sub
 
 Private Sub HideAsk()
@@ -942,7 +941,7 @@ End Sub
 
 Private Sub btnRefresh_Click()
     ReadLink
-    lblStatus.Caption = "Read the link again at " & Format$(Now, "h:nn am/pm") & "."
+    lblStatus.Caption = "Checked the effort's folder at " & Format$(Now, "h:nn am/pm") & "."
 End Sub
 
 Private Sub btnUnlink_Click()

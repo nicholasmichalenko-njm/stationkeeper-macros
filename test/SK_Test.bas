@@ -299,6 +299,13 @@ Public Function T_SkLink(ByVal folder As String) As String
     T_SkLink = d("state") & " | parts=" & d("parts") & " | rev=" & d("revision") & " | effort=" & d("effort") & " | " & d("note")
 End Function
 
+' 1.28.0 (M6): the strip's line with a folder linked, and the effort's folder for a few picked folders.
+Public Function T_SkLinkShown(ByVal folder As String) As String
+    SK_SetLinkFolder folder
+    T_SkLinkShown = "line=" & SK_LinkLine(SK_LinkInfo()) & " | of=" & SK_EffortsFolder("C:\x\Effort Q\Stationkeeper Data") & ";" & _
+        SK_EffortsFolder("C:\x\Effort Q\Stationkeeper Data\") & ";" & SK_EffortsFolder("C:\x\Effort Q") & ";" & SK_EffortsFolder("C:\")
+End Function
+
 ' Writes a stand-in for what Stationkeeper publishes. arg = "<effort folder>|current|stale|incomplete|bad".
 Public Function T_SkMakeData(ByVal arg As String) As String
     Dim f As String, kind As String, dd As String, fso As Object, utc As String, rev As Long, rulesRev As Long

@@ -231,9 +231,10 @@ Private Sub UserForm_Initialize()
     Lbl pg, "lblSk", "Stationkeeper", 568, 274, 190, 14
     Set cboSk = AddTo(pg, "Forms.ComboBox.1", "cboSk", 568, 288, 190, 20)
     cboSk.Style = fmStyleDropDownCombo
-    For Each v In Array("Not related", "Built for Stationkeeper", "Needs Stationkeeper data: rules", _
-                        "Needs Stationkeeper data: template", "Needs Stationkeeper data: dictionary", _
-                        "Needs Stationkeeper data: rules, template")
+    ' 1.28.0 (M2): the new words. A kind saved in the older words ("Needs Stationkeeper data: rules") is read the same.
+    For Each v In Array("Not related", "Built for Stationkeeper", "Needs the effort's folder: rules", _
+                        "Needs the effort's folder: template", "Needs the effort's folder: dictionary", _
+                        "Needs the effort's folder: rules, template")
         cboSk.AddItem v
     Next
     Set chkShown = Chk(pg, "chkShown", "Show in the menu", 568, 312, 190, 18)

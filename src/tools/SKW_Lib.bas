@@ -1009,10 +1009,10 @@ Public Function SKW_StdNote() As String
             IIf(e("fromCache"), " (last complete copy: " & LCase$(e("state")) & ")", "") & _
             IIf(Len(wb) > 0, ", then " & wb, "")
     ElseIf Len(wb) > 0 Then
-        SKW_StdNote = "Standards: " & wb & IIf(e("state") <> "Not linked", " (effort data: " & LCase$(e("state")) & ")", "")
+        SKW_StdNote = "Standards: " & wb & IIf(e("state") <> "Not linked", " (the effort's folder: " & LCase$(e("state")) & ")", "")
     Else
         SKW_StdNote = "Standards: built-in defaults (no standards workbook chosen)" & _
-            IIf(e("state") <> "Not linked", " (effort data: " & LCase$(e("state")) & ")", "")
+            IIf(e("state") <> "Not linked", " (the effort's folder: " & LCase$(e("state")) & ")", "")
     End If
 End Function
 

@@ -15,7 +15,7 @@ Attribute VB_Name = "SK_Macros"
 Option Explicit
 
 Public Const SK_APP As String = "Stationkeeper Macros"
-Public Const SK_VERSION As String = "1.27.0"
+Public Const SK_VERSION As String = "1.28.0"
 Public Const SK_NS As String = "urn:stationkeeper:macros:1"
 Public Const SK_LINK_APP As String = "Stationkeeper Tools"   ' where the Stationkeeper link is kept (shared with the tools)
 Private Const SK_READER As Double = 1#                     ' effort data contract versions this kit reads
@@ -1540,7 +1540,7 @@ End Function
 Public Function SK_SkLabel(ByVal v As String) As String
     Select Case SK_SkKind(v)
         Case "built": SK_SkLabel = "Built for Stationkeeper, works on its own"
-        Case "needs": SK_SkLabel = "Needs Stationkeeper data (" & SK_PartNames(SK_SkParts(v)) & ")"
+        Case "needs": SK_SkLabel = "Needs the effort's folder (" & SK_PartNames(SK_SkParts(v)) & ")"
         Case Else: SK_SkLabel = "Not related"
     End Select
 End Function
@@ -1685,9 +1685,18 @@ Public Function SK_PickLinkFolder() As String
         start = ActiveDocument.Path
         On Error GoTo 0
     End If
-    f = SK_PickFolder("Pick the effort folder Stationkeeper saves to (it holds Stationkeeper Data)", start)
+    f = SK_PickFolder("Pick the effort's folder (Stationkeeper saves Stationkeeper Data in it)", start)
+    f = SK_EffortsFolder(f)                ' 1.28.0 (M6): the Stationkeeper Data folder picked: its effort's folder is kept
     If Len(f) > 0 Then SK_SetLinkFolder f
     SK_PickLinkFolder = f
+End Function
+
+' 1.28.0 (M6): the effort's folder for a picked folder: the folder above when the Stationkeeper Data folder
+' itself was picked, else the folder. The data is read from the same place either way (SK_DataDir).
+Public Function SK_EffortsFolder(ByVal f As String) As String
+    If Right$(f, 1) = "\" And Len(f) > 3 Then f = Left$(f, Len(f) - 1)
+    If LCase$(Mid$(f, InStrRev(f, "\") + 1)) = "stationkeeper data" And InStrRev(f, "\") > 1 Then f = Left$(f, InStrRev(f, "\") - 1)
+    SK_EffortsFolder = f
 End Function
 
 ' The Stationkeeper Data folder for a picked folder: the folder itself when it is one, else its subfolder.
@@ -1762,7 +1771,7 @@ Private Function SK_LinkRead() As Object
     d("cached") = False
     Set SK_LinkRead = d
     f = SK_LinkFolder()
-    d("folder") = f
+    d("folder") = SK_EffortsFolder(f)     ' 1.28.0 (M6): the strip names the effort's folder whichever was linked
     If Len(f) = 0 Then
         d("state") = "Not linked"
         d("note") = "Not linked. Stationkeeper tools use the team standards workbook, then their own defaults."
@@ -1917,9 +1926,9 @@ Public Function SK_SyncWarnings(ByVal f As String, ByVal dd As String) As String
     Next
     If nOnline > 0 Then
         w = nOnline & " file(s) are online-only (" & online & "). Offline they cannot open, so the tools would use the last complete copy. " & _
-            "Right-click the effort folder > Always keep on this device."
+            "Right-click the effort's folder > Always keep on this device."
     ElseIf cloud And (SK_FileAttr(f) And PINNED) = 0 Then
-        w = "The effort folder is synced but not kept on this device. Right-click it > Always keep on this device, so it works offline."
+        w = "The effort's folder is synced but not kept on this device. Right-click it > Always keep on this device, so it works offline."
     End If
     If Len(conf) > 0 Then
         w = w & IIf(Len(w) > 0, " ", "") & "OneDrive kept conflicting copies (" & conf & "): two PCs saved this effort at once. " & _
@@ -1966,7 +1975,7 @@ Public Function SK_SuggestLink(ByVal docPath As String, ByVal info As Object, By
     If IsObject(man("effort")) Then nm = SK_JGet(man("effort"), "name")
     If Len(nm) = 0 Then nm = Mid$(f, InStrRev(f, "\") + 1)
     If info("state") = "Not linked" Then
-        msg = "This document is in the effort folder for " & nm & ". Link it?"
+        msg = "This document is in the effort's folder for " & nm & ". Link it?"
     Else
         msg = "This document is in " & nm & ", but the menu reads " & IIf(Len(info("effort")) > 0, info("effort"), Mid$(info("folder"), InStrRev(info("folder"), "\") + 1)) & ". Switch?"
     End If
@@ -2020,8 +2029,8 @@ End Function
 ' The one-line link summary the menu shows.
 Public Function SK_LinkLine(ByVal info As Object) As String
     Select Case info("state")
-        Case "Not linked": SK_LinkLine = "Stationkeeper data: not linked"
-        Case Else: SK_LinkLine = "Stationkeeper data: " & info("state") & "  |  " & info("folder")
+        Case "Not linked": SK_LinkLine = "The effort's folder: not linked"
+        Case Else: SK_LinkLine = "The effort's folder: " & info("state") & "  |  " & info("folder")
     End Select
 End Function
 
@@ -2149,7 +2158,7 @@ Public Function SK_TestMacro(ByVal run As String, ByVal worksOn As String, Optio
     Dim before As New Collection, dd As Object, extra As New Collection, x As Variant, known As Boolean
     If SK_SkKind(skText) = "needs" Then
         If Not SK_DataReady(SK_LinkInfo(), SK_SkParts(skText), why) Then
-            SK_TestMacro = "Skipped: it needs Stationkeeper data. " & why
+            SK_TestMacro = "Skipped: it needs the effort's folder. " & why
             Exit Function
         End If
     End If
@@ -2236,7 +2245,7 @@ Public Function SK_TestAll(ByVal m As Object, ByVal includeRisky As Boolean) As 
     Next
     SK_TestAll = "Passed: " & nP & "    Failed: " & nF & "    Skipped (needs a selection, table or list): " & nS & _
         "    Not run (saves, closes or deletes files, or ends Word): " & nR & _
-        IIf(nD > 0, "    Skipped (needs Stationkeeper data): " & nD, "") & failed
+        IIf(nD > 0, "    Skipped (needs the effort's folder): " & nD, "") & failed
 End Function
 
 Public Function SK_IsRisky(ByVal e As Object) As Boolean
