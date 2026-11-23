@@ -881,7 +881,8 @@ try {
         $ty = RunW $word 'SKW_Test.TW_TypeLook' $tl
         Write-Output "TYPELOOK: $ty"
         Check '1.27.0: an effort''s type look that holds only its change is laid over the Global header look: its fill and the line it takes away change, every other value stays' (($ty -match '## effort=\[[^#]*\{heron [^}]*caption:absent header:ZZ Table Head,left,center,C00000,yes,,Arial,9,FFFFFF,2,2,,,yes,1\|1F3864,none,0\.5\|8EA9DB,0\.5\|8EA9DB,0\.5\|8EA9DB, [^}]*total:absent notes:absent\}') -and ($ty -notmatch 'ERROR')) $ty
-        Check '1.27.0: the Global types are read as before with the effort''s workbook laid over, and the key type still takes its whole named look' (($ty -match 'global=\[[^#]*\{key [^}]*header:ZZ Table Head,left,center,D9E2F3,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,') -and ($ty -match '## effort=\[[^#]*\{key [^}]*header:ZZ Table Head,left,center,D9E2F3,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,')) $ty
+        Check '1.27.0: the Global types are read as before, and the key type takes its whole named look' ($ty -match 'global=\[[^#]*\{key [^}]*header:ZZ Table Head,left,center,D9E2F3,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,') $ty
+        Check '1.29.0 (G15): an effort''s change to the key type''s header (only a fill) is laid over the Global type''s own header look, which is over the kind''s: the effort''s fill, the Global type''s text color and the line it takes away' ($ty -match '## effort=\[[^#]*\{key [^}]*header:ZZ Table Head,left,center,112233,yes,,Arial,9,000000,2,2,,,yes,1\|1F3864,none,') $ty
         $lp = RunW $word 'SKW_Test.TW_LocalPath' $work
         Write-Output "LOCALPATH: $lp"
         Check '1.11.0: a workbook named by its OneDrive or SharePoint web address is found in the synced folder on this PC' (($lp -match '^plain=C:\\Some Folder\\Book\.xlsx ## found=\\Team standards\.xlsx ##') -and ($lp -match '## choose=The tools now use Team standards\.xlsx')) $lp

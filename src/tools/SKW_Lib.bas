@@ -1119,6 +1119,9 @@ Private Function SKW_Overlay(ByVal glob As Object, ByVal eff As Object) As Strin
                                     If Not d.Exists(f) Then
                                         d(f) = e(f): nCells = nCells + 1
                                     ElseIf CStr(d(f)) <> CStr(e(f)) Then
+                                        ' 1.29.0 (G15): an effort's type that names another look for a kind keeps the
+                                        ' Global type's look under it, as the app's deep merge does.
+                                        If LCase$(CStr(k)) = "table types" And Right$(LCase$(CStr(f)), 5) = " look" And Len(Trim$(CStr(d(f)))) > 0 Then d("under " & f) = d(f)
                                         d(f) = e(f): nCells = nCells + 1
                                     End If
                                 End If

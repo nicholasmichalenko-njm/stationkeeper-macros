@@ -41,7 +41,8 @@ Public Function SKW_TableTypes() As Collection
                 d("override") = AppVal(r, "override")
                 ' 1.24.0: the plain columns that are to replace Roles and Override, read when they are there.
                 If Len(d("roles")) = 0 Then d("roles") = HasRoles(r)
-                d("looks") = LookNames(r)
+                d("looks") = LookNames(r, "")
+                d("under looks") = LookNames(r, "under ")   ' 1.29.0 (G15): the Global type's look an effort's change is laid over
                 If Len(AppVal(r, "rows may break across pages")) > 0 Then
                     d("rows may break across pages") = IIf(SKW_IsYes(AppVal(r, "rows may break across pages")), "Yes", "No")
                 End If
@@ -93,12 +94,43 @@ Private Function HasRoles(ByVal r As Object) As String
 End Function
 
 ' The look each kind of row uses when the type names one, as |kind=look name|...|, lower case. "" when it names none.
-Private Function LookNames(ByVal r As Object) As String
+' 1.29.0: the look a type's list of names gives a kind ("|header=shaded header|..."), or "".
+Private Function NamedIn(ByVal looks As String, ByVal kd As String) As String
+    Dim p As Long, lk As String
+    p = InStr(looks, "|" & kd & "=")
+    If p = 0 Then Exit Function
+    lk = Mid$(looks, p + Len(kd) + 2)
+    NamedIn = Left$(lk, InStr(lk, "|") - 1)
+End Function
+
+' 1.27.0, 1.29.0: lays a named look over a kind's look, filled cells only ("none" takes a line away); with no look of
+' the kind yet, the named look is used whole. A name that is the kind's own word, or no row, changes nothing.
+Private Sub LayNamed(ByVal res As Object, ByVal key As String, ByVal kd As String, ByVal lk As String, ByVal named As Object)
+    Dim tmp As Object, f As Variant
+    If Len(lk) = 0 Or lk = kd Then Exit Sub
+    If Not named.Exists(lk) Then Exit Sub
+    If res(key)("absent") = "yes" Then
+        AppLook res, key, named(lk), res(key)("recognize")
+        Exit Sub
+    End If
+    Set tmp = CreateObject("Scripting.Dictionary")
+    tmp.CompareMode = 1
+    AppLook tmp, "x", named(lk), res(key)("recognize")
+    For Each f In tmp("x").Keys
+        If f <> "app" And f <> "absent" Then
+            If Len(CStr(tmp("x")(f))) > 0 Then res(key)(f) = tmp("x")(f)
+        End If
+    Next
+End Sub
+
+Private Function LookNames(ByVal r As Object, ByVal prefix As String) As String
     Dim v As Variant, p As Long, s As String, cell As String
     For Each v In Split("caption look=caption|header look=header|second header look=header2|subhead look=subhead|body look=body|" & _
                         "subtotal look=subtotal|total look=total|notes look=note", "|")
         p = InStr(v, "=")
-        cell = LCase$(AppVal(r, Left$(v, p - 1)))
+        cell = ""
+        If r.Exists(prefix & Left$(v, p - 1)) Then cell = LCase$(Trim$(CStr(r(prefix & Left$(v, p - 1)))))
+        If Len(prefix) = 0 Then cell = LCase$(AppVal(r, Left$(v, p - 1)))
         If Len(cell) > 0 Then s = s & "|" & Mid$(v, p + 1) & "=" & cell
     Next
     If Len(s) > 0 Then LookNames = s & "|"
@@ -1030,7 +1062,7 @@ End Sub
 Private Function AppRoles(ByVal tyName As String) As Object
     Dim res As Object, r As Object, nm As String, ty As Object, k As Object, ov As Object, used As Object, v As Variant
     Dim role As Variant, key As Variant, o As Object, ed As Variant, names As Object
-    Dim looks As String, kd As Variant, p As Long, serves As Boolean, named As Object, tmp As Object, f As Variant, lk As String
+    Dim looks As String, under As String, kd As Variant, p As Long, serves As Boolean, named As Object
     Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = 1
     Set names = CreateObject("Scripting.Dictionary")
@@ -1071,9 +1103,12 @@ Private Function AppRoles(ByVal tyName As String) As Object
     ' type names is then laid over it, filled cells only. A blank cell there means "not changed"; "none" takes a line
     ' away. In an effort's workbook such a look holds only the effort's change, and in the Global Standards the
     ' whole look, so the two give the same result. With no look of the kind's own word, the named look is used whole.
-    looks = ""
+    ' 1.29.0 (G15): when an effort's type names another look for a kind than the Global type did, the Global type's
+    ' look is laid first and the effort's over it (the app's deep merge: rules.resolve, then row_look).
+    looks = "": under = ""
     If Not ty Is Nothing Then
         If ty.Exists("looks") Then looks = ty("looks")
+        If ty.Exists("under looks") Then under = ty("under looks")
     End If
     Set named = CreateObject("Scripting.Dictionary")
     named.CompareMode = 1
@@ -1095,26 +1130,11 @@ Private Function AppRoles(ByVal tyName As String) As Object
         End If
     Next
     For Each kd In names.Keys
-        p = InStr(looks, "|" & kd & "=")
-        If p > 0 Then
-            lk = Mid$(looks, p + Len(kd) + 2)
-            lk = Left$(lk, InStr(lk, "|") - 1)
-            serves = (used Is Nothing)
-            If Not serves Then serves = used.Exists(kd) Or kd = "number" Or kd = "short" Or kd = "keep" Or kd = "figure caption"
-            If serves And lk <> kd And named.Exists(lk) Then
-                If res(names(kd))("absent") = "yes" Then
-                    AppLook res, names(kd), named(lk), res(names(kd))("recognize")
-                Else
-                    Set tmp = CreateObject("Scripting.Dictionary")
-                    tmp.CompareMode = 1
-                    AppLook tmp, "x", named(lk), res(names(kd))("recognize")
-                    For Each f In tmp("x").Keys
-                        If f <> "app" And f <> "absent" Then
-                            If Len(CStr(tmp("x")(f))) > 0 Then res(names(kd))(f) = tmp("x")(f)
-                        End If
-                    Next
-                End If
-            End If
+        serves = (used Is Nothing)
+        If Not serves Then serves = used.Exists(kd) Or kd = "number" Or kd = "short" Or kd = "keep" Or kd = "figure caption"
+        If serves Then
+            LayNamed res, names(kd), kd, NamedIn(under, CStr(kd)), named
+            LayNamed res, names(kd), kd, NamedIn(looks, CStr(kd)), named
         End If
     Next
     ' The type's overrides: {"header": {"fill": "D9E2F3", "edges": {"top": null}}}
